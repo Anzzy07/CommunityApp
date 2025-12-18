@@ -1,8 +1,9 @@
-import { View, Text, Image, StyleSheet } from "react-native";
-import React from "react";
 import { formatDistanceToNowStrict } from "date-fns";
+import React from "react";
+import { Image, StyleSheet, Text, View } from "react-native";
 
-import posts from "../../../assets/data/posts.json";
+import posts from "@/assets/data/posts.json";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 export default function HomeScreen() {
   const post = posts[0];
@@ -24,12 +25,31 @@ export default function HomeScreen() {
       </View>
 
       {/* Content */}
-      <Text>{post.title}</Text>
-      <Image
-        source={{ uri: post.image }}
-        style={{ width: "100%", aspectRatio: 4 / 3, borderRadius: 15 }}
-      />
-      <Text>{post.description}</Text>
+      <Text style={styles.title}>{post.title}</Text>
+      <Image source={{ uri: post.image }} style={styles.image} />
+      <Text numberOfLines={4}>{post.description}</Text>
+
+      {/* Post Footer */}
+      <View style={{ flexDirection: "row" }}>
+        <MaterialCommunityIcons
+          name="arrow-up-bold-outline"
+          size={19}
+          color="black"
+        />
+        <Text></Text>
+        <MaterialCommunityIcons
+          name="arrow-down-bold-outline"
+          size={19}
+          color="black"
+        />
+        <MaterialCommunityIcons
+          name="comment-outline"
+          size={19}
+          color="black"
+        />
+        <MaterialCommunityIcons name="trophy-outline" size={19} color="black" />
+        <MaterialCommunityIcons name="share-outline" size={19} color="black" />
+      </View>
     </View>
   );
 }
@@ -42,5 +62,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7,
     borderRadius: 10,
     fontWeight: "bold",
+  },
+  image: {
+    width: "100%",
+    aspectRatio: 4 / 3,
+    borderRadius: 15,
+  },
+  title: {
+    fontWeight: "bold",
+    fontSize: 17,
+    letterSpacing: 0.5,
   },
 });
