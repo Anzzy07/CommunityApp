@@ -1,7 +1,9 @@
-import { Tabs } from "expo-router";
+import { useAuth } from "@clerk/clerk-expo";
 import { AntDesign, Feather, Ionicons } from "@expo/vector-icons";
+import { Tabs } from "expo-router";
 
 export default function TabLayout() {
+  const { signOut } = useAuth();
   return (
     <Tabs
       screenOptions={{
@@ -12,6 +14,7 @@ export default function TabLayout() {
             size={22}
             color="black"
             style={{ paddingRight: 10 }}
+            onPress={() => signOut()}
           />
         ),
       }}
