@@ -1,14 +1,23 @@
 import { useSignUp } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
-import * as React from "react";
+import React from "react";
 import {
-  Button,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
+
+const COLORS = {
+  wave: "#9CAF88",
+  background: "#DFE6DA",
+  primary: "#9CAF88",
+  primaryDark: "#758467",
+  button: "#819171",
+};
 
 export default function SignUpScreen() {
   const { isLoaded, signUp, setActive } = useSignUp();
@@ -20,134 +29,186 @@ export default function SignUpScreen() {
   const [pendingVerification, setPendingVerification] = React.useState(false);
   const [code, setCode] = React.useState("");
 
-  // Handle submission of sign-up form
   const onSignUpPress = async () => {
     if (!isLoaded) return;
 
-    // Start sign-up process using email and password provided
     try {
-      await signUp.create({
-        emailAddress,
-        username,
-        password,
-      });
-
-      // Send user an email with verification code
+      await signUp.create({ emailAddress, username, password });
       await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
-
-      // Set 'pendingVerification' to true to display second form
-      // and capture OTP code
       setPendingVerification(true);
     } catch (err) {
-      // See https://clerk.com/docs/custom-flows/error-handling
-      // for more info on error handling
       console.error(JSON.stringify(err, null, 2));
     }
   };
 
-  // Handle submission of verification form
   const onVerifyPress = async () => {
     if (!isLoaded) return;
 
     try {
-      // Use the code the user provided to attempt verification
-      const signUpAttempt = await signUp.attemptEmailAddressVerification({
+      const completeSignUp = await signUp.attemptEmailAddressVerification({
         code,
       });
-
-      // If verification was completed, set the session to active
-      // and redirect the user
-      if (signUpAttempt.status === "complete") {
-        await setActive({ session: signUpAttempt.createdSessionId });
+      if (completeSignUp.status === "complete") {
+        await setActive({ session: completeSignUp.createdSessionId });
         router.replace("/");
-      } else {
-        // If the status is not complete, check why. User may need to
-        // complete further steps.
-        console.error(JSON.stringify(signUpAttempt, null, 2));
       }
     } catch (err) {
-      // See https://clerk.com/docs/custom-flows/error-handling
-      // for more info on error handling
       console.error(JSON.stringify(err, null, 2));
     }
   };
 
   if (pendingVerification) {
     return (
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
-        <Text style={styles.title}>Verify Your Email</Text>
-        <TextInput
-          style={styles.input}
-          value={code}
-          placeholder="Enter your verification code"
-          placeholderTextColor="#aaa"
-          onChangeText={setCode}
-        />
-        <Button title="Verify" onPress={onVerifyPress} />
-      </KeyboardAvoidingView>
+      <View style={styles.container}>
+        <View style={styles.waveBackground} />
+        <KeyboardAvoidingView
+          style={styles.formContainer}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <Text style={styles.title}>Verify Email</Text>
+
+          <Text style={styles.label}>Code</Text>
+          <View style={styles.inputWrapper}>
+            <Text style={styles.icon}>📧</Text>
+            <TextInput
+              style={styles.input}
+              value={code}
+              placeholder="Enter code"
+              placeholderTextColor="#aaa"
+              onChangeText={setCode}
+              keyboardType="number-pad"
+            />
+          </View>
+
+          <TouchableOpacity style={styles.button} onPress={onVerifyPress}>
+            <Text style={styles.buttonText}>Verify</Text>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
+      </View>
     );
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <Text style={styles.title}>Sign Up</Text>
-      <TextInput
-        style={styles.input}
-        autoCapitalize="none"
-        value={emailAddress}
-        placeholder="Enter email"
-        placeholderTextColor="#aaa"
-        onChangeText={setEmailAddress}
-      />
-      <TextInput
-        style={styles.input}
-        autoCapitalize="none"
-        value={username}
-        placeholder="Username"
-        placeholderTextColor="#aaa"
-        onChangeText={setUsername}
-      />
-      <TextInput
-        style={styles.input}
-        value={password}
-        placeholder="Enter password"
-        placeholderTextColor="#aaa"
-        secureTextEntry
-        onChangeText={setPassword}
-      />
-      <Button title="Continue" onPress={onSignUpPress} />
-    </KeyboardAvoidingView>
+    <View style={styles.container}>
+      <View style={styles.waveBackground} />
+
+      <KeyboardAvoidingView
+        style={styles.formContainer}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        <Text style={styles.title}>Sign Up</Text>
+
+        <Text style={styles.label}>Email</Text>
+        <View style={styles.inputWrapper}>
+          <Text style={styles.icon}>✉️</Text>
+          <TextInput
+            style={styles.input}
+            autoCapitalize="none"
+            value={emailAddress}
+            placeholder="Enter email"
+            placeholderTextColor="#aaa"
+            onChangeText={setEmailAddress}
+          />
+        </View>
+
+        <Text style={styles.label}>Username</Text>
+        <View style={styles.inputWrapper}>
+          <Text style={styles.icon}>👤</Text>
+          <TextInput
+            style={styles.input}
+            autoCapitalize="none"
+            value={username}
+            placeholder="Username"
+            placeholderTextColor="#aaa"
+            onChangeText={setUsername}
+          />
+        </View>
+
+        <Text style={styles.label}>Password</Text>
+        <View style={styles.inputWrapper}>
+          <Text style={styles.icon}>🔒</Text>
+          <TextInput
+            style={styles.input}
+            value={password}
+            placeholder="Enter password"
+            placeholderTextColor="#aaa"
+            secureTextEntry
+            onChangeText={setPassword}
+          />
+        </View>
+
+        <TouchableOpacity style={styles.button} onPress={onSignUpPress}>
+          <Text style={styles.buttonText}>Continue</Text>
+        </TouchableOpacity>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  waveBackground: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: "45%",
+    backgroundColor: COLORS.wave,
+    borderBottomLeftRadius: 50,
+    borderBottomRightRadius: 80,
+  },
+  formContainer: {
+    flex: 1,
+    paddingHorizontal: 30,
     justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-    backgroundColor: "#f8f9fa",
   },
   title: {
-    fontSize: 24,
+    fontSize: 36,
     fontWeight: "bold",
+    color: COLORS.primaryDark,
+    marginBottom: 40,
+    textAlign: "left",
+  },
+  label: {
+    fontSize: 16,
+    color: COLORS.primaryDark,
+    marginBottom: 8,
+    marginLeft: 5,
+  },
+  inputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    height: 54,
     marginBottom: 20,
-    color: "black",
+    borderBottomWidth: 2,
+    borderBottomColor: COLORS.primary,
+  },
+  icon: {
+    fontSize: 20,
+    marginRight: 12,
+    color: COLORS.primaryDark,
   },
   input: {
-    width: "100%",
-    height: 50,
-    borderWidth: 1,
-    borderColor: "lightgrey",
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    marginBottom: 15,
-    backgroundColor: "white",
+    flex: 1,
+    fontSize: 16,
+    color: "#333",
+  },
+  button: {
+    backgroundColor: COLORS.button,
+    paddingVertical: 16,
+    borderRadius: 30,
+    alignItems: "center",
+    marginTop: 10,
+  },
+  buttonText: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "bold",
   },
 });

@@ -2,6 +2,7 @@ import { Post } from "@/src/types";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { formatDistanceToNowStrict } from "date-fns";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { COLORS } from "../colors";
 
 type PostListItemProps = {
   post: Post;
@@ -13,7 +14,6 @@ export default function PostListItem({
   isDetailedPost,
 }: PostListItemProps) {
   return (
-    // <Link href={`/post/${post.id}`}>
     <View
       style={{
         paddingHorizontal: 15,
@@ -53,7 +53,7 @@ export default function PostListItem({
           onPress={() => console.error("Pressed")}
           style={{
             marginLeft: "auto",
-            backgroundColor: "#0d469b",
+            backgroundColor: COLORS.border,
             borderRadius: 10,
           }}
         >
@@ -95,7 +95,7 @@ export default function PostListItem({
             <MaterialCommunityIcons
               name="arrow-up-bold-outline"
               size={19}
-              color="black"
+              color={COLORS.border}
             />
             <Text
               style={{
@@ -118,14 +118,14 @@ export default function PostListItem({
             <MaterialCommunityIcons
               name="arrow-down-bold-outline"
               size={19}
-              color="black"
+              color={COLORS.border}
             />
           </View>
           <View style={[{ flexDirection: "row" }, styles.iconBox]}>
             <MaterialCommunityIcons
               name="comment-outline"
               size={19}
-              color="black"
+              color={COLORS.border}
             />
             <Text
               style={{
@@ -142,26 +142,25 @@ export default function PostListItem({
           <MaterialCommunityIcons
             name="trophy-outline"
             size={19}
-            color="black"
+            color={COLORS.border}
             style={styles.iconBox}
           />
           <MaterialCommunityIcons
             name="share-outline"
             size={19}
-            color="black"
+            color={COLORS.border}
             style={styles.iconBox}
           />
         </View>
       </View>
     </View>
-    // </Link>
   );
 }
 
 const styles = StyleSheet.create({
   iconBox: {
     borderWidth: 0.5,
-    borderColor: "#D4D4D4",
+    borderColor: COLORS.border,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 20,
