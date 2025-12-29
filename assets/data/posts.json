@@ -1,196 +1,196 @@
 [
   {
     "id": "post-1",
-    "title": "Why React Native is the best?",
+    "title": "Why morning walks are the best way to start your day",
     "created_at": "2025-02-12T08:30:00Z",
     "upvotes": 120,
     "nr_of_comments": 15,
-    "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.",
+    "description": "I've been taking morning walks for months now, and it's completely transformed my energy levels, mood, and productivity. Here's why I think it's the ultimate habit, plus some tips to get started.",
     "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/images/3.jpg",
     "group": {
       "id": "group-1",
-      "name": "r/FrontendDevelopers",
+      "name": "r/HealthyLiving",
       "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/11.png"
     },
     "user": {
       "id": "user-1",
-      "name": "u/User1",
+      "name": "u/MorningWalker",
       "image": null
     }
   },
   {
     "id": "post-2",
-    "title": "Exploring Next.js Features in Depth",
+    "title": "My favorite minimalist wardrobe essentials for 2025",
     "created_at": "2025-02-11T14:22:00Z",
     "upvotes": 200,
     "nr_of_comments": 30,
+    "description": "Building a minimalist wardrobe has saved me time, money, and stress. In this post, I’ll share my go-to pieces that mix and match effortlessly. What are yours?",
     "image": null,
-    "description": "Next.js brings powerful features for React developers, such as server-side rendering, static generation, and more. In this post, I’ll dive deep into each of these. Feel free to share your opinion, it's always interesting to keep the discussion going!",
     "group": {
       "id": "group-2",
-      "name": "r/ReactEnthusiasts",
+      "name": "r/Minimalism",
       "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/10.png"
     },
     "user": {
-      "id": "user-",
-      "name": "u/User2",
+      "id": "user-2",
+      "name": "u/SimpleStyle",
       "image": null
     }
   },
   {
     "id": "post-3",
-    "title": "How to Build a Portfolio Website with HTML and CSS",
+    "title": "How I started a simple vegetable garden on my balcony",
     "created_at": "2025-02-10T09:10:00Z",
     "upvotes": 85,
     "nr_of_comments": 10,
-    "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/images/8.jpg",
     "description": null,
+    "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/images/8.jpg",
     "group": {
       "id": "group-3",
-      "name": "r/WebDevelopers",
+      "name": "r/UrbanGardening",
       "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/9.png"
     },
     "user": {
       "id": "user-3",
-      "name": "u/User3",
+      "name": "u/BalconyGrower",
       "image": null
     }
   },
   {
     "id": "post-4",
-    "title": "Top JavaScript Frameworks to Learn in 2025",
+    "title": "Top books that changed my perspective on life in 2025",
     "created_at": "2025-02-09T18:45:00Z",
     "upvotes": 50,
     "nr_of_comments": 5,
+    "description": "Reading has been my biggest self-improvement tool this year. Here are the top books that inspired me the most—fiction and non-fiction alike.",
     "image": null,
-    "description": "In 2025, JavaScript frameworks continue to evolve. Let’s explore the top frameworks that will shape the development world this year.",
     "group": {
       "id": "group-4",
-      "name": "r/JSDevelopers",
+      "name": "r/BookLovers",
       "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/8.png"
     },
     "user": {
       "id": "user-4",
-      "name": "u/User4",
+      "name": "u/AvidReader",
       "image": null
     }
   },
   {
     "id": "post-5",
-    "title": "Understanding the Basics of Machine Learning",
+    "title": "Beginner tips for practicing mindfulness meditation",
     "created_at": "2025-02-08T15:00:00Z",
     "upvotes": 175,
     "nr_of_comments": 20,
-    "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/images/6.jpg",
     "description": null,
+    "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/images/6.jpg",
     "group": {
       "id": "group-5",
-      "name": "r/AIInnovators",
+      "name": "r/Mindfulness",
       "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/7.png"
     },
     "user": {
       "id": "user-5",
-      "name": "u/User5",
+      "name": "u/ZenBeginner",
       "image": null
     }
   },
   {
     "id": "post-6",
-    "title": "How to Get Started with TypeScript in 2025",
+    "title": "How to create a cozy reading nook at home",
     "created_at": "2025-02-07T16:10:00Z",
     "upvotes": 95,
     "nr_of_comments": 12,
-    "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/images/1.jpg",
     "description": null,
+    "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/images/1.jpg",
     "group": {
       "id": "group-6",
-      "name": "r/TypeScriptCommunity",
+      "name": "r/HomeDecor",
       "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/6.png"
     },
     "user": {
       "id": "user-6",
-      "name": "u/User6",
+      "name": "u/CozyHome",
       "image": null
     }
   },
   {
     "id": "post-7",
-    "title": "A Deep Dive into React Hooks",
+    "title": "Benefits of drinking more herbal teas daily",
     "created_at": "2025-02-06T11:00:00Z",
     "upvotes": 150,
     "nr_of_comments": 25,
+    "description": "Switching to herbal teas has improved my digestion, sleep, and overall calm. Here's a breakdown of my favorites and why they work.",
     "image": null,
-    "description": "React Hooks allow you to use state and other features without writing a class. In this post, I will walk you through various hooks in detail.",
     "group": {
       "id": "group-7",
-      "name": "r/ReactJS",
+      "name": "r/HerbalTea",
       "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/5.jpg"
     },
     "user": {
       "id": "user-7",
-      "name": "u/User7",
+      "name": "u/TeaEnthusiast",
       "image": null
     }
   },
   {
     "id": "post-8",
-    "title": "Exploring the World of Serverless Architecture",
+    "title": "Why I switched to a plant-based diet this year",
     "created_at": "2025-02-05T17:30:00Z",
     "upvotes": 220,
     "nr_of_comments": 40,
+    "description": "Going plant-based was a game-changer for my health and energy. Sharing the pros, cons, and easy transitions that worked for me.",
     "image": null,
-    "description": "Serverless architecture is revolutionizing cloud computing. Learn about the benefits, challenges, and how to get started.",
     "group": {
       "id": "group-8",
-      "name": "r/ServerlessTech",
+      "name": "r/PlantBased",
       "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/4.jpg"
     },
     "user": {
       "id": "user-8",
-      "name": "u/User8",
+      "name": "u/VeganJourney",
       "image": null
     }
   },
   {
     "id": "post-9",
-    "title": "Best Practices for Web Accessibility",
+    "title": "Simple habits for better sleep quality",
     "created_at": "2025-02-04T14:40:00Z",
     "upvotes": 90,
     "nr_of_comments": 10,
+    "description": "Struggling with sleep? These no-cost habits completely fixed my routine and helped me wake up refreshed.",
     "image": null,
-    "description": "Web accessibility is crucial for making websites usable for everyone. Let’s explore the best practices for creating accessible websites.",
     "group": {
       "id": "group-9",
-      "name": "r/WebAccessibility",
+      "name": "r/SleepBetter",
       "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/3.jpg"
     },
     "user": {
       "id": "user-9",
-      "name": "u/User9",
+      "name": "u/GoodNight",
       "image": null
     }
   },
   {
     "id": "post-10",
-    "title": "The Future of Progressive Web Apps",
+    "title": "Hidden gems for solo travel adventures",
     "created_at": "2025-02-03T19:20:00Z",
     "upvotes": 170,
     "nr_of_comments": 22,
-    "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/images/5.jpeg",
     "description": null,
+    "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/images/5.jpeg",
     "group": {
       "id": "group-10",
-      "name": "r/PWADevs",
+      "name": "r/SoloTravel",
       "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/2.jpg"
     },
     "user": {
       "id": "user-10",
-      "name": "u/User10",
+      "name": "u/SoloAdventurer",
       "image": null
     }
   },
   {
-    "id": "post-21",
+    "id": "post-11",
     "title": "How morning walks changed my daily routine",
     "created_at": "2025-02-20T06:30:00Z",
     "upvotes": 134,
@@ -203,13 +203,13 @@
       "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/1.jpg"
     },
     "user": {
-      "id": "user-21",
+      "id": "user-11",
       "name": "u/HealthySoul",
       "image": null
     }
   },
   {
-    "id": "post-22",
+    "id": "post-12",
     "title": "Best budget travel tips for students",
     "created_at": "2025-02-19T10:15:00Z",
     "upvotes": 220,
@@ -222,13 +222,13 @@
       "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/2.jpg"
     },
     "user": {
-      "id": "user-22",
+      "id": "user-12",
       "name": "u/WanderStudent",
       "image": null
     }
   },
   {
-    "id": "post-23",
+    "id": "post-13",
     "title": "Easy home workouts without equipment",
     "created_at": "2025-02-18T07:45:00Z",
     "upvotes": 198,
@@ -241,13 +241,13 @@
       "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/3.jpg"
     },
     "user": {
-      "id": "user-23",
+      "id": "user-13",
       "name": "u/FitAtHome",
       "image": null
     }
   },
   {
-    "id": "post-24",
+    "id": "post-14",
     "title": "How I manage stress during exams",
     "created_at": "2025-02-17T21:10:00Z",
     "upvotes": 165,
@@ -260,13 +260,13 @@
       "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/4.jpg"
     },
     "user": {
-      "id": "user-24",
+      "id": "user-14",
       "name": "u/CalmMind",
       "image": null
     }
   },
   {
-    "id": "post-25",
+    "id": "post-15",
     "title": "Simple meals you can cook in 15 minutes",
     "created_at": "2025-02-16T12:00:00Z",
     "upvotes": 240,
@@ -279,13 +279,13 @@
       "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/5.jpg"
     },
     "user": {
-      "id": "user-25",
+      "id": "user-15",
       "name": "u/HomeCook",
       "image": null
     }
   },
   {
-    "id": "post-26",
+    "id": "post-16",
     "title": "Photography tips for beginners using a phone",
     "created_at": "2025-02-15T16:35:00Z",
     "upvotes": 180,
@@ -298,13 +298,13 @@
       "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/5.jpg"
     },
     "user": {
-      "id": "user-26",
+      "id": "user-16",
       "name": "u/PhotoLover",
       "image": null
     }
   },
   {
-    "id": "post-27",
+    "id": "post-17",
     "title": "How I started saving money every month",
     "created_at": "2025-02-14T09:20:00Z",
     "upvotes": 210,
@@ -317,13 +317,13 @@
       "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/3.jpg"
     },
     "user": {
-      "id": "user-27",
+      "id": "user-17",
       "name": "u/MoneyWise",
       "image": null
     }
   },
   {
-    "id": "post-28",
+    "id": "post-18",
     "title": "Best places to visit in Nepal",
     "created_at": "2025-02-13T14:50:00Z",
     "upvotes": 300,
@@ -336,13 +336,13 @@
       "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/2.jpg"
     },
     "user": {
-      "id": "user-28",
+      "id": "user-18",
       "name": "u/NepalExplorer",
       "image": null
     }
   },
   {
-    "id": "post-29",
+    "id": "post-19",
     "title": "Why daily journaling improves mental clarity",
     "created_at": "2025-02-12T20:15:00Z",
     "upvotes": 145,
@@ -355,13 +355,13 @@
       "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/1.jpg"
     },
     "user": {
-      "id": "user-29",
+      "id": "user-19",
       "name": "u/DailyWriter",
       "image": null
     }
   },
   {
-    "id": "post-30",
+    "id": "post-20",
     "title": "Balancing work and personal life",
     "created_at": "2025-02-11T08:00:00Z",
     "upvotes": 190,
@@ -374,7 +374,7 @@
       "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/2.jpg"
     },
     "user": {
-      "id": "user-30",
+      "id": "user-20",
       "name": "u/LifeBalance",
       "image": null
     }

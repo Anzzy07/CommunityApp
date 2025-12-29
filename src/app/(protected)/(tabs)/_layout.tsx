@@ -16,9 +16,9 @@ export default function TabLayout() {
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: "#000000",
         tabBarStyle: {
-          backgroundColor: "#DFE6DA",
+          backgroundColor: "#e9f2e3",
         },
-        headerTintColor: "#e3dfdf",
+        headerTintColor: "#f4f1f1",
         headerTitleStyle: {
           fontFamily: Platform.select({
             ios: "System",
