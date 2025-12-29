@@ -1,0 +1,11 @@
+[
+  {
+    "id": "challenge-1",
+    "group_id": "group-1",
+    "title": "Share your best frontend tip",
+    "description": "Post a useful frontend development tip.",
+    "start_date": "2025-02-10",
+    "end_date": "2025-02-20",
+    "created_by": "user-1"
+  }
+]

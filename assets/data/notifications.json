@@ -1,0 +1,29 @@
+[
+  {
+    "id": "notif-1",
+    "user_id": "user-1",
+    "type": "comment",
+    "reference_id": "comment-1",
+    "message": "Someone commented on your post.",
+    "is_read": false,
+    "created_at": "2025-02-19T12:01:00Z"
+  },
+  {
+    "id": "notif-2",
+    "user_id": "user-2",
+    "type": "poll",
+    "reference_id": "poll-1",
+    "message": "New poll added to a post you follow.",
+    "is_read": true,
+    "created_at": "2025-02-12T09:05:00Z"
+  },
+  {
+    "id": "notif-3",
+    "user_id": "user-3",
+    "type": "challenge",
+    "reference_id": "challenge-1",
+    "message": "New community challenge has started.",
+    "is_read": false,
+    "created_at": "2025-02-10T08:00:00Z"
+  }
+]

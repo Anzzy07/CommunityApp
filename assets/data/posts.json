@@ -188,6 +188,195 @@
       "name": "u/User10",
       "image": null
     }
+  },
+  {
+    "id": "post-21",
+    "title": "How morning walks changed my daily routine",
+    "created_at": "2025-02-20T06:30:00Z",
+    "upvotes": 134,
+    "nr_of_comments": 18,
+    "description": "I started walking every morning for 30 minutes and it helped improve my mood, focus, and sleep. Sharing my experience here.",
+    "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/images/2.jpg",
+    "group": {
+      "id": "group-lifestyle",
+      "name": "r/Lifestyle",
+      "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/1.jpg"
+    },
+    "user": {
+      "id": "user-21",
+      "name": "u/HealthySoul",
+      "image": null
+    }
+  },
+  {
+    "id": "post-22",
+    "title": "Best budget travel tips for students",
+    "created_at": "2025-02-19T10:15:00Z",
+    "upvotes": 220,
+    "nr_of_comments": 32,
+    "description": "Traveling doesn’t have to be expensive. Here are some simple tips I used to travel on a tight student budget.",
+    "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/images/1.jpg",
+    "group": {
+      "id": "group-travel",
+      "name": "r/Travel",
+      "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/2.jpg"
+    },
+    "user": {
+      "id": "user-22",
+      "name": "u/WanderStudent",
+      "image": null
+    }
+  },
+  {
+    "id": "post-23",
+    "title": "Easy home workouts without equipment",
+    "created_at": "2025-02-18T07:45:00Z",
+    "upvotes": 198,
+    "nr_of_comments": 26,
+    "description": "You don’t need a gym to stay fit. These simple exercises can be done at home with no equipment.",
+    "image": null,
+    "group": {
+      "id": "group-fitness",
+      "name": "r/Fitness",
+      "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/3.jpg"
+    },
+    "user": {
+      "id": "user-23",
+      "name": "u/FitAtHome",
+      "image": null
+    }
+  },
+  {
+    "id": "post-24",
+    "title": "How I manage stress during exams",
+    "created_at": "2025-02-17T21:10:00Z",
+    "upvotes": 165,
+    "nr_of_comments": 24,
+    "description": "Exams can be stressful. These simple habits helped me stay calm and focused during exam time.",
+    "image": null,
+    "group": {
+      "id": "group-mental-health",
+      "name": "r/MentalHealth",
+      "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/4.jpg"
+    },
+    "user": {
+      "id": "user-24",
+      "name": "u/CalmMind",
+      "image": null
+    }
+  },
+  {
+    "id": "post-25",
+    "title": "Simple meals you can cook in 15 minutes",
+    "created_at": "2025-02-16T12:00:00Z",
+    "upvotes": 240,
+    "nr_of_comments": 40,
+    "description": "If you’re busy or living alone, these quick meals are healthy and easy to cook.",
+    "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/images/4.jpg",
+    "group": {
+      "id": "group-food",
+      "name": "r/Food",
+      "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/5.jpg"
+    },
+    "user": {
+      "id": "user-25",
+      "name": "u/HomeCook",
+      "image": null
+    }
+  },
+  {
+    "id": "post-26",
+    "title": "Photography tips for beginners using a phone",
+    "created_at": "2025-02-15T16:35:00Z",
+    "upvotes": 180,
+    "nr_of_comments": 21,
+    "description": "You don’t need a camera to take good photos. These mobile photography tips really helped me.",
+    "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/images/3.jpg",
+    "group": {
+      "id": "group-photography",
+      "name": "r/Photography",
+      "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/5.jpg"
+    },
+    "user": {
+      "id": "user-26",
+      "name": "u/PhotoLover",
+      "image": null
+    }
+  },
+  {
+    "id": "post-27",
+    "title": "How I started saving money every month",
+    "created_at": "2025-02-14T09:20:00Z",
+    "upvotes": 210,
+    "nr_of_comments": 33,
+    "description": "Saving money was hard for me until I changed a few habits. Sharing what worked.",
+    "image": null,
+    "group": {
+      "id": "group-finance",
+      "name": "r/PersonalFinance",
+      "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/3.jpg"
+    },
+    "user": {
+      "id": "user-27",
+      "name": "u/MoneyWise",
+      "image": null
+    }
+  },
+  {
+    "id": "post-28",
+    "title": "Best places to visit in Nepal",
+    "created_at": "2025-02-13T14:50:00Z",
+    "upvotes": 300,
+    "nr_of_comments": 55,
+    "description": "Nepal has beautiful places beyond mountains. Here are some of my favorite travel spots.",
+    "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/images/6.jpg",
+    "group": {
+      "id": "group-travel",
+      "name": "r/Travel",
+      "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/2.jpg"
+    },
+    "user": {
+      "id": "user-28",
+      "name": "u/NepalExplorer",
+      "image": null
+    }
+  },
+  {
+    "id": "post-29",
+    "title": "Why daily journaling improves mental clarity",
+    "created_at": "2025-02-12T20:15:00Z",
+    "upvotes": 145,
+    "nr_of_comments": 19,
+    "description": "Writing your thoughts daily helps reduce stress and improves self-awareness. Here’s how I do it.",
+    "image": null,
+    "group": {
+      "id": "group-selfcare",
+      "name": "r/SelfCare",
+      "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/1.jpg"
+    },
+    "user": {
+      "id": "user-29",
+      "name": "u/DailyWriter",
+      "image": null
+    }
+  },
+  {
+    "id": "post-30",
+    "title": "Balancing work and personal life",
+    "created_at": "2025-02-11T08:00:00Z",
+    "upvotes": 190,
+    "nr_of_comments": 28,
+    "description": "Work-life balance is important for long-term happiness. Sharing what helped me manage both.",
+    "image": null,
+    "group": {
+      "id": "group-career",
+      "name": "r/CareerAdvice",
+      "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/2.jpg"
+    },
+    "user": {
+      "id": "user-30",
+      "name": "u/LifeBalance",
+      "image": null
+    }
   }
 ]
-

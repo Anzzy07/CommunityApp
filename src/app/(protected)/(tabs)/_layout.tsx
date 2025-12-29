@@ -1,11 +1,14 @@
 import { COLORS } from "@/src/colors";
-import { useAuth } from "@clerk/clerk-expo";
+import { useAuth, useUser } from "@clerk/clerk-expo";
 import { AntDesign, Feather, Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
-import { Platform, View } from "react-native";
+import { Image, Platform, TouchableOpacity, View } from "react-native";
 
 export default function TabLayout() {
   const { signOut } = useAuth();
+  const { user } = useUser();
+
+  const profileImageUrl = user?.imageUrl || "https://via.placeholder.com/32"; // Fallback image
 
   return (
     <Tabs
@@ -27,14 +30,32 @@ export default function TabLayout() {
         headerBackground: () => (
           <View style={{ flex: 1, backgroundColor: COLORS.headerMain }} />
         ),
+
+        headerLeft: () => (
+          <TouchableOpacity
+            // onPress={() => router.push("/profile")} // to profile screen
+            style={{ marginLeft: 15 }}
+          >
+            <Image
+              source={{ uri: profileImageUrl }}
+              style={{
+                width: 25,
+                height: 25,
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: "#DFE6DA",
+              }}
+            />
+          </TouchableOpacity>
+        ),
+
         headerRight: () => (
-          <Feather
-            name="log-out"
-            size={22}
-            color="#f9f6f6"
-            style={{ marginRight: 15 }}
+          <TouchableOpacity
             onPress={() => signOut()}
-          />
+            style={{ marginRight: 15 }}
+          >
+            <Feather name="log-out" size={22} color="#f9f6f6" />
+          </TouchableOpacity>
         ),
       }}
     >
@@ -63,7 +84,7 @@ export default function TabLayout() {
         options={{
           title: "Create",
           headerTitle: "Create Post",
-          headerShown: false, // Keeps header hidden
+          headerShown: false,
           tabBarStyle: { display: "none" },
           tabBarIcon: ({ color }) => (
             <AntDesign name="plus" size={24} color={color} />

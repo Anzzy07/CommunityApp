@@ -1,0 +1,14 @@
+[
+  {
+    "user_id": "user-1",
+    "current_streak": 5,
+    "longest_streak": 12,
+    "last_active_date": "2025-02-19"
+  },
+  {
+    "user_id": "user-2",
+    "current_streak": 2,
+    "longest_streak": 7,
+    "last_active_date": "2025-02-18"
+  }
+]

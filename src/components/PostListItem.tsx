@@ -1,3 +1,4 @@
+import userStreaks from "@/assets/data/userStreaks.json";
 import { Post } from "@/src/types";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { formatDistanceToNowStrict } from "date-fns";
@@ -13,6 +14,8 @@ export default function PostListItem({
   post,
   isDetailedPost,
 }: PostListItemProps) {
+  const streak = userStreaks.find((s) => s.user_id === post.user.id);
+
   return (
     <View
       style={{
@@ -37,6 +40,18 @@ export default function PostListItem({
             >
               {post.group.name}
             </Text>
+
+            {streak && streak.current_streak > 0 && (
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <MaterialCommunityIcons name="fire" size={14} color="#FF6A00" />
+                <Text
+                  style={{ fontSize: 12, color: "#FF6A00", fontWeight: "600" }}
+                >
+                  {streak.current_streak}
+                </Text>
+              </View>
+            )}
+
             <Text
               style={{ color: "grey", fontSize: 13, alignSelf: "flex-start" }}
             >

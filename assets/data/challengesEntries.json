@@ -1,0 +1,18 @@
+[
+  {
+    "id": "entry-1",
+    "challenge_id": "challenge-1",
+    "user_id": "user-2",
+    "content": "Always break UI into reusable components.",
+    "created_at": "2025-02-11T10:30:00Z",
+    "votes": 8
+  },
+  {
+    "id": "entry-2",
+    "challenge_id": "challenge-1",
+    "user_id": "user-3",
+    "content": "Use TypeScript to avoid runtime bugs.",
+    "created_at": "2025-02-12T12:00:00Z",
+    "votes": 12
+  }
+]

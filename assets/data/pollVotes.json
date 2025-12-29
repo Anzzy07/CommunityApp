@@ -1,0 +1,12 @@
+[
+  {
+    "poll_id": "poll-1",
+    "option_id": "option-1",
+    "user_id": "user-2"
+  },
+  {
+    "poll_id": "poll-1",
+    "option_id": "option-2",
+    "user_id": "user-3"
+  }
+]
