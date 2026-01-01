@@ -16,6 +16,8 @@ export default function PostListItem({
   isDetailedPost,
 }: PostListItemProps) {
   const streak = userStreaks.find((s) => s.user_id === post.user.id);
+  const shouldShowImage = isDetailedPost || post.image;
+  const shouldShowDescription = isDetailedPost || !post.image; // show description when post doesn't have image
 
   return (
     <Link href={`/post/${post.id}`}>
@@ -100,14 +102,14 @@ export default function PostListItem({
         <Text style={{ fontWeight: "bold", fontSize: 17, letterSpacing: 0.5 }}>
           {post.title}
         </Text>
-        {post.image && (
+        {shouldShowImage && post.image && (
           <Image
             source={{ uri: post.image }}
             style={{ width: "100%", aspectRatio: 4 / 3, borderRadius: 15 }}
           />
         )}
 
-        {post.description && !post.image && (
+        {shouldShowDescription && post.description && (
           <Text numberOfLines={isDetailedPost ? undefined : 4}>
             {post.description}
           </Text>
