@@ -1,6 +1,6 @@
 import { COLORS } from "@/src/colors";
 import { AntDesign } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { Link, router } from "expo-router";
 import React, { useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -45,10 +45,12 @@ export default function CreateScreen() {
       >
         <ScrollView showsVerticalScrollIndicator={false}>
           {/* Community Selector */}
-          <View style={styles.communityContainer}>
-            <Text style={styles.kStyles}>k/</Text>
-            <Text style={{ fontWeight: "600" }}>Select a community</Text>
-          </View>
+          <Link href={"groupSelector"} asChild>
+            <Pressable style={styles.communityContainer}>
+              <Text style={styles.kStyles}>k/</Text>
+              <Text style={{ fontWeight: "600" }}>Select a community</Text>
+            </Pressable>
+          </Link>
 
           {/* Post Title Input */}
           <TextInput
