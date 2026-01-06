@@ -1,3 +1,4 @@
+import { COLORS } from "@/src/colors";
 import { useSignIn } from "@clerk/clerk-expo";
 import { Link, useRouter } from "expo-router";
 import React from "react";
@@ -10,15 +11,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-
-const COLORS = {
-  wave: "#9CAF88",
-  background: "#DFE6DA",
-  primary: "#9CAF88",
-  primaryDark: "#758467",
-  button: "#819171",
-  checkbox: "#758467",
-};
 
 export default function Page() {
   const { signIn, setActive, isLoaded } = useSignIn();

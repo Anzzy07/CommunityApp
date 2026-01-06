@@ -45,6 +45,16 @@ export type GroupMember = {
   joined_at: string;
 };
 
+// GROUP CHAT
+
+export type GroupMessage = {
+  id: string;
+  group_id: string;
+  user: User;
+  message: string;
+  created_at: string;
+};
+
 // POLLS
 
 export type Poll = {

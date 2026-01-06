@@ -1,3 +1,4 @@
+import { COLORS } from "@/src/colors";
 import { useSignUp } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
 import React from "react";
@@ -10,14 +11,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-
-const COLORS = {
-  wave: "#9CAF88",
-  background: "#DFE6DA",
-  primary: "#9CAF88",
-  primaryDark: "#758467",
-  button: "#819171",
-};
 
 export default function SignUpScreen() {
   const { isLoaded, signUp, setActive } = useSignUp();

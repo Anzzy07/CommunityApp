@@ -22,15 +22,23 @@ export default function CreateScreen() {
   const [bodyText, setbodyText] = useState<string>("");
   const [group, setGroup] = useAtom(selectedGroupAtom);
 
+  const [titleFocused, setTitleFocused] = useState(false);
+  const [bodyFocused, setBodyFocused] = useState(false);
+
   const goBack = () => {
     setTitle("");
     setbodyText("");
     setGroup(null);
     router.back();
   };
+
   return (
     <SafeAreaView
-      style={{ backgroundColor: COLORS.border, flex: 1, paddingHorizontal: 10 }}
+      style={{
+        backgroundColor: COLORS.background,
+        flex: 1,
+        paddingHorizontal: 10,
+      }}
     >
       {/* Header */}
       <View
@@ -42,7 +50,7 @@ export default function CreateScreen() {
         }}
       >
         <Pressable onPress={goBack} hitSlop={10}>
-          <AntDesign name="close" size={30} color={COLORS.primaryDark} />
+          <AntDesign name="close" size={30} color={COLORS.button} />
         </Pressable>
 
         <Pressable onPress={() => console.log("POST")} hitSlop={10}>
@@ -64,36 +72,78 @@ export default function CreateScreen() {
                     source={{ uri: group.image }}
                     style={{ width: 20, height: 20, borderRadius: 10 }}
                   />
-                  <Text style={{ fontWeight: "600" }}>{group.name}</Text>
+                  <Text style={{ fontWeight: "600", color: "#fff" }}>
+                    {group.name}
+                  </Text>
                 </>
               ) : (
                 <>
                   <Text style={styles.kStyles}>k/</Text>
-                  <Text style={{ fontWeight: "600" }}>Select a community</Text>
+                  <Text style={{ fontWeight: "600", color: "#fff" }}>
+                    Select a community
+                  </Text>
                 </>
               )}
             </Pressable>
           </Link>
+          {/* Title Input */}
+          <View
+            style={{
+              borderBottomWidth: titleFocused ? 2 : 1,
+              borderBottomColor: titleFocused ? COLORS.button : "#ddd",
+              marginTop: 20,
+            }}
+          >
+            <TextInput
+              placeholder="An interesting title"
+              placeholderTextColor="#888"
+              style={{
+                fontSize: 28,
+                fontWeight: "bold",
+                color: COLORS.text || "#000",
+                paddingVertical: 16,
+                paddingHorizontal: 4,
+              }}
+              value={title}
+              onChangeText={setTitle}
+              onFocus={() => setTitleFocused(true)}
+              onBlur={() => setTitleFocused(false)}
+              multiline
+              scrollEnabled={false}
+              selectionColor={COLORS.button}
+              autoFocus={false}
+            />
+          </View>
+          {/* Body Input  */}
+          <View
+            style={{
+              borderBottomWidth: bodyFocused ? 2 : 0,
+              borderBottomColor: COLORS.button,
+              marginTop: 32,
+            }}
+          >
+            <TextInput
+              placeholder="Text (optional)"
+              placeholderTextColor="#888"
+              style={{
+                fontSize: 20,
+                color: COLORS.text || "#000",
+                paddingVertical: 20,
+                paddingHorizontal: 4,
+                minHeight: 300,
+                textAlignVertical: "top",
+              }}
+              value={bodyText}
+              onChangeText={setbodyText}
+              onFocus={() => setBodyFocused(true)}
+              onBlur={() => setBodyFocused(false)}
+              multiline
+              scrollEnabled={false}
+              selectionColor={COLORS.button}
+            />
+          </View>
 
-          {/* Post Title Input */}
-          <TextInput
-            placeholder="title"
-            style={{ fontSize: 20, fontFamily: "bold", paddingVertical: 20 }}
-            value={title}
-            onChangeText={(text) => setTitle(text)}
-            multiline
-            scrollEnabled={false}
-          />
-
-          {/* Post Input */}
-          <TextInput
-            placeholder="texts..."
-            style={{ fontSize: 20, fontFamily: "bold", paddingVertical: 20 }}
-            value={bodyText}
-            onChangeText={(text) => setbodyText(text)}
-            multiline
-            scrollEnabled={false}
-          />
+          <View style={{ height: 100 }} />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -105,9 +155,9 @@ const styles = StyleSheet.create({
     color: "white",
     backgroundColor: COLORS.success,
     fontWeight: "bold",
-    paddingHorizontal: 10,
+    paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 15,
+    borderRadius: 20,
   },
   kStyles: {
     backgroundColor: "black",
@@ -116,14 +166,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
     borderRadius: 10,
     fontWeight: "bold",
+    marginRight: 5,
   },
   communityContainer: {
     flexDirection: "row",
-    backgroundColor: COLORS.success,
-    padding: 10,
+    backgroundColor: COLORS.secondary,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderRadius: 20,
-    gap: 5,
+    gap: 6,
     alignSelf: "flex-start",
-    marginVertical: 10,
+    marginVertical: 12,
+    alignItems: "center",
   },
 });
