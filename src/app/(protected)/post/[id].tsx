@@ -19,24 +19,33 @@ export default function DetailedPost() {
   const { id } = useLocalSearchParams();
   const insets = useSafeAreaInsets();
 
-  const [comment, setComment] = useState<string>("");
-  const [isInputFocused, setIsInputFocused] = useState<boolean>(false);
+  const [comment, setComment] = useState("");
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [isInputFocused, setIsInputFocused] = useState(false);
+
   const inputRef = useRef<TextInput | null>(null);
 
   const detailedPost = posts.find((post) => post.id === id);
-  const postComments = comments.filter(
-    (comment) => comment.post_id === detailedPost?.id
-  );
+  const postComments = comments.filter((c) => c.post_id === detailedPost?.id);
 
   if (!detailedPost) {
     return <Text>Post Not Found!</Text>;
   }
 
   // useCallback with memo inside CommentListItem prevents re-renders when replying to a comment
-  const handleReplyPress = useCallback((commentId: string) => {
-    console.log(commentId);
-    inputRef.current?.focus();
-  }, []);
+  const handleReplyPress = useCallback(
+    (commentId: string, username: string) => {
+      setReplyingTo(username);
+      inputRef.current?.focus();
+    },
+    []
+  );
+
+  const handleSend = () => {
+    console.log("Send:", comment);
+    setComment("");
+    setReplyingTo(null);
+  };
 
   return (
     <KeyboardAvoidingView
@@ -49,6 +58,7 @@ export default function DetailedPost() {
           <PostListItem post={detailedPost} isDetailedPost />
         }
         data={postComments}
+        keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <CommentListItem
             comment={item}
@@ -56,54 +66,64 @@ export default function DetailedPost() {
             handleReplyPress={handleReplyPress}
           />
         )}
+        contentContainerStyle={{ paddingBottom: 80 }}
       />
-      {/* POST A COMMENT */}
+
+      {/* COMMENT INPUT */}
       <View
         style={{
           paddingBottom: insets.bottom,
-          borderBottomWidth: 1,
-          borderBottomColor: "lightgrey",
           padding: 10,
           backgroundColor: "white",
-          borderRadius: 10,
-          shadowColor: "#000",
-          shadowOffset: {
-            width: 0,
-            height: -3,
-          },
-          shadowOpacity: 0.1,
-          shadowRadius: 3,
-
-          elevation: 4,
+          borderTopWidth: 1,
+          borderTopColor: "#E5E7EB",
         }}
       >
+        {replyingTo && (
+          <Text
+            style={{
+              fontSize: 12,
+              color: "#737373",
+              marginBottom: 4,
+            }}
+          >
+            Replying to @{replyingTo}
+          </Text>
+        )}
+
         <TextInput
-          placeholder="Join the conversation"
           ref={inputRef}
+          placeholder="Join the conversation"
           value={comment}
-          onChangeText={(text) => setComment(text)}
-          style={{ backgroundColor: "#E4E4E4", padding: 5, borderRadius: 5 }}
+          onChangeText={setComment}
           multiline
+          style={{
+            backgroundColor: "#F3F4F6",
+            padding: 8,
+            borderRadius: 8,
+            minHeight: 40,
+          }}
           onFocus={() => setIsInputFocused(true)}
           onBlur={() => setIsInputFocused(false)}
         />
+
         {isInputFocused && (
           <Pressable
-            disabled={!comment}
-            onPress={() => console.error("Pressed")}
+            disabled={!comment.trim()}
+            onPress={handleSend}
             style={{
-              backgroundColor: !comment ? "lightgrey" : "#0d469b",
-              borderRadius: 15,
-              marginLeft: "auto",
-              marginTop: 15,
+              backgroundColor: comment.trim() ? "#2563EB" : "#D1D5DB",
+              alignSelf: "flex-end",
+              marginTop: 8,
+              borderRadius: 16,
             }}
           >
             <Text
               style={{
                 color: "white",
-                paddingVertical: 5,
-                paddingHorizontal: 10,
-                fontWeight: "bold",
+                paddingVertical: 6,
+                paddingHorizontal: 14,
+                fontWeight: "600",
                 fontSize: 13,
               }}
             >

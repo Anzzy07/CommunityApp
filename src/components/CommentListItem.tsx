@@ -1,14 +1,19 @@
 import { Entypo, MaterialCommunityIcons, Octicons } from "@expo/vector-icons";
 import { formatDistanceToNowStrict } from "date-fns";
 import { memo, useState } from "react";
-import { FlatList, Image, Pressable, Text, View } from "react-native";
+import { Image, Pressable, Text, View } from "react-native";
 import { Comment } from "../types";
 
 type CommentListItemProps = {
   comment: Comment;
   depth: number;
-  handleReplyPress: (commentId: string) => void;
+  handleReplyPress: (commentId: string, username: string) => void;
 };
+
+const MAX_DEPTH = 4;
+const INDENT = 14;
+const DEFAULT_AVATAR =
+  "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/3.jpg";
 
 const CommentListItem = ({
   comment,
@@ -20,113 +25,123 @@ const CommentListItem = ({
   return (
     <View
       style={{
-        backgroundColor: "white",
-        marginTop: 10,
-        paddingHorizontal: 10,
-        paddingVertical: 5,
-        gap: 10,
-        borderLeftWidth: depth > 0 ? 1 : 0,
+        backgroundColor: depth === 0 ? "#FFFFFF" : "#FAFAFA",
+        marginTop: 8,
+        padding: 10,
+        marginLeft: Math.min(depth, MAX_DEPTH) * INDENT,
+        borderRadius: 8,
+        borderLeftWidth: depth > 0 ? 2 : 0,
         borderLeftColor: "#E5E7EB",
+        gap: 6,
       }}
     >
-      {/* User Info */}
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+      {/* USER INFO */}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
         <Image
-          source={{
-            uri:
-              comment.user.image ||
-              "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/3.jpg",
-          }}
-          style={{ width: 28, height: 28, borderRadius: 15, marginRight: 4 }}
+          source={{ uri: comment.user.image || DEFAULT_AVATAR }}
+          style={{ width: 30, height: 30, borderRadius: 15 }}
         />
-        <Text style={{ fontWeight: "600", color: "#737373", fontSize: 13 }}>
-          {comment.user.name}
-        </Text>
-        <Text style={{ color: "#737373", fontSize: 13 }}>&#x2022;</Text>
-        <Text style={{ color: "#737373", fontSize: 13 }}>
-          {formatDistanceToNowStrict(new Date(comment.created_at))}
-        </Text>
-      </View>
 
-      {/* Comment Content */}
-      <Text>{comment.comment}</Text>
-
-      {/* Comment Actions */}
-      <View
-        style={{
-          flexDirection: "row",
-          justifyContent: "flex-end",
-          alignItems: "center",
-          gap: 14,
-        }}
-      >
-        <Entypo name="dots-three-horizontal" size={15} color="#737373" />
-        <Octicons
-          name="reply"
-          size={16}
-          color="#737373"
-          onPress={() => handleReplyPress(comment.id)}
-        />
-        <MaterialCommunityIcons
-          name="trophy-outline"
-          size={16}
-          color="#737373"
-        />
-        <View style={{ flexDirection: "row", gap: 5, alignItems: "center" }}>
-          <MaterialCommunityIcons
-            name="arrow-up-bold-outline"
-            size={18}
-            color="#737373"
-          />
-          <Text style={{ fontWeight: "500", color: "#737373" }}>
-            {comment.upvotes}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+          <Text style={{ fontWeight: "600", fontSize: 13 }}>
+            {comment.user.name}
           </Text>
-          <MaterialCommunityIcons
-            name="arrow-down-bold-outline"
-            size={18}
-            color="#737373"
-          />
+          <Text style={{ color: "#A3A3A3", fontSize: 12 }}>
+            · {formatDistanceToNowStrict(new Date(comment.created_at))}
+          </Text>
         </View>
       </View>
 
-      {/* Show Replies Button */}
-      {comment.replies.length > 0 && depth < 5 && !showReplies && (
-        <Pressable
-          onPress={() => setShowReplies(true)}
-          style={{
-            backgroundColor: "#EDEDED",
-            borderRadius: 3,
-            paddingVertical: 3,
-            alignItems: "center",
-          }}
-        >
+      {/* COMMENT  */}
+      <Text
+        style={{
+          fontSize: 14,
+          lineHeight: 20,
+          color: "#262626",
+        }}
+      >
+        {comment.comment}
+      </Text>
+
+      {/* ACTION BAR */}
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginTop: 4,
+        }}
+      >
+        {/* LEFT ACTIONS */}
+        <View style={{ flexDirection: "row", gap: 16 }}>
+          <Pressable
+            hitSlop={10}
+            onPress={() => handleReplyPress(comment.id, comment.user.name)}
+          >
+            <Octicons name="reply" size={16} color="#737373" />
+          </Pressable>
+
+          <MaterialCommunityIcons
+            name="trophy-outline"
+            size={16}
+            color="#737373"
+          />
+
+          <Entypo name="dots-three-horizontal" size={14} color="#737373" />
+        </View>
+
+        {/* VOTING */}
+        <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
+          <Pressable hitSlop={10}>
+            <MaterialCommunityIcons
+              name="arrow-up-bold-outline"
+              size={18}
+              color="#737373"
+            />
+          </Pressable>
+
+          <Text style={{ fontSize: 13, fontWeight: "500" }}>
+            {comment.upvotes}
+          </Text>
+
+          <Pressable hitSlop={10}>
+            <MaterialCommunityIcons
+              name="arrow-down-bold-outline"
+              size={18}
+              color="#737373"
+            />
+          </Pressable>
+        </View>
+      </View>
+
+      {/* SHOW / HIDE REPLIES */}
+      {comment.replies.length > 0 && depth < MAX_DEPTH && (
+        <Pressable onPress={() => setShowReplies((v) => !v)}>
           <Text
             style={{
               fontSize: 12,
-              letterSpacing: 0.5,
               fontWeight: "500",
-              color: "#545454",
+              color: "#2563EB",
+              marginTop: 2,
             }}
           >
-            Show Replies
+            {showReplies
+              ? "Hide replies"
+              : `View ${comment.replies.length} replies`}
           </Text>
         </Pressable>
       )}
 
-      {/* Nested Replies */}
-      {showReplies && (
-        <FlatList
-          data={comment.replies}
-          keyExtractor={(reply) => reply.id}
-          renderItem={({ item }) => (
-            <CommentListItem
-              comment={item}
-              depth={depth + 1}
-              handleReplyPress={handleReplyPress}
-            />
-          )}
-        />
-      )}
+      {/* NESTED REPLIES  */}
+      {showReplies &&
+        comment.replies.map((reply) => (
+          <CommentListItem
+            key={reply.id}
+            comment={reply}
+            depth={depth + 1}
+            handleReplyPress={handleReplyPress}
+          />
+        ))}
     </View>
   );
 };
