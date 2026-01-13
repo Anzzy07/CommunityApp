@@ -1,16 +1,19 @@
+// USER
 export type User = {
   id: string;
   name: string;
   image: string | null;
 };
 
+// GROUP
 export type Group = {
   id: string;
   name: string;
   image: string;
-  leader_id?: string; // user who created the group
+  leader_id?: string;
 };
 
+// POST
 export type Post = {
   id: string;
   title: string;
@@ -24,6 +27,7 @@ export type Post = {
   poll?: Poll | null;
 };
 
+// COMMENT
 export type Comment = {
   id: string;
   post_id: string;
@@ -36,8 +40,7 @@ export type Comment = {
   replies: Comment[];
 };
 
-//GROUP MEMBERSHIP
-
+// GROUP MEMBERSHIP
 export type GroupMember = {
   id: string;
   group_id: string;
@@ -46,17 +49,20 @@ export type GroupMember = {
 };
 
 // GROUP CHAT
-
 export type GroupMessage = {
   id: string;
   group_id: string;
   user: User;
   message: string;
   created_at: string;
+  reply_to?: {
+    id: string;
+    message: string;
+    user_name: string;
+  } | null;
 };
 
 // POLLS
-
 export type Poll = {
   id: string;
   post_id: string;
@@ -78,8 +84,7 @@ export type PollVote = {
   user_id: string;
 };
 
-//  USER STREAKS
-
+// USER STREAKS
 export type UserStreak = {
   user_id: string;
   current_streak: number;
@@ -87,8 +92,7 @@ export type UserStreak = {
   last_active_date: string;
 };
 
-// COMMUNITY CHALLENGES
-
+// CHALLENGES
 export type Challenge = {
   id: string;
   group_id: string;
@@ -96,7 +100,7 @@ export type Challenge = {
   description: string | null;
   start_date: string;
   end_date: string;
-  created_by: string; // leader_id
+  created_by: string;
 };
 
 export type ChallengeEntry = {
@@ -109,7 +113,6 @@ export type ChallengeEntry = {
 };
 
 // NOTIFICATIONS
-
 export type NotificationType =
   | "comment"
   | "post"
