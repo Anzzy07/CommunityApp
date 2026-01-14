@@ -2,6 +2,7 @@ import groupMembers from "@/assets/data/groupMembers.json";
 import messages from "@/assets/data/groupMessage.json";
 import { COLORS } from "@/src/colors";
 import ChatMessageItem from "@/src/components/ChatMessageItem";
+import JoinGroupView from "@/src/components/JoinGroupView";
 import { GroupMessage } from "@/src/types";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import React, { useState } from "react";
@@ -50,6 +51,21 @@ export default function ChatScreen() {
     setText(""); // clear input
     setReplyTo(null); // clear reply
   };
+
+  // If user is NOT a member show join group UI
+  if (!isMember) {
+    return (
+      <View style={{ flex: 1 }}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>r/Lifestyle Chat</Text>
+        </View>
+
+        {/* Join Group */}
+        <JoinGroupView />
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
