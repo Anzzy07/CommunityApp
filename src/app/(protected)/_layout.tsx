@@ -56,6 +56,30 @@ export default function AppLayout() {
           ),
         }}
       />
+      <Stack.Screen
+        name="community/[id]"
+        options={{
+          animation: "slide_from_bottom",
+          headerTitle: "",
+          headerStyle: {
+            backgroundColor: COLORS.headerMain,
+          },
+
+          headerLeft: () => (
+            <View
+              style={{
+                height: "100%",
+                alignItems: "center",
+                paddingHorizontal: 10,
+              }}
+            >
+              <Pressable onPress={() => router.back()} hitSlop={10}>
+                <AntDesign name="close" size={24} color="white" />
+              </Pressable>
+            </View>
+          ),
+        }}
+      />
     </Stack>
   );
 }

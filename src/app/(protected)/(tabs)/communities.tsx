@@ -3,6 +3,7 @@ import groups from "@/assets/data/groups.json";
 import { COLORS } from "@/src/colors";
 import { Group } from "@/src/types";
 import { AntDesign, EvilIcons } from "@expo/vector-icons";
+import { Link } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
   FlatList,
@@ -20,7 +21,7 @@ const CURRENT_USER_ID = "user-21"; // logged-in user id
 export default function CommunitiesScreen() {
   const [searchValue, setSearchValue] = useState("");
 
-  //  Check whether the current user has joined a group
+  //  Checking whether the current user has joined a group
 
   const isJoined = (groupId: string) => {
     return groupMembers.some(
@@ -28,7 +29,7 @@ export default function CommunitiesScreen() {
     );
   };
 
-  // Filter and split communities into joined communities, discoverable communities
+  // Filter and split communities into joined communities, finding communities
 
   const { joinedGroups, discoverGroups } = useMemo(() => {
     const filtered = groups.filter((group) =>
@@ -42,35 +43,40 @@ export default function CommunitiesScreen() {
   }, [searchValue]);
 
   //  Community card
-
   const renderCommunity = ({ item }: { item: Group }) => {
     const joined = isJoined(item.id);
 
     return (
-      <Pressable style={styles.card}>
-        {/* Community avatar */}
-        <Image source={{ uri: item.image }} style={styles.image} />
+      <Link href={`/community/${item.id}`} asChild>
+        <Pressable style={styles.card}>
+          {/* Community avatar */}
+          <Image source={{ uri: item.image }} style={styles.image} />
 
-        {/* Community name & status */}
-        <View style={{ flex: 1 }}>
-          <Text style={styles.name}>r/{item.name}</Text>
-          <Text style={styles.subText}>
-            {joined ? "You are a member" : "Tap to explore"}
-          </Text>
-        </View>
+          {/* Community name & status */}
+          <View style={{ flex: 1 }}>
+            <Text style={styles.name}>{item.name}</Text>
+            <Text style={styles.subText}>
+              {joined ? "You are a member" : "Tap to explore"}
+            </Text>
+          </View>
 
-        {/* Join / Joined button */}
-        <Pressable
-          style={[styles.joinButton, joined && styles.joinedButton]}
-          onPress={() =>
-            console.log(joined ? "Open community" : "Join community", item.id)
-          }
-        >
-          <Text style={[styles.joinText, joined && { color: "#555" }]}>
-            {joined ? "Joined" : "Join"}
-          </Text>
+          {/* Join / Joined button */}
+          <Pressable
+            onPress={(e) => {
+              e.stopPropagation();
+              console.log(
+                joined ? "Already joined" : "Join community",
+                item.id
+              );
+            }}
+            style={[styles.joinButton, joined && styles.joinedButton]}
+          >
+            <Text style={[styles.joinText, joined && { color: "#555" }]}>
+              {joined ? "Joined" : "Join"}
+            </Text>
+          </Pressable>
         </Pressable>
-      </Pressable>
+      </Link>
     );
   };
 

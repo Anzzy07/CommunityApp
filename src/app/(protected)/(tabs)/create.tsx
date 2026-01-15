@@ -1,4 +1,4 @@
-import { selectedGroupAtom } from "@/src/atoms";
+import { selectedGroupAtom } from "@/src/atoms/SelectGroupAtom";
 import { COLORS } from "@/src/colors";
 import { AntDesign } from "@expo/vector-icons";
 import { Link, router } from "expo-router";

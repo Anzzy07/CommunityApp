@@ -1,5 +1,6 @@
 import groups from "@/assets/data/groups.json";
-import { selectedGroupAtom } from "@/src/atoms";
+import { selectedGroupAtom } from "@/src/atoms/SelectGroupAtom";
+
 import { COLORS } from "@/src/colors";
 import { Group } from "@/src/types";
 import { AntDesign, EvilIcons } from "@expo/vector-icons";
