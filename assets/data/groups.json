@@ -2,51 +2,61 @@
   {
     "id": "group-1",
     "name": "r/FrontendDevelopers",
-    "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/11.png"
+    "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/11.png",
+    "leader_id": "user-21"
   },
   {
     "id": "group-2",
     "name": "r/ReactEnthusiasts",
-    "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/10.png"
+    "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/10.png",
+    "leader_id": "user-21"
   },
   {
     "id": "group-3",
     "name": "r/WebDevelopers",
-    "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/9.png"
+    "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/9.png",
+    "leader_id": "user-21"
   },
   {
     "id": "group-4",
     "name": "r/JSDevelopers",
-    "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/8.png"
+    "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/8.png",
+    "leader_id": "user-21"
   },
   {
     "id": "group-5",
     "name": "r/AIInnovators",
-    "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/7.png"
+    "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/7.png",
+    "leader_id": "user-21"
   },
   {
     "id": "group-6",
     "name": "r/TypeScriptCommunity",
-    "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/6.png"
+    "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/6.png",
+    "leader_id": "user-21"
   },
   {
     "id": "group-7",
     "name": "r/ReactJS",
-    "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/5.jpg"
+    "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/5.jpg",
+    "leader_id": "user-21"
   },
   {
     "id": "group-8",
     "name": "r/ServerlessTech",
-    "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/4.jpg"
+    "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/4.jpg",
+    "leader_id": "user-21"
   },
   {
     "id": "group-9",
     "name": "r/WebAccessibility",
-    "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/3.jpg"
+    "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/3.jpg",
+    "leader_id": "user-10"
   },
   {
     "id": "group-10",
     "name": "r/PWADevs",
-    "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/2.jpg"
+    "image": "https://notjustdev-dummy.s3.us-east-2.amazonaws.com/avatars/2.jpg",
+    "leader_id": "user-17"
   }
 ]

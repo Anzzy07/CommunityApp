@@ -1,7 +1,7 @@
 import { COLORS } from "@/src/colors";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import { AntDesign, Feather, Ionicons } from "@expo/vector-icons";
-import { Tabs } from "expo-router";
+import { router, Tabs } from "expo-router";
 import { Image, Platform, TouchableOpacity, View } from "react-native";
 
 export default function TabLayout() {
@@ -77,8 +77,18 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => (
             <Feather name="users" size={24} color={color} />
           ),
+
+          headerRight: () => (
+            <TouchableOpacity
+              onPress={() => router.push("/createCommunity")}
+              style={{ marginRight: 15 }}
+            >
+              <AntDesign name="plus-circle" size={22} color="white" />
+            </TouchableOpacity>
+          ),
         }}
       />
+
       <Tabs.Screen
         name="create"
         options={{

@@ -26,6 +26,9 @@ export default function CommunityDetailsScreen() {
     (m) => m.group_id === id && m.user_id === CURRENT_USER_ID
   );
 
+  // check if current user is the community leader
+  const isLeader = group?.leader_id === CURRENT_USER_ID;
+
   // get posts belonging to this community
   const groupPosts = useMemo(
     () => posts.filter((p) => p.group.id === id),
@@ -104,6 +107,7 @@ export default function CommunityDetailsScreen() {
                   flexDirection: "row",
                   marginTop: 14,
                   gap: 12,
+                  flexWrap: "wrap",
                 }}
               >
                 {/* CREATE POST */}
@@ -150,6 +154,42 @@ export default function CommunityDetailsScreen() {
                   <MaterialCommunityIcons name="chat-outline" size={14} />
                   <Text style={{ fontSize: 13, fontWeight: "500" }}>Chat</Text>
                 </Pressable>
+
+                {/* CREATE CHALLENGE (LEADER ONLY) */}
+                {isLeader && (
+                  <Pressable
+                    // onPress={() =>
+                    //   router.push({
+                    //     pathname: "/createChallenge",
+                    //     params: { groupId: group.id },
+                    //   })
+                    // }
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 20,
+                      backgroundColor: "#E0F2FE",
+                    }}
+                  >
+                    <MaterialCommunityIcons
+                      name="trophy-outline"
+                      size={14}
+                      color="#0369A1"
+                    />
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        fontWeight: "600",
+                        color: "#0369A1",
+                      }}
+                    >
+                      Challenge
+                    </Text>
+                  </Pressable>
+                )}
               </View>
             </View>
           </>

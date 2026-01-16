@@ -1,5 +1,8 @@
-import groupMembers from "@/assets/data/groupMembers.json";
-import groups from "@/assets/data/groups.json";
+import { groupMembersAtom } from "@/src/atoms/GroupMembersAtom";
+import { groupsAtom } from "@/src/atoms/GroupsAtom";
+import { selectedGroupAtom } from "@/src/atoms/SelectGroupAtom";
+import { useAtomValue, useSetAtom } from "jotai";
+
 import { COLORS } from "@/src/colors";
 import { Group } from "@/src/types";
 import { AntDesign, EvilIcons } from "@expo/vector-icons";
@@ -16,21 +19,24 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const CURRENT_USER_ID = "user-21"; // logged-in user id
+const CURRENT_USER_ID = "user-21";
 
 export default function CommunitiesScreen() {
+  // global state
+  const groups = useAtomValue(groupsAtom);
+  const groupMembers = useAtomValue(groupMembersAtom);
+  const setSelectedGroup = useSetAtom(selectedGroupAtom);
+
   const [searchValue, setSearchValue] = useState("");
 
-  //  Checking whether the current user has joined a group
-
+  // check if user joined a group
   const isJoined = (groupId: string) => {
     return groupMembers.some(
       (m) => m.group_id === groupId && m.user_id === CURRENT_USER_ID
     );
   };
 
-  // Filter and split communities into joined communities, finding communities
-
+  // split communities into joined & discover
   const { joinedGroups, discoverGroups } = useMemo(() => {
     const filtered = groups.filter((group) =>
       group.name.toLowerCase().includes(searchValue.toLowerCase())
@@ -40,19 +46,22 @@ export default function CommunitiesScreen() {
       joinedGroups: filtered.filter((g) => isJoined(g.id)),
       discoverGroups: filtered.filter((g) => !isJoined(g.id)),
     };
-  }, [searchValue]);
+  }, [groups, groupMembers, searchValue]);
 
-  //  Community card
+  // single community card
   const renderCommunity = ({ item }: { item: Group }) => {
     const joined = isJoined(item.id);
 
     return (
       <Link href={`/community/${item.id}`} asChild>
-        <Pressable style={styles.card}>
+        <Pressable
+          style={styles.card}
+          onPress={() => setSelectedGroup(item)} // store selected group globally
+        >
           {/* Community avatar */}
           <Image source={{ uri: item.image }} style={styles.image} />
 
-          {/* Community name & status */}
+          {/* Community name & subtitle */}
           <View style={{ flex: 1 }}>
             <Text style={styles.name}>{item.name}</Text>
             <Text style={styles.subText}>
@@ -63,7 +72,7 @@ export default function CommunitiesScreen() {
           {/* Join / Joined button */}
           <Pressable
             onPress={(e) => {
-              e.stopPropagation();
+              e.stopPropagation(); // prevent routing
               console.log(
                 joined ? "Already joined" : "Join community",
                 item.id
@@ -82,7 +91,7 @@ export default function CommunitiesScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["bottom"]}>
-      {/* Search input */}
+      {/* Search bar */}
       <View style={styles.searchContainer}>
         <EvilIcons name="search" size={18} color="#555" />
 
@@ -122,7 +131,7 @@ export default function CommunitiesScreen() {
             {/* Section title */}
             <Text style={styles.sectionTitle}>{item.title}</Text>
 
-            {/* Section communities */}
+            {/* Section items */}
             <FlatList
               data={item.data}
               keyExtractor={(g) => g.id}
@@ -178,9 +187,9 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     marginHorizontal: 15,
     marginBottom: 12,
-    padding: 14,
-    borderRadius: 14,
-    gap: 12,
+    padding: 16,
+    borderRadius: 16,
+    gap: 14,
     minHeight: 100,
 
     shadowColor: "#000",
@@ -189,15 +198,18 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 3,
   },
+
   image: {
-    width: 52,
-    height: 52,
-    borderRadius: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
   },
+
   name: {
     fontSize: 17,
     fontWeight: "600",
   },
+
   subText: {
     fontSize: 14,
     color: "#777",
@@ -210,9 +222,11 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     borderRadius: 20,
   },
+
   joinedButton: {
     backgroundColor: COLORS.button,
   },
+
   joinText: {
     color: "white",
     fontSize: 14,
