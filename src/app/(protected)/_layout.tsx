@@ -16,6 +16,7 @@ export default function AppLayout() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="groupSelector" options={{ headerShown: false }} />
       <Stack.Screen name="createCommunity" options={{ headerShown: false }} />
+      <Stack.Screen name="createChallenge" options={{ headerShown: false }} />
 
       <Stack.Screen
         name="post/[id]"

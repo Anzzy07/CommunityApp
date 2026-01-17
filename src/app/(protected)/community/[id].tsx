@@ -1,12 +1,15 @@
 import groupMembers from "@/assets/data/groupMembers.json";
 import groups from "@/assets/data/groups.json";
 import posts from "@/assets/data/posts.json";
+import { challengesAtom } from "@/src/atoms/ChallangesAtom";
 import { chatGroupAtom } from "@/src/atoms/ChatGroupAtom";
+import { groupMembersAtom } from "@/src/atoms/GroupMembersAtom";
 import { COLORS } from "@/src/colors";
+import ChallengeListItem from "@/src/components/ChallengeListItem";
 import PostListItem from "@/src/components/PostListItem";
 import { AntDesign, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { useSetAtom } from "jotai";
+import { useAtomValue, useSetAtom } from "jotai";
 import React, { useMemo } from "react";
 import { FlatList, Image, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -15,8 +18,16 @@ const CURRENT_USER_ID = "user-21";
 
 export default function CommunityDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const challenges = useAtomValue(challengesAtom);
 
   const setChatGroup = useSetAtom(chatGroupAtom);
+  const setGroupMembers = useSetAtom(groupMembersAtom);
+
+  // challenges of community
+  const groupChallenges = useMemo(
+    () => challenges.filter((c) => c.group_id === id),
+    [challenges, id]
+  );
 
   // find current group
   const group = groups.find((g) => g.id === id);
@@ -35,6 +46,15 @@ export default function CommunityDetailsScreen() {
     [id]
   );
 
+  // leave community for members
+  const handleLeave = () => {
+    setGroupMembers((prev) =>
+      prev.filter(
+        (m) => !(m.group_id === group?.id && m.user_id === CURRENT_USER_ID)
+      )
+    );
+  };
+
   if (!group) {
     return <Text>Community not found</Text>;
   }
@@ -47,7 +67,9 @@ export default function CommunityDetailsScreen() {
       <FlatList
         data={groupPosts}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <PostListItem post={item} />}
+        renderItem={({ item }) => (
+          <PostListItem post={item} showJoinButton={false} />
+        )}
         ListHeaderComponent={
           <>
             {/* COMMUNITY HEADER */}
@@ -72,33 +94,77 @@ export default function CommunityDetailsScreen() {
                 />
 
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 18, fontWeight: "bold" }}>
-                    r/{group.name}
-                  </Text>
+                  {/* COMMUNITY NAME & LEADER BADGE */}
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    <Text style={{ fontSize: 18, fontWeight: "bold" }}>
+                      {group.name}
+                    </Text>
+
+                    {isLeader && (
+                      <MaterialCommunityIcons
+                        name="crown"
+                        size={16}
+                        color="#F59E0B"
+                      />
+                    )}
+                  </View>
+
                   <Text style={{ fontSize: 13, color: "#6B7280" }}>
-                    {isJoined ? "You are a member" : "Join to post & chat"}
+                    {isJoined
+                      ? isLeader
+                        ? "You are the community leader"
+                        : "You are a member"
+                      : "Join to post & chat"}
                   </Text>
                 </View>
 
-                {/* JOIN / JOINED */}
-                <Pressable
-                  style={{
-                    backgroundColor: isJoined ? "#E5E7EB" : COLORS.button,
-                    paddingHorizontal: 14,
-                    paddingVertical: 6,
-                    borderRadius: 20,
-                  }}
-                >
-                  <Text
+                {/* Join / Leave */}
+                {isJoined && !isLeader ? (
+                  <Pressable
+                    onPress={handleLeave}
                     style={{
-                      color: isJoined ? "#374151" : "white",
-                      fontWeight: "600",
-                      fontSize: 13,
+                      backgroundColor: "#FEE2E2",
+                      paddingHorizontal: 14,
+                      paddingVertical: 6,
+                      borderRadius: 20,
                     }}
                   >
-                    {isJoined ? "Joined" : "Join"}
-                  </Text>
-                </Pressable>
+                    <Text
+                      style={{
+                        color: "#991B1B",
+                        fontWeight: "600",
+                        fontSize: 13,
+                      }}
+                    >
+                      Leave
+                    </Text>
+                  </Pressable>
+                ) : (
+                  <Pressable
+                    style={{
+                      backgroundColor: isJoined ? "#E5E7EB" : COLORS.button,
+                      paddingHorizontal: 14,
+                      paddingVertical: 6,
+                      borderRadius: 20,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: isJoined ? "#374151" : "white",
+                        fontWeight: "600",
+                        fontSize: 13,
+                      }}
+                    >
+                      {isJoined ? "Joined" : "Join"}
+                    </Text>
+                  </Pressable>
+                )}
               </View>
 
               {/* ACTION ROW */}
@@ -158,12 +224,12 @@ export default function CommunityDetailsScreen() {
                 {/* CREATE CHALLENGE (LEADER ONLY) */}
                 {isLeader && (
                   <Pressable
-                    // onPress={() =>
-                    //   router.push({
-                    //     pathname: "/createChallenge",
-                    //     params: { groupId: group.id },
-                    //   })
-                    // }
+                    onPress={() =>
+                      router.push({
+                        pathname: "/createChallenge",
+                        params: { groupId: group.id },
+                      })
+                    }
                     style={{
                       flexDirection: "row",
                       alignItems: "center",
@@ -192,6 +258,26 @@ export default function CommunityDetailsScreen() {
                 )}
               </View>
             </View>
+            {/* CHALLENGES */}
+            {groupChallenges.length > 0 && (
+              <>
+                <Text
+                  style={{
+                    marginTop: 16,
+                    marginLeft: 15,
+                    fontSize: 14,
+                    fontWeight: "600",
+                    color: "#475569",
+                  }}
+                >
+                  Active Challenges
+                </Text>
+
+                {groupChallenges.map((challenge) => (
+                  <ChallengeListItem key={challenge.id} challenge={challenge} />
+                ))}
+              </>
+            )}
           </>
         }
         ListEmptyComponent={

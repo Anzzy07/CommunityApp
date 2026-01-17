@@ -9,11 +9,15 @@ import { COLORS } from "../colors";
 type PostListItemProps = {
   post: Post;
   isDetailedPost?: boolean;
+  showJoinButton?: boolean;
+  isJoined?: boolean;
 };
 
 export default function PostListItem({
   post,
   isDetailedPost,
+  showJoinButton = true,
+  isJoined = false,
 }: PostListItemProps) {
   const streak = userStreaks.find((s) => s.user_id === post.user.id);
   const shouldShowImage = isDetailedPost || post.image;
@@ -76,26 +80,30 @@ export default function PostListItem({
               </Text>
             )}
           </View>
-          <Pressable
-            onPress={() => console.log("Pressed")}
-            style={{
-              marginLeft: "auto",
-              backgroundColor: COLORS.border,
-              borderRadius: 10,
-            }}
-          >
-            <Text
+
+          {/* JOIN COMMUNITY */}
+          {showJoinButton && !isJoined && (
+            <Pressable
+              onPress={() => console.log("Join community", post.group.id)}
               style={{
-                color: "white",
-                paddingVertical: 2,
-                paddingHorizontal: 7,
-                fontWeight: "bold",
-                fontSize: 13,
+                marginLeft: "auto",
+                backgroundColor: COLORS.border,
+                borderRadius: 10,
               }}
             >
-              Join
-            </Text>
-          </Pressable>
+              <Text
+                style={{
+                  color: "white",
+                  paddingVertical: 2,
+                  paddingHorizontal: 7,
+                  fontWeight: "bold",
+                  fontSize: 13,
+                }}
+              >
+                Join
+              </Text>
+            </Pressable>
+          )}
         </View>
 
         {/* CONTENT */}
