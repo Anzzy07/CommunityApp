@@ -1,12 +1,21 @@
+import { unreadNotificationsCountAtom } from "@/src/atoms/NotificationAtom";
 import { COLORS } from "@/src/colors";
 import { useAuth, useUser } from "@clerk/clerk-expo";
-import { AntDesign, Feather, Ionicons } from "@expo/vector-icons";
+import {
+  AntDesign,
+  Feather,
+  Ionicons,
+  MaterialCommunityIcons,
+} from "@expo/vector-icons";
 import { router, Tabs } from "expo-router";
-import { Image, Platform, TouchableOpacity, View } from "react-native";
+import { useAtomValue } from "jotai";
+import { Image, Platform, Text, TouchableOpacity, View } from "react-native";
 
 export default function TabLayout() {
   const { signOut } = useAuth();
   const { user } = useUser();
+
+  const unreadCount = useAtomValue(unreadNotificationsCountAtom);
 
   const profileImageUrl = user?.imageUrl || "https://via.placeholder.com/32"; // Fallback image
 
@@ -119,9 +128,41 @@ export default function TabLayout() {
         name="inbox"
         options={{
           title: "Inbox",
-          headerTitle: "Notifications",
-          tabBarIcon: ({ color }) => (
-            <Feather name="bell" size={24} color={color} />
+          tabBarIcon: ({ color, size }) => (
+            <View>
+              <MaterialCommunityIcons
+                name="bell-outline"
+                size={size}
+                color={color}
+              />
+
+              {unreadCount > 0 && (
+                <View
+                  style={{
+                    position: "absolute",
+                    right: -6,
+                    top: -4,
+                    backgroundColor: "red",
+                    borderRadius: 10,
+                    minWidth: 16,
+                    height: 16,
+                    justifyContent: "center",
+                    alignItems: "center",
+                    paddingHorizontal: 4,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: "white",
+                      fontSize: 10,
+                      fontWeight: "bold",
+                    }}
+                  >
+                    {unreadCount}
+                  </Text>
+                </View>
+              )}
+            </View>
           ),
         }}
       />
