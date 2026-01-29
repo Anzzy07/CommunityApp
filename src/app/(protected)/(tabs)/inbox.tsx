@@ -9,28 +9,35 @@ import { SafeAreaView } from "react-native-safe-area-context";
 export default function InboxScreen() {
   const [notifications, setNotifications] = useAtom(notificationsAtom);
 
-  const handlePress = (notificationId: string, type: string, ref: string) => {
+  // open notification
+  const handlePress = (id: string, type: string, ref: string) => {
     // mark as read
     setNotifications((prev) =>
-      prev.map((n) => (n.id === notificationId ? { ...n, is_read: true } : n)),
+      prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)),
     );
 
-    //  routing logic
+    // routing
     if (type === "comment" || type === "post") {
       router.push(`/post/${ref}`);
     }
-
     if (type === "challenge") {
       router.push(`/community/${ref}`);
     }
-
     if (type === "message") {
       router.push("/chat");
     }
   };
 
+  // delete notification
+  const handleDelete = (id: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  };
+
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#F3F4F6" }}>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: "#F3F4F6" }}
+      edges={["bottom"]}
+    >
       <FlatList
         data={notifications}
         keyExtractor={(item) => item.id}
@@ -38,6 +45,7 @@ export default function InboxScreen() {
           <NotificationListItem
             notification={item}
             onPress={() => handlePress(item.id, item.type, item.reference_id)}
+            onDelete={() => handleDelete(item.id)}
           />
         )}
         ListEmptyComponent={
