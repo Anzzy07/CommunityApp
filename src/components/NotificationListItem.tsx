@@ -1,3 +1,4 @@
+import { COLORS } from "@/src/colors";
 import { Notification } from "@/src/types";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import React from "react";
@@ -19,76 +20,79 @@ export default function NotificationListItem({
   const renderRightActions = (
     _progress: SharedValue<number>,
     _drag: SharedValue<number>,
-  ) => (
-    <Pressable
-      onPress={onDelete}
-      style={{
-        backgroundColor: "#EF4444",
-        justifyContent: "center",
-        alignItems: "center",
-        width: 80,
-        marginVertical: 6,
-        borderRadius: 14,
-      }}
-    >
-      <MaterialCommunityIcons name="trash-can" size={22} color="white" />
-    </Pressable>
-  );
+  ) => {
+    return (
+      <Pressable
+        onPress={onDelete}
+        style={{
+          backgroundColor: COLORS.error,
+          justifyContent: "center",
+          alignItems: "center",
+          width: 80,
+          borderTopRightRadius: 16,
+          borderBottomRightRadius: 16,
+          marginVertical: 6,
+        }}
+      >
+        <MaterialCommunityIcons name="trash-can" size={22} color="white" />
+      </Pressable>
+    );
+  };
 
   return (
     <Swipeable renderRightActions={renderRightActions} overshootRight={false}>
       <Pressable
         onPress={onPress}
         style={{
-          flexDirection: "row",
-          padding: 20,
+          backgroundColor: notification.is_read ? "white" : COLORS.background,
           marginHorizontal: 12,
-          marginVertical: 8,
+          marginVertical: 6,
+          padding: 18,
           borderRadius: 16,
-          backgroundColor: notification.is_read ? "white" : "#E8EDFF",
+          flexDirection: "row",
+          gap: 14,
+          borderLeftWidth: notification.is_read ? 0 : 4,
+          borderLeftColor: COLORS.primary,
         }}
       >
-        {/* ICON  */}
+        {/* ICON */}
         <View
           style={{
-            width: 40,
-            height: 40,
-            borderRadius: 20,
-            backgroundColor: "#E5E7EB",
+            width: 42,
+            height: 42,
+            borderRadius: 21,
+            backgroundColor: COLORS.surface,
             justifyContent: "center",
             alignItems: "center",
-            marginRight: 12,
           }}
         >
           <MaterialCommunityIcons
-            name={
-              notification.type === "comment"
-                ? "comment-outline"
-                : notification.type === "challenge"
-                  ? "trophy-outline"
-                  : notification.type === "message"
-                    ? "chat-outline"
-                    : "bell-outline"
-            }
-            size={18}
-            color="#374151"
+            name="bell-outline"
+            size={20}
+            color={COLORS.textPrimary}
           />
         </View>
 
         {/* CONTENT */}
         <View style={{ flex: 1 }}>
           <Text
-            numberOfLines={2}
             style={{
-              fontSize: 14,
+              fontSize: 15,
               fontWeight: notification.is_read ? "400" : "600",
-              color: "#111827",
+              color: COLORS.textPrimary,
+              lineHeight: 20,
             }}
           >
             {notification.message}
           </Text>
 
-          <Text style={{ fontSize: 12, color: "#6B7280", marginTop: 4 }}>
+          <Text
+            style={{
+              marginTop: 6,
+              fontSize: 12,
+              color: COLORS.textSecondary,
+            }}
+          >
             {new Date(notification.created_at).toLocaleTimeString([], {
               hour: "2-digit",
               minute: "2-digit",
