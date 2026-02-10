@@ -1,8 +1,11 @@
 import { COLORS } from "@/src/colors";
 import { useSignIn } from "@clerk/clerk-expo";
+import { Ionicons } from "@expo/vector-icons";
 import { Link, useRouter } from "expo-router";
+import * as SecureStore from "expo-secure-store";
 import React from "react";
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -19,10 +22,48 @@ export default function Page() {
   const [emailAddress, setEmailAddress] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [rememberMe, setRememberMe] = React.useState(false);
+  const [showPassword, setShowPassword] = React.useState(false);
+  const [isLoading, setIsLoading] = React.useState(false);
+
+  // Load saved credentials on mount
+  React.useEffect(() => {
+    loadSavedCredentials();
+  }, []);
+
+  // Load saved email if remember me was checked
+  const loadSavedCredentials = async () => {
+    try {
+      const savedEmail = await SecureStore.getItemAsync("savedEmail");
+      const wasRemembered = await SecureStore.getItemAsync("rememberMe");
+
+      if (savedEmail && wasRemembered === "true") {
+        setEmailAddress(savedEmail);
+        setRememberMe(true);
+      }
+    } catch (error) {
+      console.error("Error loading saved credentials:", error);
+    }
+  };
+
+  // Save or clear credentials based on remember me
+  const handleRememberMe = async (shouldRemember: boolean) => {
+    try {
+      if (shouldRemember && emailAddress) {
+        await SecureStore.setItemAsync("savedEmail", emailAddress);
+        await SecureStore.setItemAsync("rememberMe", "true");
+      } else {
+        await SecureStore.deleteItemAsync("savedEmail");
+        await SecureStore.deleteItemAsync("rememberMe");
+      }
+    } catch (error) {
+      console.error("Error saving credentials:", error);
+    }
+  };
 
   const onSignInPress = React.useCallback(async () => {
-    if (!isLoaded) return;
+    if (!isLoaded || !signIn) return;
 
+    setIsLoading(true);
     try {
       const signInAttempt = await signIn.create({
         identifier: emailAddress,
@@ -30,13 +71,59 @@ export default function Page() {
       });
 
       if (signInAttempt.status === "complete") {
+        // Save credentials if remember me is checked
+        await handleRememberMe(rememberMe);
+
         await setActive({ session: signInAttempt.createdSessionId });
         router.replace("/");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(JSON.stringify(err, null, 2));
+      Alert.alert(
+        "Sign In Failed",
+        err.errors?.[0]?.message || "Invalid email or password",
+      );
+    } finally {
+      setIsLoading(false);
     }
-  }, [isLoaded, emailAddress, password]);
+  }, [isLoaded, signIn, emailAddress, password, rememberMe]);
+
+  const onForgotPasswordPress = async () => {
+    if (!isLoaded || !signIn) return;
+
+    if (!emailAddress) {
+      Alert.alert(
+        "Email Required",
+        "Please enter your email address to reset your password",
+      );
+      return;
+    }
+
+    try {
+      // Start the password reset flow with Clerk
+      await signIn.create({
+        strategy: "reset_password_email_code",
+        identifier: emailAddress,
+      });
+
+      Alert.alert(
+        "Reset Email Sent",
+        "Check your email for a password reset code",
+        [
+          {
+            text: "OK",
+            onPress: () => router.push("/resetPassword"),
+          },
+        ],
+      );
+    } catch (err: any) {
+      console.error(JSON.stringify(err, null, 2));
+      Alert.alert(
+        "Error",
+        err.errors?.[0]?.message || "Unable to send reset email",
+      );
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -50,7 +137,12 @@ export default function Page() {
 
         <Text style={styles.label}>Email</Text>
         <View style={styles.inputWrapper}>
-          <Text style={styles.icon}>✉️</Text>
+          <Ionicons
+            name="mail-outline"
+            size={20}
+            color={COLORS.primaryDark}
+            style={styles.icon}
+          />
           <TextInput
             style={styles.input}
             autoCapitalize="none"
@@ -58,20 +150,39 @@ export default function Page() {
             placeholder="demo@email.com"
             placeholderTextColor="#aaa"
             onChangeText={setEmailAddress}
+            keyboardType="email-address"
+            autoComplete="email"
           />
         </View>
 
         <Text style={styles.label}>Password</Text>
         <View style={styles.inputWrapper}>
-          <Text style={styles.icon}>🔒</Text>
+          <Ionicons
+            name="lock-closed-outline"
+            size={20}
+            color={COLORS.primaryDark}
+            style={styles.icon}
+          />
           <TextInput
             style={styles.input}
             value={password}
             placeholder="enter your password"
             placeholderTextColor="#aaa"
-            secureTextEntry
+            secureTextEntry={!showPassword}
             onChangeText={setPassword}
+            autoComplete="password"
           />
+          {/* Password visibility toggle button */}
+          <TouchableOpacity
+            onPress={() => setShowPassword(!showPassword)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons
+              name={showPassword ? "eye-outline" : "eye-off-outline"}
+              size={22}
+              color={COLORS.primaryDark}
+            />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.row}>
@@ -87,11 +198,19 @@ export default function Page() {
             <Text style={styles.checkboxText}>Remember Me</Text>
           </TouchableOpacity>
 
-          <Text style={styles.forgot}>Forgot Password?</Text>
+          <TouchableOpacity onPress={onForgotPasswordPress}>
+            <Text style={styles.forgot}>Forgot Password?</Text>
+          </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={styles.button} onPress={onSignInPress}>
-          <Text style={styles.buttonText}>Login</Text>
+        <TouchableOpacity
+          style={[styles.button, isLoading && styles.buttonDisabled]}
+          onPress={onSignInPress}
+          disabled={isLoading}
+        >
+          <Text style={styles.buttonText}>
+            {isLoading ? "Signing in..." : "Login"}
+          </Text>
         </TouchableOpacity>
 
         <View style={styles.signupRow}>
@@ -152,9 +271,7 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.primary,
   },
   icon: {
-    fontSize: 20,
     marginRight: 12,
-    color: COLORS.primaryDark,
   },
   input: {
     flex: 1,
@@ -204,6 +321,9 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     alignItems: "center",
     marginBottom: 30,
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
   buttonText: {
     color: "#fff",

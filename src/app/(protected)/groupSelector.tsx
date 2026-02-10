@@ -1,6 +1,5 @@
 import groups from "@/assets/data/groups.json";
 import { selectedGroupAtom } from "@/src/atoms/SelectGroupAtom";
-
 import { COLORS } from "@/src/colors";
 import { Group } from "@/src/types";
 import { AntDesign, EvilIcons } from "@expo/vector-icons";
@@ -20,11 +19,11 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function GroupSelector() {
-  const [searchValue, setSearchValue] = useState<string>("");
+  const [searchValue, setSearchValue] = useState("");
   const setGroup = useSetAtom(selectedGroupAtom);
 
   const filterGroups = groups.filter((group) =>
-    group.name.toLowerCase().includes(searchValue.toLowerCase())
+    group.name.toLowerCase().includes(searchValue.toLowerCase()),
   );
 
   const onGroupSelected = (group: Group) => {
@@ -35,19 +34,21 @@ export default function GroupSelector() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : undefined}
-      style={{ flex: 1, backgroundColor: "white", paddingHorizontal: 10 }}
+      style={{ flex: 1, backgroundColor: COLORS.background }}
     >
-      <SafeAreaView style={{ marginHorizontal: 10, flex: 1 }}>
+      <SafeAreaView style={{ flex: 1, paddingHorizontal: 14 }}>
+        {/* HEADER */}
         <View
           style={{
-            height: 44,
+            height: 48,
             justifyContent: "center",
+            marginBottom: 8,
           }}
         >
           <AntDesign
             name="close"
-            size={30}
-            color={COLORS.primaryDark}
+            size={26}
+            color={COLORS.textPrimary}
             onPress={() => router.back()}
             style={{ position: "absolute", left: 0 }}
           />
@@ -55,61 +56,91 @@ export default function GroupSelector() {
           <Text
             style={{
               fontSize: 16,
-              fontWeight: "bold",
+              fontWeight: "600",
               textAlign: "center",
+              color: COLORS.textPrimary,
             }}
           >
             Post to
           </Text>
         </View>
 
+        {/* SEARCH */}
         <View
           style={{
             flexDirection: "row",
-            backgroundColor: "lightgrey",
-            borderRadius: 5,
-            gap: 5,
-            marginVertical: 10,
             alignItems: "center",
-            paddingHorizontal: 5,
+            gap: 6,
+            backgroundColor: COLORS.surface,
+            borderRadius: 12,
+            paddingHorizontal: 10,
+            paddingVertical: 6,
+            borderWidth: 1,
+            borderColor: COLORS.border,
+            marginBottom: 14,
           }}
         >
-          <EvilIcons name="search" size={16} color="black" />
+          <EvilIcons name="search" size={18} color={COLORS.textSecondary} />
+
           <TextInput
             placeholder="Search for the community"
-            placeholderTextColor={COLORS.primaryDark}
-            style={{ paddingVertical: 10, flex: 1 }}
+            placeholderTextColor={COLORS.textSecondary}
+            style={{
+              flex: 1,
+              paddingVertical: 6,
+              color: COLORS.textPrimary,
+            }}
             value={searchValue}
-            onChangeText={(text) => setSearchValue(text)}
+            onChangeText={setSearchValue}
           />
-          {searchValue && (
+
+          {searchValue.length > 0 && (
             <AntDesign
               name="close-circle"
-              size={15}
-              color="#E4E4E4"
+              size={16}
+              color={COLORS.textSecondary}
               onPress={() => setSearchValue("")}
             />
           )}
         </View>
 
+        {/* LIST */}
         <FlatList
           data={filterGroups}
           keyboardShouldPersistTaps="handled"
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ paddingBottom: 24 }}
           renderItem={({ item }) => (
             <Pressable
               onPress={() => onGroupSelected(item)}
               style={{
                 flexDirection: "row",
                 alignItems: "center",
-                gap: 5,
-                marginBottom: 20,
+                gap: 12,
+                paddingVertical: 10,
+                paddingHorizontal: 6,
+                borderRadius: 12,
               }}
             >
               <Image
                 source={{ uri: item.image }}
-                style={{ width: 40, aspectRatio: 1, borderRadius: 20 }}
+                style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: 21,
+                  backgroundColor: COLORS.surface,
+                }}
               />
-              <Text style={{ fontWeight: "600" }}>{item.name}</Text>
+
+              <Text
+                style={{
+                  fontSize: 15,
+                  fontWeight: "600",
+                  color: COLORS.textPrimary,
+                }}
+              >
+                {item.name}
+              </Text>
             </Pressable>
           )}
         />
