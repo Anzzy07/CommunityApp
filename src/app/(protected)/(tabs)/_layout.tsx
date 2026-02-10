@@ -42,7 +42,7 @@ export default function TabLayout() {
 
         headerLeft: () => (
           <TouchableOpacity
-            // onPress={() => router.push("/profile")} // to profile screen
+            onPress={() => router.push("/profile")} // Navigate to profile screen
             style={{ marginLeft: 15 }}
           >
             <Image
