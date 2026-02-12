@@ -6,7 +6,6 @@ import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import Swipeable from "react-native-gesture-handler/ReanimatedSwipeable";
 import type { SharedValue } from "react-native-reanimated";
-import Animated, { useAnimatedStyle } from "react-native-reanimated";
 
 type Props = {
   notification: Notification;
@@ -72,98 +71,97 @@ export default function NotificationListItem({
 
   const renderRightActions = (
     _progress: SharedValue<number>,
-    drag: SharedValue<number>,
+    _drag: SharedValue<number>,
   ) => {
-    // Animated style for delete button
-    const animatedStyle = useAnimatedStyle(() => {
-      return {
-        transform: [{ translateX: drag.value }],
-      };
-    });
-
     return (
-      <Animated.View style={[styles.deleteContainer, animatedStyle]}>
+      <View style={styles.deleteContainer}>
         <Pressable onPress={onDelete} style={styles.deleteButton}>
           <MaterialCommunityIcons name="trash-can" size={24} color="white" />
           <Text style={styles.deleteText}>Delete</Text>
         </Pressable>
-      </Animated.View>
+      </View>
     );
   };
 
   return (
-    <Swipeable
-      renderRightActions={renderRightActions}
-      overshootRight={false}
-      friction={2}
-    >
-      <Pressable
-        onPress={onPress}
-        style={[
-          styles.container,
-          {
-            backgroundColor: notification.is_read ? "white" : COLORS.background,
-            borderLeftWidth: notification.is_read ? 0 : 4,
-            borderLeftColor: COLORS.primary,
-          },
-        ]}
+    <View style={styles.swipeableWrapper}>
+      <Swipeable
+        renderRightActions={renderRightActions}
+        overshootRight={false}
+        friction={2}
       >
-        {/* ICON */}
-        <View
+        <Pressable
+          onPress={onPress}
           style={[
-            styles.iconContainer,
+            styles.container,
             {
-              backgroundColor: backgroundColor,
+              backgroundColor: notification.is_read
+                ? "white"
+                : COLORS.background,
+              borderLeftWidth: notification.is_read ? 0 : 4,
+              borderLeftColor: COLORS.primary,
             },
           ]}
         >
-          <IconComponent name={name} size={22} color={iconColor} />
-        </View>
-
-        {/* CONTENT */}
-        <View style={styles.contentContainer}>
-          <Text
+          {/* ICON */}
+          <View
             style={[
-              styles.message,
+              styles.iconContainer,
               {
-                fontWeight: notification.is_read ? "400" : "600",
+                backgroundColor: backgroundColor,
               },
             ]}
-            numberOfLines={2}
           >
-            {notification.message}
-          </Text>
+            <IconComponent name={name} size={22} color={iconColor} />
+          </View>
 
-          <View style={styles.metaContainer}>
-            <Feather
-              name="clock"
-              size={12}
-              color={COLORS.textSecondary}
-              style={styles.clockIcon}
-            />
-            <Text style={styles.timeText}>
-              {formatDistanceToNowStrict(new Date(notification.created_at), {
-                addSuffix: true,
-              })}
+          {/* CONTENT */}
+          <View style={styles.contentContainer}>
+            <Text
+              style={[
+                styles.message,
+                {
+                  fontWeight: notification.is_read ? "400" : "600",
+                },
+              ]}
+              numberOfLines={2}
+            >
+              {notification.message}
             </Text>
-          </View>
-        </View>
 
-        {/* UNREAD INDICATOR */}
-        {!notification.is_read && (
-          <View style={styles.unreadIndicator}>
-            <View style={styles.unreadDot} />
+            <View style={styles.metaContainer}>
+              <Feather
+                name="clock"
+                size={12}
+                color={COLORS.textSecondary}
+                style={styles.clockIcon}
+              />
+              <Text style={styles.timeText}>
+                {formatDistanceToNowStrict(new Date(notification.created_at), {
+                  addSuffix: true,
+                })}
+              </Text>
+            </View>
           </View>
-        )}
-      </Pressable>
-    </Swipeable>
+
+          {/* UNREAD INDICATOR */}
+          {!notification.is_read && (
+            <View style={styles.unreadIndicator}>
+              <View style={styles.unreadDot} />
+            </View>
+          )}
+        </Pressable>
+      </Swipeable>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  swipeableWrapper: {
     marginHorizontal: 12,
     marginVertical: 6,
+  },
+  container: {
     padding: 16,
     borderRadius: 16,
     flexDirection: "row",
@@ -218,13 +216,13 @@ const styles = StyleSheet.create({
   deleteContainer: {
     justifyContent: "center",
     alignItems: "center",
-    marginVertical: 6,
+    width: 90,
   },
   deleteButton: {
     backgroundColor: COLORS.error,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 20,
+    width: "100%",
     height: "100%",
     borderTopRightRadius: 16,
     borderBottomRightRadius: 16,
