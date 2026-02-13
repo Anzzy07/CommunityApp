@@ -1,187 +1,136 @@
 import groupMembers from "@/assets/data/groupMembers.json";
 import messages from "@/assets/data/groupMessage.json";
+import posts from "@/assets/data/posts.json";
 import { COLORS } from "@/src/colors";
-import ChatMessageItem from "@/src/components/ChatMessageItem";
-import JoinGroupView from "@/src/components/JoinGroupView";
-import { GroupMessage } from "@/src/types";
-import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import React, { useState } from "react";
-import {
-  FlatList,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import GroupListItem from "@/src/components/GroupListItem";
+import { Group } from "@/src/types";
+import { Feather } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import React, { useMemo } from "react";
+import { FlatList, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-const CURRENT_USER_ID = "user-21"; // logged-in user
-const GROUP_ID = "group-lifestyle"; // active group
+const CURRENT_USER_ID = "user-21"; // TODO: Get from Clerk
 
-export default function ChatScreen() {
-  const insets = useSafeAreaInsets();
-  const [replyTo, setReplyTo] = useState<GroupMessage | null>(null);
-  const [text, setText] = useState("");
+export default function ChatGroupsList() {
+  const router = useRouter();
 
-  // check if user is a group member
-  const isMember = groupMembers.some(
-    (m) => m.group_id === GROUP_ID && m.user_id === CURRENT_USER_ID
-  );
+  // Get groups user is a member of
+  const userGroups = useMemo(() => {
+    const memberGroups = groupMembers
+      .filter((m) => m.user_id === CURRENT_USER_ID)
+      .map((m) => m.group_id);
 
-  // filter messages for this group
-  const groupMessages = messages.filter((m) => m.group_id === GROUP_ID);
+    // Get unique groups from posts
+    const uniqueGroups = new Map<string, Group>();
+    posts.forEach((post) => {
+      if (memberGroups.includes(post.group.id)) {
+        uniqueGroups.set(post.group.id, post.group);
+      }
+    });
 
-  // handle send message (console only for now)
-  const handleSend = () => {
-    if (!text || !isMember) return;
+    return Array.from(uniqueGroups.values());
+  }, []);
 
-    const newMessage = {
-      group_id: GROUP_ID,
-      user_id: CURRENT_USER_ID,
-      message: text,
-      reply_to: replyTo?.id ?? null,
-      created_at: new Date().toISOString(),
+  // Get last message and unread count for each group
+  const getGroupData = (groupId: string) => {
+    const groupMessages = messages.filter((m) => m.group_id === groupId);
+
+    if (groupMessages.length === 0) {
+      return { lastMessage: undefined, unreadCount: 0 };
+    }
+
+    // Sort by timestamp, most recent first
+    const sorted = [...groupMessages].sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    );
+
+    const lastMessage = {
+      text: sorted[0].message,
+      timestamp: sorted[0].created_at,
+      sender: sorted[0].user.name,
     };
 
-    console.log("Sending message:", newMessage); // TEMP: Supabase later
+    // Mock unread count
+    const unreadCount = Math.floor(Math.random() * 5);
 
-    setText(""); // clear input
-    setReplyTo(null); // clear reply
+    return { lastMessage, unreadCount };
   };
 
-  // If user is NOT a member show join group UI
-  if (!isMember) {
-    return (
-      <View style={{ flex: 1 }}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>r/Lifestyle Chat</Text>
-        </View>
+  const handleGroupPress = (group: Group) => {
+    router.push({
+      pathname: "/groupChat/[id]",
+      params: { id: group.id, name: group.name },
+    });
+  };
 
-        {/* Join Group */}
-        <JoinGroupView />
+  const renderEmpty = () => (
+    <View style={styles.emptyContainer}>
+      <View style={styles.emptyIconContainer}>
+        <Feather name="message-circle" size={64} color={COLORS.textSecondary} />
       </View>
-    );
-  }
+      <Text style={styles.emptyTitle}>No Group Chats Yet</Text>
+      <Text style={styles.emptySubtitle}>
+        Join communities to start chatting with members
+      </Text>
+    </View>
+  );
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : undefined} // avoid keyboard overlap
-      style={{ flex: 1 }}
-      keyboardVerticalOffset={insets.top + 10}
-    >
-      <View style={styles.container}>
-        {/* HEADER */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>r/Lifestyle Chat</Text>
-        </View>
-
-        {/* MESSAGES LIST */}
-        <FlatList
-          data={groupMessages}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={{ padding: 10 }}
-          renderItem={({ item }) => (
-            <ChatMessageItem
-              item={item}
-              isMe={item.user.id === CURRENT_USER_ID} // check sender
-              isMember={isMember}
-              onReply={setReplyTo} // set reply message
+    <SafeAreaView style={styles.container} edges={["bottom"]}>
+      <FlatList
+        data={userGroups}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => {
+          const { lastMessage, unreadCount } = getGroupData(item.id);
+          return (
+            <GroupListItem
+              group={item}
+              lastMessage={lastMessage}
+              unreadCount={unreadCount}
+              onPress={() => handleGroupPress(item)}
             />
-          )}
-        />
-
-        {/* REPLY PREVIEW */}
-        {replyTo && (
-          <View style={styles.replyPreview}>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontWeight: "600" }}>
-                Replying to {replyTo.user.name}
-              </Text>
-              <Text numberOfLines={1}>{replyTo.message}</Text>
-            </View>
-
-            {/* CANCEL REPLY */}
-            <Pressable onPress={() => setReplyTo(null)}>
-              <MaterialCommunityIcons name="close" size={18} />
-            </Pressable>
-          </View>
-        )}
-
-        {/* MESSAGE INPUT */}
-        <View style={styles.inputContainer}>
-          <TextInput
-            placeholder={isMember ? "Type a message..." : "Join group to chat"}
-            editable={isMember} // only members can type
-            value={text}
-            onChangeText={setText}
-            style={styles.input}
-          />
-
-          {/* SEND BUTTON */}
-          <Pressable
-            onPress={handleSend} // send message
-            disabled={!isMember || !text}
-            style={[
-              styles.sendButton,
-              (!isMember || !text) && { opacity: 0.5 },
-            ]}
-          >
-            <MaterialCommunityIcons name="send" size={20} color="white" />
-          </Pressable>
-        </View>
-      </View>
-    </KeyboardAvoidingView>
+          );
+        }}
+        ListEmptyComponent={renderEmpty}
+        contentContainerStyle={userGroups.length === 0 && { flex: 1 }}
+      />
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F2F2F2",
+    backgroundColor: COLORS.background,
   },
-  header: {
-    padding: 15,
-    backgroundColor: "white",
-    borderBottomWidth: 0.5,
-    borderColor: COLORS.border,
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  replyPreview: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 10,
-    backgroundColor: "#EEE",
-    borderTopWidth: 0.5,
-    borderColor: COLORS.border,
-    gap: 10,
-  },
-  inputContainer: {
-    flexDirection: "row",
-    padding: 10,
-    backgroundColor: "white",
-    borderTopWidth: 0.5,
-    borderColor: COLORS.border,
-  },
-  input: {
+  emptyContainer: {
     flex: 1,
-    borderWidth: 0.5,
-    borderColor: COLORS.border,
-    borderRadius: 20,
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    marginRight: 10,
-  },
-  sendButton: {
-    backgroundColor: "#2E5DAA",
-    padding: 10,
-    borderRadius: 20,
     justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 40,
+  },
+  emptyIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: "white",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: COLORS.textPrimary,
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  emptySubtitle: {
+    fontSize: 15,
+    color: COLORS.textSecondary,
+    textAlign: "center",
+    lineHeight: 22,
   },
 });

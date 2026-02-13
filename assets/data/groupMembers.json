@@ -1,20 +1,62 @@
 [
   {
     "id": "gm-1",
-    "group_id": "group-1",
-    "user_id": "user-1",
-    "joined_at": "2025-02-01T10:00:00Z"
+    "group_id": "group-lifestyle",
+    "user_id": "user-21",
+    "joined_at": "2025-02-15T08:00:00Z"
   },
   {
     "id": "gm-2",
-    "group_id": "group-1",
-    "user_id": "user-2",
-    "joined_at": "2025-02-02T11:30:00Z"
+    "group_id": "group-lifestyle",
+    "user_id": "user-29",
+    "joined_at": "2025-02-16T09:30:00Z"
   },
   {
     "id": "gm-3",
-    "group_id": "group-2",
-    "user_id": "user-3",
-    "joined_at": "2025-02-03T09:15:00Z"
+    "group_id": "group-travel",
+    "user_id": "user-21",
+    "joined_at": "2025-02-14T10:00:00Z"
+  },
+  {
+    "id": "gm-4",
+    "group_id": "group-travel",
+    "user_id": "user-22",
+    "joined_at": "2025-02-17T11:15:00Z"
+  },
+  {
+    "id": "gm-5",
+    "group_id": "group-travel",
+    "user_id": "user-28",
+    "joined_at": "2025-02-18T14:20:00Z"
+  },
+  {
+    "id": "gm-6",
+    "group_id": "group-fitness",
+    "user_id": "user-21",
+    "joined_at": "2025-02-13T07:00:00Z"
+  },
+  {
+    "id": "gm-7",
+    "group_id": "group-fitness",
+    "user_id": "user-23",
+    "joined_at": "2025-02-15T08:30:00Z"
+  },
+  {
+    "id": "gm-8",
+    "group_id": "group-react",
+    "user_id": "user-21",
+    "joined_at": "2025-02-05T09:00:00Z"
+  },
+  {
+    "id": "gm-9",
+    "group_id": "group-react",
+    "user_id": "user-7",
+    "joined_at": "2025-02-04T10:30:00Z"
+  },
+  {
+    "id": "gm-10",
+    "group_id": "group-react",
+    "user_id": "user-11",
+    "joined_at": "2025-02-06T11:00:00Z"
   }
 ]
