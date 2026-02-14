@@ -1,297 +1,518 @@
-import groupMembers from "@/assets/data/groupMembers.json";
-import groups from "@/assets/data/groups.json";
 import posts from "@/assets/data/posts.json";
 import { challengesAtom } from "@/src/atoms/ChallangesAtom";
 import { chatGroupAtom } from "@/src/atoms/ChatGroupAtom";
 import { groupMembersAtom } from "@/src/atoms/GroupMembersAtom";
+import { groupsAtom } from "@/src/atoms/GroupsAtom";
 import { COLORS } from "@/src/colors";
 import ChallengeListItem from "@/src/components/ChallengeListItem";
 import PostListItem from "@/src/components/PostListItem";
-import { AntDesign, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useAtomValue, useSetAtom } from "jotai";
 import React, { useMemo } from "react";
-import { FlatList, Image, Pressable, Text, View } from "react-native";
+import {
+  Alert,
+  FlatList,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const CURRENT_USER_ID = "user-21";
+const CURRENT_USER_ID = "user-21"; // TODO: Get from Clerk
 
 export default function CommunityDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+
+  // Use atoms for real-time sync
+  const groups = useAtomValue(groupsAtom);
+  const groupMembers = useAtomValue(groupMembersAtom);
   const challenges = useAtomValue(challengesAtom);
 
   const setChatGroup = useSetAtom(chatGroupAtom);
   const setGroupMembers = useSetAtom(groupMembersAtom);
 
-  // challenges of community
-  const groupChallenges = useMemo(
-    () => challenges.filter((c) => c.group_id === id),
-    [challenges, id]
-  );
-
-  // find current group
+  // Find current group
   const group = groups.find((g) => g.id === id);
 
-  // check if user has joined this community
+  // Check if user has joined this community
   const isJoined = groupMembers.some(
-    (m) => m.group_id === id && m.user_id === CURRENT_USER_ID
+    (m) => m.group_id === id && m.user_id === CURRENT_USER_ID,
   );
 
-  // check if current user is the community leader
+  // Check if current user is the community leader
   const isLeader = group?.leader_id === CURRENT_USER_ID;
 
-  // get posts belonging to this community
-  const groupPosts = useMemo(
-    () => posts.filter((p) => p.group.id === id),
-    [id]
+  // Get challenges of community
+  const groupChallenges = useMemo(
+    () => challenges.filter((c) => c.group_id === id),
+    [challenges, id],
   );
 
-  // leave community for members
+  // Get posts belonging to this community
+  const groupPosts = useMemo(
+    () => posts.filter((p) => p.group.id === id),
+    [id],
+  );
+
+  // Get member count
+  const memberCount = useMemo(
+    () => groupMembers.filter((m) => m.group_id === id).length,
+    [id],
+  );
+
+  // Handle join
+  const handleJoin = () => {
+    setGroupMembers((prev) => [
+      ...prev,
+      {
+        id: `gm-${Date.now()}`,
+        group_id: id,
+        user_id: CURRENT_USER_ID,
+        joined_at: new Date().toISOString(),
+      },
+    ]);
+  };
+
+  // Handle leave
   const handleLeave = () => {
-    setGroupMembers((prev) =>
-      prev.filter(
-        (m) => !(m.group_id === group?.id && m.user_id === CURRENT_USER_ID)
-      )
+    if (isLeader) {
+      Alert.alert(
+        "Cannot Leave",
+        "You're the leader of this community. Transfer leadership before leaving.",
+      );
+      return;
+    }
+
+    Alert.alert(
+      "Leave Community",
+      "Are you sure you want to leave this community?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Leave",
+          style: "destructive",
+          onPress: () => {
+            setGroupMembers((prev) =>
+              prev.filter(
+                (m) => !(m.group_id === id && m.user_id === CURRENT_USER_ID),
+              ),
+            );
+          },
+        },
+      ],
     );
   };
 
   if (!group) {
-    return <Text>Community not found</Text>;
+    return (
+      <View style={styles.notFound}>
+        <Text>Community not found</Text>
+      </View>
+    );
   }
 
+  const renderHeader = () => (
+    <>
+      {/* Hero Section */}
+      <View style={styles.heroSection}>
+        <Image
+          source={{ uri: group.image }}
+          style={styles.heroCover}
+          blurRadius={20}
+        />
+        <View style={styles.heroOverlay} />
+        <View style={styles.heroContent}>
+          <Image source={{ uri: group.image }} style={styles.heroImage} />
+          <View style={styles.heroInfo}>
+            <View style={styles.nameRow}>
+              <Text style={styles.heroName}>{group.name}</Text>
+              {isLeader && (
+                <MaterialCommunityIcons
+                  name="crown"
+                  size={20}
+                  color="#FCD34D"
+                />
+              )}
+            </View>
+            <View style={styles.metaRow}>
+              <MaterialCommunityIcons
+                name="account-group"
+                size={16}
+                color="rgba(255,255,255,0.8)"
+              />
+              <Text style={styles.metaText}>
+                {memberCount} {memberCount === 1 ? "member" : "members"}
+              </Text>
+            </View>
+          </View>
+        </View>
+      </View>
+
+      {/* Action Buttons */}
+      <View style={styles.actionsContainer}>
+        {isJoined ? (
+          <>
+            {/* Create Post */}
+            <Pressable
+              style={[styles.actionButton, styles.primaryAction]}
+              onPress={() =>
+                router.push({
+                  pathname: "/create",
+                  params: { groupId: group.id },
+                })
+              }
+            >
+              <Feather name="edit-3" size={18} color="white" />
+              <Text style={styles.primaryActionText}>Create Post</Text>
+            </Pressable>
+
+            {/* Chat */}
+            <Pressable
+              style={[styles.actionButton, styles.secondaryAction]}
+              onPress={() => {
+                setChatGroup(group);
+                router.push({
+                  pathname: "/groupChat/[id]",
+                  params: { id: group.id, name: group.name },
+                });
+              }}
+            >
+              <MaterialCommunityIcons
+                name="chat-outline"
+                size={20}
+                color={COLORS.primary}
+              />
+              <Text style={styles.secondaryActionText}>Chat</Text>
+            </Pressable>
+
+            {/* Create Challenge (Leader Only) */}
+            {isLeader && (
+              <Pressable
+                style={[styles.actionButton, styles.challengeAction]}
+                onPress={() =>
+                  router.push({
+                    pathname: "/createChallenge",
+                    params: { groupId: group.id },
+                  })
+                }
+              >
+                <MaterialCommunityIcons
+                  name="trophy-outline"
+                  size={20}
+                  color="#0369A1"
+                />
+                <Text style={styles.challengeActionText}>Challenge</Text>
+              </Pressable>
+            )}
+          </>
+        ) : (
+          <Pressable
+            style={[styles.actionButton, styles.joinAction]}
+            onPress={handleJoin}
+          >
+            <MaterialCommunityIcons
+              name="account-plus"
+              size={20}
+              color="white"
+            />
+            <Text style={styles.joinActionText}>Join Community</Text>
+          </Pressable>
+        )}
+
+        {/* Leave Button (if joined and not leader) */}
+        {isJoined && !isLeader && (
+          <Pressable
+            style={[styles.actionButton, styles.leaveAction]}
+            onPress={handleLeave}
+          >
+            <MaterialCommunityIcons
+              name="exit-to-app"
+              size={18}
+              color="#DC2626"
+            />
+          </Pressable>
+        )}
+      </View>
+
+      {/* Status Banner */}
+      {isJoined && (
+        <View style={styles.statusBanner}>
+          <MaterialCommunityIcons
+            name={isLeader ? "crown" : "check-circle"}
+            size={16}
+            color={isLeader ? "#F59E0B" : COLORS.primary}
+          />
+          <Text
+            style={[styles.statusText, isLeader && styles.leaderStatusText]}
+          >
+            {isLeader
+              ? "You're the community leader"
+              : "You're a member of this community"}
+          </Text>
+        </View>
+      )}
+
+      {/* Challenges Section */}
+      {groupChallenges.length > 0 && (
+        <>
+          <View style={styles.sectionHeader}>
+            <MaterialCommunityIcons
+              name="trophy"
+              size={20}
+              color={COLORS.primary}
+            />
+            <Text style={styles.sectionTitle}>Active Challenges</Text>
+            <Text style={styles.challengeCount}>{groupChallenges.length}</Text>
+          </View>
+          {groupChallenges.map((challenge) => (
+            <ChallengeListItem key={challenge.id} challenge={challenge} />
+          ))}
+        </>
+      )}
+
+      {/* Posts Header */}
+      <View style={styles.postsHeader}>
+        <Text style={styles.postsTitle}>Community Posts</Text>
+        <Text style={styles.postsCount}>{groupPosts.length}</Text>
+      </View>
+    </>
+  );
+
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: "#F3F4F6" }}
-      edges={["bottom"]}
-    >
+    <SafeAreaView style={styles.container} edges={["bottom"]}>
       <FlatList
         data={groupPosts}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <PostListItem post={item} showJoinButton={false} />
         )}
-        ListHeaderComponent={
-          <>
-            {/* COMMUNITY HEADER */}
-            <View
-              style={{
-                backgroundColor: "white",
-                padding: 15,
-                borderBottomWidth: 0.5,
-                borderColor: "#E5E7EB",
-              }}
-            >
-              {/* TOP ROW */}
-              <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <Image
-                  source={{ uri: group.image }}
-                  style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: 24,
-                    marginRight: 10,
-                  }}
-                />
-
-                <View style={{ flex: 1 }}>
-                  {/* COMMUNITY NAME & LEADER BADGE */}
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 6,
-                    }}
-                  >
-                    <Text style={{ fontSize: 18, fontWeight: "bold" }}>
-                      {group.name}
-                    </Text>
-
-                    {isLeader && (
-                      <MaterialCommunityIcons
-                        name="crown"
-                        size={16}
-                        color="#F59E0B"
-                      />
-                    )}
-                  </View>
-
-                  <Text style={{ fontSize: 13, color: "#6B7280" }}>
-                    {isJoined
-                      ? isLeader
-                        ? "You are the community leader"
-                        : "You are a member"
-                      : "Join to post & chat"}
-                  </Text>
-                </View>
-
-                {/* Join / Leave */}
-                {isJoined && !isLeader ? (
-                  <Pressable
-                    onPress={handleLeave}
-                    style={{
-                      backgroundColor: "#FEE2E2",
-                      paddingHorizontal: 14,
-                      paddingVertical: 6,
-                      borderRadius: 20,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: "#991B1B",
-                        fontWeight: "600",
-                        fontSize: 13,
-                      }}
-                    >
-                      Leave
-                    </Text>
-                  </Pressable>
-                ) : (
-                  <Pressable
-                    style={{
-                      backgroundColor: isJoined ? "#E5E7EB" : COLORS.button,
-                      paddingHorizontal: 14,
-                      paddingVertical: 6,
-                      borderRadius: 20,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: isJoined ? "#374151" : "white",
-                        fontWeight: "600",
-                        fontSize: 13,
-                      }}
-                    >
-                      {isJoined ? "Joined" : "Join"}
-                    </Text>
-                  </Pressable>
-                )}
-              </View>
-
-              {/* ACTION ROW */}
-              <View
-                style={{
-                  flexDirection: "row",
-                  marginTop: 14,
-                  gap: 12,
-                  flexWrap: "wrap",
-                }}
-              >
-                {/* CREATE POST */}
-                <Pressable
-                  onPress={() =>
-                    router.push({
-                      pathname: "/create",
-                      params: { groupId: group.id },
-                    })
-                  }
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 6,
-                    paddingHorizontal: 12,
-                    paddingVertical: 6,
-                    borderRadius: 20,
-                    backgroundColor: "#F3F4F6",
-                  }}
-                >
-                  <AntDesign name="plus-circle" size={14} />
-                  <Text style={{ fontSize: 13, fontWeight: "500" }}>Post</Text>
-                </Pressable>
-
-                {/* CHAT */}
-                <Pressable
-                  onPress={() => {
-                    // set the active chat community
-                    setChatGroup(group);
-
-                    // navigate to Chat TAB
-                    router.push("/chat");
-                  }}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 6,
-                    paddingHorizontal: 12,
-                    paddingVertical: 6,
-                    borderRadius: 20,
-                    backgroundColor: "#F3F4F6",
-                  }}
-                >
-                  <MaterialCommunityIcons name="chat-outline" size={14} />
-                  <Text style={{ fontSize: 13, fontWeight: "500" }}>Chat</Text>
-                </Pressable>
-
-                {/* CREATE CHALLENGE (LEADER ONLY) */}
-                {isLeader && (
-                  <Pressable
-                    onPress={() =>
-                      router.push({
-                        pathname: "/createChallenge",
-                        params: { groupId: group.id },
-                      })
-                    }
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 6,
-                      paddingHorizontal: 12,
-                      paddingVertical: 6,
-                      borderRadius: 20,
-                      backgroundColor: "#E0F2FE",
-                    }}
-                  >
-                    <MaterialCommunityIcons
-                      name="trophy-outline"
-                      size={14}
-                      color="#0369A1"
-                    />
-                    <Text
-                      style={{
-                        fontSize: 13,
-                        fontWeight: "600",
-                        color: "#0369A1",
-                      }}
-                    >
-                      Challenge
-                    </Text>
-                  </Pressable>
-                )}
-              </View>
-            </View>
-            {/* CHALLENGES */}
-            {groupChallenges.length > 0 && (
-              <>
-                <Text
-                  style={{
-                    marginTop: 16,
-                    marginLeft: 15,
-                    fontSize: 14,
-                    fontWeight: "600",
-                    color: "#475569",
-                  }}
-                >
-                  Active Challenges
-                </Text>
-
-                {groupChallenges.map((challenge) => (
-                  <ChallengeListItem key={challenge.id} challenge={challenge} />
-                ))}
-              </>
-            )}
-          </>
-        }
+        ListHeaderComponent={renderHeader}
         ListEmptyComponent={
-          <Text
-            style={{
-              textAlign: "center",
-              marginTop: 40,
-              color: "#6B7280",
-            }}
-          >
-            No posts yet. Be the first to post.
-          </Text>
+          <View style={styles.emptyPosts}>
+            <MaterialCommunityIcons
+              name="post-outline"
+              size={48}
+              color={COLORS.textSecondary}
+            />
+            <Text style={styles.emptyTitle}>No posts yet</Text>
+            <Text style={styles.emptySubtitle}>
+              {isJoined
+                ? "Be the first to share something!"
+                : "Join the community to see posts"}
+            </Text>
+          </View>
         }
       />
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  notFound: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  heroSection: {
+    height: 200,
+    position: "relative",
+    backgroundColor: COLORS.headerMain,
+  },
+  heroCover: {
+    ...StyleSheet.absoluteFillObject,
+    width: "100%",
+    height: "100%",
+  },
+  heroOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0, 0, 0, 0.4)",
+  },
+  heroContent: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  heroImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 3,
+    borderColor: "white",
+  },
+  heroInfo: {
+    flex: 1,
+    marginLeft: 16,
+    justifyContent: "flex-end",
+  },
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 6,
+  },
+  heroName: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "white",
+    textShadowColor: "rgba(0, 0, 0, 0.75)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  metaText: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.9)",
+    fontWeight: "500",
+  },
+  actionsContainer: {
+    flexDirection: "row",
+    paddingHorizontal: 15,
+    paddingVertical: 16,
+    backgroundColor: "white",
+    gap: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  actionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    gap: 8,
+  },
+  primaryAction: {
+    flex: 1,
+    backgroundColor: COLORS.primary,
+  },
+  primaryActionText: {
+    color: "white",
+    fontWeight: "600",
+    fontSize: 15,
+  },
+  secondaryAction: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
+  },
+  secondaryActionText: {
+    color: COLORS.primary,
+    fontWeight: "600",
+    fontSize: 15,
+  },
+  challengeAction: {
+    paddingHorizontal: 14,
+    backgroundColor: "#E0F2FE",
+    borderWidth: 1.5,
+    borderColor: "#0369A1",
+  },
+  challengeActionText: {
+    color: "#0369A1",
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  joinAction: {
+    flex: 1,
+    backgroundColor: COLORS.primary,
+  },
+  joinActionText: {
+    color: "white",
+    fontWeight: "700",
+    fontSize: 16,
+  },
+  leaveAction: {
+    paddingHorizontal: 12,
+    backgroundColor: "#FEE2E2",
+  },
+  statusBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.background,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  statusText: {
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    fontWeight: "500",
+  },
+  leaderStatusText: {
+    color: "#D97706",
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 15,
+    paddingVertical: 16,
+    gap: 8,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+    flex: 1,
+  },
+  challengeCount: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.textSecondary,
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  postsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 15,
+    paddingVertical: 16,
+    backgroundColor: "white",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  postsTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+  },
+  postsCount: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.textSecondary,
+  },
+  emptyPosts: {
+    paddingVertical: 80,
+    alignItems: "center",
+    paddingHorizontal: 40,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: COLORS.textPrimary,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptySubtitle: {
+    fontSize: 15,
+    color: COLORS.textSecondary,
+    textAlign: "center",
+    lineHeight: 22,
+  },
+});
