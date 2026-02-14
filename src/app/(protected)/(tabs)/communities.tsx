@@ -35,7 +35,7 @@ export default function CommunitiesScreen() {
     );
   };
 
-  // Handle join/unjoin
+  // Handle join/leave
   const handleJoinToggle = (group: Group, joined: boolean) => {
     if (joined) {
       // Leave group

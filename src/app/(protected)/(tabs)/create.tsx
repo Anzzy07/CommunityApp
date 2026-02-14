@@ -1,10 +1,12 @@
 import { selectedGroupAtom } from "@/src/atoms/SelectGroupAtom";
 import { COLORS } from "@/src/colors";
-import { AntDesign } from "@expo/vector-icons";
+import { AntDesign, Ionicons, MaterialIcons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { Link, router } from "expo-router";
 import { useAtom } from "jotai";
 import React, { useState } from "react";
 import {
+  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -17,19 +19,152 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+type CreateMode = "post" | "poll";
+
+interface PollOption {
+  id: string;
+  text: string;
+  image?: string;
+}
+
 export default function CreateScreen() {
+  // Mode state
+  const [mode, setMode] = useState<CreateMode>("post");
+
+  // Post states
   const [title, setTitle] = useState<string>("");
-  const [bodyText, setbodyText] = useState<string>("");
+  const [bodyText, setBodyText] = useState<string>("");
+  const [postImage, setPostImage] = useState<string | null>(null);
   const [group, setGroup] = useAtom(selectedGroupAtom);
 
+  // Poll states
+  const [pollQuestion, setPollQuestion] = useState<string>("");
+  const [pollOptions, setPollOptions] = useState<PollOption[]>([
+    { id: "1", text: "" },
+    { id: "2", text: "" },
+  ]);
+  const [pollDuration, setPollDuration] = useState<string>("24h");
+
+  // Focus states
   const [titleFocused, setTitleFocused] = useState(false);
   const [bodyFocused, setBodyFocused] = useState(false);
+  const [pollQuestionFocused, setPollQuestionFocused] = useState(false);
+
+  const pollDurations = [
+    { label: "1 hour", value: "1h" },
+    { label: "6 hours", value: "6h" },
+    { label: "24 hours", value: "24h" },
+    { label: "3 days", value: "3d" },
+    { label: "7 days", value: "7d" },
+  ];
 
   const goBack = () => {
     setTitle("");
-    setbodyText("");
+    setBodyText("");
+    setPostImage(null);
+    setPollQuestion("");
+    setPollOptions([
+      { id: "1", text: "" },
+      { id: "2", text: "" },
+    ]);
     setGroup(null);
     router.back();
+  };
+
+  const pickPostImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert(
+        "Permission needed",
+        "Please grant photo library access to upload images.",
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [16, 9],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setPostImage(result.assets[0].uri);
+    }
+  };
+
+  const pickPollOptionImage = async (optionId: string) => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert(
+        "Permission needed",
+        "Please grant photo library access to upload images.",
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setPollOptions((prev) =>
+        prev.map((opt) =>
+          opt.id === optionId ? { ...opt, image: result.assets[0].uri } : opt,
+        ),
+      );
+    }
+  };
+
+  const removePollOptionImage = (optionId: string) => {
+    setPollOptions((prev) =>
+      prev.map((opt) =>
+        opt.id === optionId ? { ...opt, image: undefined } : opt,
+      ),
+    );
+  };
+
+  const addPollOption = () => {
+    if (pollOptions.length < 4) {
+      setPollOptions([...pollOptions, { id: Date.now().toString(), text: "" }]);
+    }
+  };
+
+  const removePollOption = (id: string) => {
+    if (pollOptions.length > 2) {
+      setPollOptions(pollOptions.filter((opt) => opt.id !== id));
+    }
+  };
+
+  const updatePollOption = (id: string, text: string) => {
+    setPollOptions(
+      pollOptions.map((opt) => (opt.id === id ? { ...opt, text } : opt)),
+    );
+  };
+
+  const handlePost = () => {
+    if (mode === "post") {
+      console.log("POST", { title, bodyText, postImage, group });
+      // Add your post logic here
+    } else {
+      console.log("POLL", { pollQuestion, pollOptions, pollDuration, group });
+      // Add your poll logic here
+    }
+  };
+
+  const canPost = () => {
+    if (mode === "post") {
+      return title.trim().length > 0 && group !== null;
+    } else {
+      return (
+        pollQuestion.trim().length > 0 &&
+        pollOptions.filter((opt) => opt.text.trim().length > 0).length >= 2 &&
+        group !== null
+      );
+    }
   };
 
   return (
@@ -41,20 +176,59 @@ export default function CreateScreen() {
       }}
     >
       {/* Header */}
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          height: 44,
-        }}
-      >
+      <View style={styles.header}>
         <Pressable onPress={goBack} hitSlop={10}>
-          <AntDesign name="close" size={30} color={COLORS.button} />
+          <AntDesign name="close" size={28} color={COLORS.textPrimary} />
         </Pressable>
 
-        <Pressable onPress={() => console.log("POST")} hitSlop={10}>
+        <Pressable
+          onPress={handlePost}
+          hitSlop={10}
+          disabled={!canPost()}
+          style={[styles.postButton, !canPost() && styles.postButtonDisabled]}
+        >
           <Text style={styles.postText}>Post</Text>
+        </Pressable>
+      </View>
+
+      {/* Mode Toggle */}
+      <View style={styles.modeToggle}>
+        <Pressable
+          onPress={() => setMode("post")}
+          style={[
+            styles.modeButton,
+            mode === "post" && styles.modeButtonActive,
+          ]}
+        >
+          <Ionicons
+            name="create-outline"
+            size={18}
+            color={mode === "post" ? COLORS.button : COLORS.textSecondary}
+          />
+          <Text
+            style={[styles.modeText, mode === "post" && styles.modeTextActive]}
+          >
+            Post
+          </Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => setMode("poll")}
+          style={[
+            styles.modeButton,
+            mode === "poll" && styles.modeButtonActive,
+          ]}
+        >
+          <Ionicons
+            name="bar-chart-outline"
+            size={18}
+            color={mode === "poll" ? COLORS.button : COLORS.textSecondary}
+          />
+          <Text
+            style={[styles.modeText, mode === "poll" && styles.modeTextActive]}
+          >
+            Poll
+          </Text>
         </Pressable>
       </View>
 
@@ -62,7 +236,10 @@ export default function CreateScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1 }}
       >
-        <ScrollView showsVerticalScrollIndicator={false}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           {/* Community Selector */}
           <Link href={"groupSelector"} asChild>
             <Pressable style={styles.communityContainer}>
@@ -70,78 +247,251 @@ export default function CreateScreen() {
                 <>
                   <Image
                     source={{ uri: group.image }}
-                    style={{ width: 20, height: 20, borderRadius: 10 }}
+                    style={styles.communityImage}
                   />
-                  <Text style={{ fontWeight: "600", color: "#fff" }}>
-                    {group.name}
-                  </Text>
+                  <Text style={styles.communityText}>{group.name}</Text>
+                  <AntDesign
+                    name="down"
+                    size={12}
+                    color={COLORS.textPrimary}
+                    style={{ marginLeft: 4 }}
+                  />
                 </>
               ) : (
                 <>
                   <Text style={styles.kStyles}>k/</Text>
-                  <Text style={{ fontWeight: "600", color: "#fff" }}>
-                    Select a community
-                  </Text>
+                  <Text style={styles.communityText}>Select a community</Text>
+                  <AntDesign
+                    name="down"
+                    size={12}
+                    color={COLORS.textPrimary}
+                    style={{ marginLeft: 4 }}
+                  />
                 </>
               )}
             </Pressable>
           </Link>
-          {/* Title Input */}
-          <View
-            style={{
-              borderBottomWidth: titleFocused ? 2 : 1,
-              borderBottomColor: titleFocused ? COLORS.button : "#ddd",
-              marginTop: 20,
-            }}
-          >
-            <TextInput
-              placeholder="An interesting title"
-              placeholderTextColor="#888"
-              style={{
-                fontSize: 28,
-                fontWeight: "bold",
-                color: COLORS.text || "#000",
-                paddingVertical: 16,
-                paddingHorizontal: 4,
-              }}
-              value={title}
-              onChangeText={setTitle}
-              onFocus={() => setTitleFocused(true)}
-              onBlur={() => setTitleFocused(false)}
-              multiline
-              scrollEnabled={false}
-              selectionColor={COLORS.button}
-              autoFocus={false}
-            />
-          </View>
-          {/* Body Input  */}
-          <View
-            style={{
-              borderBottomWidth: bodyFocused ? 2 : 0,
-              borderBottomColor: COLORS.button,
-              marginTop: 32,
-            }}
-          >
-            <TextInput
-              placeholder="Text (optional)"
-              placeholderTextColor="#888"
-              style={{
-                fontSize: 20,
-                color: COLORS.text || "#000",
-                paddingVertical: 20,
-                paddingHorizontal: 4,
-                minHeight: 300,
-                textAlignVertical: "top",
-              }}
-              value={bodyText}
-              onChangeText={setbodyText}
-              onFocus={() => setBodyFocused(true)}
-              onBlur={() => setBodyFocused(false)}
-              multiline
-              scrollEnabled={false}
-              selectionColor={COLORS.button}
-            />
-          </View>
+
+          {/* POST MODE */}
+          {mode === "post" && (
+            <>
+              {/* Title Input */}
+              <View
+                style={[
+                  styles.inputContainer,
+                  titleFocused && styles.inputContainerFocused,
+                ]}
+              >
+                <TextInput
+                  placeholder="An interesting title"
+                  placeholderTextColor={COLORS.textSecondary}
+                  style={styles.titleInput}
+                  value={title}
+                  onChangeText={setTitle}
+                  onFocus={() => setTitleFocused(true)}
+                  onBlur={() => setTitleFocused(false)}
+                  multiline
+                  scrollEnabled={false}
+                  selectionColor={COLORS.button}
+                  maxLength={300}
+                />
+              </View>
+
+              {/* Body Input */}
+              <View
+                style={[
+                  styles.bodyContainer,
+                  bodyFocused && styles.bodyContainerFocused,
+                ]}
+              >
+                <TextInput
+                  placeholder="Text (optional)"
+                  placeholderTextColor={COLORS.textSecondary}
+                  style={styles.bodyInput}
+                  value={bodyText}
+                  onChangeText={setBodyText}
+                  onFocus={() => setBodyFocused(true)}
+                  onBlur={() => setBodyFocused(false)}
+                  multiline
+                  scrollEnabled={false}
+                  selectionColor={COLORS.button}
+                />
+              </View>
+
+              {/* Image Upload */}
+              {postImage ? (
+                <View style={styles.imagePreviewContainer}>
+                  <Image
+                    source={{ uri: postImage }}
+                    style={styles.imagePreview}
+                    resizeMode="cover"
+                  />
+                  <Pressable
+                    onPress={() => setPostImage(null)}
+                    style={styles.removeImageButton}
+                  >
+                    <Ionicons name="close-circle" size={28} color="#fff" />
+                  </Pressable>
+                </View>
+              ) : (
+                <Pressable
+                  onPress={pickPostImage}
+                  style={styles.addImageButton}
+                >
+                  <Ionicons
+                    name="image-outline"
+                    size={24}
+                    color={COLORS.button}
+                  />
+                  <Text style={styles.addImageText}>Add Image</Text>
+                </Pressable>
+              )}
+            </>
+          )}
+
+          {/* POLL MODE */}
+          {mode === "poll" && (
+            <>
+              {/* Poll Question */}
+              <View
+                style={[
+                  styles.inputContainer,
+                  pollQuestionFocused && styles.inputContainerFocused,
+                ]}
+              >
+                <TextInput
+                  placeholder="Ask a question..."
+                  placeholderTextColor={COLORS.textSecondary}
+                  style={styles.titleInput}
+                  value={pollQuestion}
+                  onChangeText={setPollQuestion}
+                  onFocus={() => setPollQuestionFocused(true)}
+                  onBlur={() => setPollQuestionFocused(false)}
+                  multiline
+                  scrollEnabled={false}
+                  selectionColor={COLORS.button}
+                  maxLength={300}
+                />
+              </View>
+
+              {/* Poll Options */}
+              <View style={styles.pollOptionsContainer}>
+                {pollOptions.map((option, index) => (
+                  <View key={option.id} style={styles.pollOptionWrapper}>
+                    <View style={styles.pollOptionHeader}>
+                      <Text style={styles.pollOptionLabel}>
+                        Option {index + 1}
+                      </Text>
+                      {pollOptions.length > 2 && (
+                        <Pressable
+                          onPress={() => removePollOption(option.id)}
+                          hitSlop={10}
+                        >
+                          <MaterialIcons
+                            name="delete-outline"
+                            size={20}
+                            color={COLORS.error}
+                          />
+                        </Pressable>
+                      )}
+                    </View>
+
+                    <TextInput
+                      placeholder={`Option ${index + 1}`}
+                      placeholderTextColor={COLORS.textSecondary}
+                      style={styles.pollOptionInput}
+                      value={option.text}
+                      onChangeText={(text) => updatePollOption(option.id, text)}
+                      selectionColor={COLORS.button}
+                      maxLength={100}
+                    />
+
+                    {/* Option Image */}
+                    {option.image ? (
+                      <View style={styles.pollOptionImageContainer}>
+                        <Image
+                          source={{ uri: option.image }}
+                          style={styles.pollOptionImage}
+                          resizeMode="cover"
+                        />
+                        <Pressable
+                          onPress={() => removePollOptionImage(option.id)}
+                          style={styles.removePollImageButton}
+                        >
+                          <Ionicons
+                            name="close-circle"
+                            size={24}
+                            color="#fff"
+                          />
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <Pressable
+                        onPress={() => pickPollOptionImage(option.id)}
+                        style={styles.addPollImageButton}
+                      >
+                        <Ionicons
+                          name="image-outline"
+                          size={18}
+                          color={COLORS.textSecondary}
+                        />
+                        <Text style={styles.addPollImageText}>
+                          Add image (optional)
+                        </Text>
+                      </Pressable>
+                    )}
+                  </View>
+                ))}
+
+                {/* Add Option Button */}
+                {pollOptions.length < 4 && (
+                  <Pressable
+                    onPress={addPollOption}
+                    style={styles.addOptionButton}
+                  >
+                    <Ionicons
+                      name="add-circle-outline"
+                      size={20}
+                      color={COLORS.button}
+                    />
+                    <Text style={styles.addOptionText}>Add option</Text>
+                  </Pressable>
+                )}
+              </View>
+
+              {/* Poll Duration */}
+              <View style={styles.durationContainer}>
+                <Text style={styles.durationLabel}>Poll duration</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.durationScroll}
+                >
+                  {pollDurations.map((duration) => (
+                    <Pressable
+                      key={duration.value}
+                      onPress={() => setPollDuration(duration.value)}
+                      style={[
+                        styles.durationButton,
+                        pollDuration === duration.value &&
+                          styles.durationButtonActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.durationButtonText,
+                          pollDuration === duration.value &&
+                            styles.durationButtonTextActive,
+                        ]}
+                      >
+                        {duration.label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            </>
+          )}
 
           <View style={{ height: 100 }} />
         </ScrollView>
@@ -151,32 +501,270 @@ export default function CreateScreen() {
 }
 
 const styles = StyleSheet.create({
-  postText: {
-    color: "white",
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    height: 44,
+    marginBottom: 8,
+  },
+  postButton: {
     backgroundColor: COLORS.success,
-    fontWeight: "bold",
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingVertical: 8,
     borderRadius: 20,
   },
-  kStyles: {
-    backgroundColor: "black",
+  postButtonDisabled: {
+    backgroundColor: COLORS.surface,
+    opacity: 0.5,
+  },
+  postText: {
     color: "white",
-    paddingVertical: 1,
-    paddingHorizontal: 5,
+    fontWeight: "700",
+    fontSize: 15,
+  },
+  modeToggle: {
+    flexDirection: "row",
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 16,
+    gap: 4,
+  },
+  modeButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
     borderRadius: 10,
-    fontWeight: "bold",
-    marginRight: 5,
+    gap: 6,
+  },
+  modeButtonActive: {
+    backgroundColor: COLORS.background,
+  },
+  modeText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: COLORS.textSecondary,
+  },
+  modeTextActive: {
+    color: COLORS.button,
   },
   communityContainer: {
     flexDirection: "row",
-    backgroundColor: COLORS.secondary,
-    paddingHorizontal: 12,
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 20,
-    gap: 6,
+    gap: 8,
     alignSelf: "flex-start",
     marginVertical: 12,
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  communityImage: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+  },
+  communityText: {
+    fontWeight: "600",
+    color: COLORS.textPrimary,
+    fontSize: 14,
+  },
+  kStyles: {
+    backgroundColor: COLORS.button,
+    color: "white",
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 6,
+    fontWeight: "700",
+    fontSize: 12,
+  },
+  inputContainer: {
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    marginTop: 12,
+  },
+  inputContainerFocused: {
+    borderBottomWidth: 2,
+    borderBottomColor: COLORS.button,
+  },
+  titleInput: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+    paddingVertical: 16,
+    paddingHorizontal: 4,
+  },
+  bodyContainer: {
+    marginTop: 24,
+  },
+  bodyContainerFocused: {
+    borderBottomWidth: 2,
+    borderBottomColor: COLORS.button,
+  },
+  bodyInput: {
+    fontSize: 16,
+    color: COLORS.textPrimary,
+    paddingVertical: 20,
+    paddingHorizontal: 4,
+    minHeight: 200,
+    textAlignVertical: "top",
+  },
+  addImageButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderStyle: "dashed",
+    paddingVertical: 32,
+    borderRadius: 12,
+    marginTop: 20,
+  },
+  addImageText: {
+    color: COLORS.button,
+    fontWeight: "600",
+    fontSize: 15,
+  },
+  imagePreviewContainer: {
+    marginTop: 20,
+    borderRadius: 12,
+    overflow: "hidden",
+    position: "relative",
+  },
+  imagePreview: {
+    width: "100%",
+    height: 220,
+    borderRadius: 12,
+  },
+  removeImageButton: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    borderRadius: 14,
+  },
+  pollOptionsContainer: {
+    marginTop: 24,
+    gap: 16,
+  },
+  pollOptionWrapper: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  pollOptionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  pollOptionLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: COLORS.textSecondary,
+    textTransform: "uppercase",
+  },
+  pollOptionInput: {
+    fontSize: 16,
+    color: COLORS.textPrimary,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    backgroundColor: COLORS.background,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  pollOptionImageContainer: {
+    marginTop: 12,
+    borderRadius: 8,
+    overflow: "hidden",
+    position: "relative",
+  },
+  pollOptionImage: {
+    width: "100%",
+    height: 120,
+    borderRadius: 8,
+  },
+  removePollImageButton: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    borderRadius: 12,
+  },
+  addPollImageButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderStyle: "dashed",
+  },
+  addPollImageText: {
+    color: COLORS.textSecondary,
+    fontSize: 13,
+    fontWeight: "500",
+  },
+  addOptionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderStyle: "dashed",
+  },
+  addOptionText: {
+    color: COLORS.button,
+    fontWeight: "600",
+    fontSize: 15,
+  },
+  durationContainer: {
+    marginTop: 24,
+  },
+  durationLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: COLORS.textSecondary,
+    textTransform: "uppercase",
+    marginBottom: 12,
+  },
+  durationScroll: {
+    gap: 8,
+  },
+  durationButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  durationButtonActive: {
+    backgroundColor: COLORS.button,
+    borderColor: COLORS.button,
+  },
+  durationButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.textSecondary,
+  },
+  durationButtonTextActive: {
+    color: "#fff",
   },
 });
