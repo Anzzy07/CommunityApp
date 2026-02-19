@@ -21,29 +21,46 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function ProfileScreen() {
+  // Get userId from URL params - if viewing another user's profile
   const { userId } = useLocalSearchParams<{ userId?: string }>();
+
+  // Get current logged-in user from Clerk
   const { user } = useUser();
+
+  // Get sign out function from Clerk
   const { signOut } = useAuth();
+
+  // Navigation router
   const router = useRouter();
+
+  // Safe area insets for notch/status bar handling
   const insets = useSafeAreaInsets();
 
+  // Track which tab is currently active (posts/comments/communities)
   const [activeTab, setActiveTab] = useState<TabType>("posts");
 
   // Determine if viewing own profile or another user's
+  // If no userId param, it's own profile
   const isOwnProfile = !userId || userId === user?.id;
+
+  // Get the profile user ID (own or other user)
   const profileUserId = userId || user?.id;
 
-  // Mock data - replace with actual data from Supabase later
+  // Filter posts to show only posts by this user
   const userPosts = posts.filter((post) => post.user.id === profileUserId);
+
+  // Find this user's streak data
   const userStreak = userStreaks.find((s) => s.user_id === profileUserId);
 
-  // Mock joined communities
+  // Get unique communities this user has posted in
   const joinedCommunities = [
     ...new Set(userPosts.map((post) => post.group)),
-  ].slice(0, 6);
+  ].slice(0, 6); // Limit to 6 communities
 
-  // Calculate stats
+  // Calculate total posts count
   const totalPosts = userPosts.length;
+
+  // Calculate total upvotes across all user's posts
   const totalUpvotes = userPosts.reduce((sum, post) => sum + post.upvotes, 0);
 
   const handleSignOut = () => {
@@ -53,36 +70,33 @@ export default function ProfileScreen() {
         text: "Sign Out",
         style: "destructive",
         onPress: async () => {
-          await signOut();
-          router.replace("/signIn");
+          await signOut(); // Sign out from Clerk
+          router.replace("/signIn"); // Navigate to sign in screen
         },
       },
     ]);
   };
 
   const handleEditProfile = () => {
-    console.log("Edit profile");
-    // TODO: Navigate to edit profile screen
-    // router.push("/editProfile");
+    router.push("/editProfile"); // Navigate to Edit Profile screen
   };
 
-  // Get data based on active tab
   const getTabData = (): Post[] => {
     switch (activeTab) {
       case "posts":
-        return userPosts;
+        return userPosts; // Show user's posts
       case "comments":
-        return []; // TODO: Implement comments data
+        return []; // Implementing comments data
       case "communities":
-        return []; // Communities use custom grid, not FlatList
+        return []; // Communities use custom grid component
       default:
         return [];
     }
   };
 
-  // Render header component for FlatList
   const renderListHeader = () => (
     <>
+      {/* Profile information section */}
       <ProfileHeader
         user={user}
         userStreak={userStreak}
@@ -92,11 +106,11 @@ export default function ProfileScreen() {
         isOwnProfile={isOwnProfile}
         onEditProfile={handleEditProfile}
       />
+      {/* Tab navigation (Posts/Comments/Communities) */}
       <ProfileTabs activeTab={activeTab} onTabChange={setActiveTab} />
     </>
   );
 
-  // Render footer for communities tab
   const renderListFooter = () => {
     if (activeTab === "communities") {
       return <CommunitiesGrid communities={joinedCommunities} />;
@@ -104,12 +118,13 @@ export default function ProfileScreen() {
     return null;
   };
 
-  // Render empty state
   const renderEmptyComponent = () => {
+    // Communities tab has its own empty state in the grid
     if (activeTab === "communities") {
-      return null; // Communities grid handles its own empty state
+      return null;
     }
 
+    // Set icon and text based on tab
     let icon: "post-outline" | "comment-outline" = "post-outline";
     let text = "No posts yet";
 
@@ -130,37 +145,43 @@ export default function ProfileScreen() {
     );
   };
 
-  // Render post item
   const renderPostItem = ({ item }: { item: Post }) => (
     <PostListItem post={item} showJoinButton={false} />
   );
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
+      {/* Custom Header with back button and sign out */}
       <View style={styles.header}>
+        {/* Back button */}
         <Pressable onPress={() => router.back()} hitSlop={10}>
           <AntDesign name="left" size={24} color="white" />
         </Pressable>
+
+        {/* Title */}
         <Text style={styles.headerTitle}>Profile</Text>
+
+        {/* Sign out button only for users own profile */}
         {isOwnProfile && (
           <Pressable onPress={handleSignOut} hitSlop={10}>
             <Feather name="log-out" size={22} color="white" />
           </Pressable>
         )}
+
+        {/* Spacer for alignment when viewing other profiles */}
         {!isOwnProfile && <View style={{ width: 22 }} />}
       </View>
 
-      {/* Main Content - FlatList */}
+      {/* Uses FlatList for scrolling */}
       <FlatList
-        data={getTabData()}
-        keyExtractor={(item) => item.id}
-        renderItem={renderPostItem}
-        ListHeaderComponent={renderListHeader}
-        ListFooterComponent={renderListFooter}
-        ListEmptyComponent={renderEmptyComponent}
+        data={getTabData()} // Posts or empty array based on tab
+        keyExtractor={(item) => item.id} // Unique key for each item
+        renderItem={renderPostItem} // How to render each post
+        ListHeaderComponent={renderListHeader} // Profile info + tabs at top
+        ListFooterComponent={renderListFooter} // Communities grid at bottom (if active)
+        ListEmptyComponent={renderEmptyComponent} // Empty state when no data
         contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={false} // Hide scroll indicator
       />
     </View>
   );

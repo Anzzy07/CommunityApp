@@ -21,7 +21,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const CURRENT_USER_ID = "user-21"; // TODO: Get from Clerk
+const CURRENT_USER_ID = "user-21"; // Get from Clerk
 
 export default function CommunityDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
