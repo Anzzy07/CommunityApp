@@ -1,10 +1,19 @@
 import userStreaks from "@/assets/data/userStreaks.json";
+import { COLORS } from "@/src/colors";
 import { Post } from "@/src/types";
-import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { formatDistanceToNowStrict } from "date-fns";
 import { Link } from "expo-router";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
-import { COLORS } from "../colors";
+import React, { useState } from "react";
+import {
+  Alert,
+  Image,
+  Pressable,
+  Share,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 type PostListItemProps = {
   post: Post;
@@ -19,182 +28,345 @@ export default function PostListItem({
   showJoinButton = true,
   isJoined = false,
 }: PostListItemProps) {
+  // Local state for vote tracking
+  const [upvotes, setUpvotes] = useState(post.upvotes);
+  const [voteStatus, setVoteStatus] = useState<"up" | "down" | null>(null);
+  const [hasAwarded, setHasAwarded] = useState(false);
+
+  // Get user's streak data
   const streak = userStreaks.find((s) => s.user_id === post.user.id);
+
+  // Determine what to show based on post type and view mode
   const shouldShowImage = isDetailedPost || post.image;
-  const shouldShowDescription = isDetailedPost || !post.image; // show description when post doesn't have image
+  const shouldShowDescription = isDetailedPost || !post.image;
 
-  return (
-    <Link href={`/post/${post.id}`}>
-      <View
-        style={{
-          paddingHorizontal: 15,
-          paddingVertical: 10,
-          gap: 7,
-          borderBottomColor: "lightgrey",
-          borderBottomWidth: 0.5,
-          backgroundColor: "white",
-        }}
-      >
-        {/* HEADER */}
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <Image
-            source={{ uri: post.group.image }}
-            style={{ width: 20, height: 20, borderRadius: 10, marginRight: 5 }}
-          />
-          <View>
-            <View style={{ flexDirection: "row", gap: 5 }}>
-              <Text
-                style={{ fontWeight: "bold", fontSize: 13, color: "#3A3B3C" }}
-              >
-                {post.group.name}
-              </Text>
+  //Toggles upvote state and updates count
+  const handleUpvote = () => {
+    if (voteStatus === "up") {
+      // Remove upvote
+      setUpvotes(upvotes - 1);
+      setVoteStatus(null);
+    } else {
+      // Add upvote
+      setUpvotes(voteStatus === "down" ? upvotes + 2 : upvotes + 1);
+      setVoteStatus("up");
+    }
+  };
 
-              {streak && streak.current_streak > 0 && (
-                <View style={{ flexDirection: "row", alignItems: "center" }}>
-                  <MaterialCommunityIcons
-                    name="fire"
-                    size={14}
-                    color="#FF6A00"
-                  />
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      color: "#FF6A00",
-                      fontWeight: "600",
-                    }}
-                  >
-                    {streak.current_streak}
-                  </Text>
-                </View>
-              )}
+  // Toggles downvote state and updates count
 
-              <Text
-                style={{ color: "grey", fontSize: 13, alignSelf: "flex-start" }}
-              >
-                {formatDistanceToNowStrict(new Date(post.created_at))}
-              </Text>
-            </View>
-            {isDetailedPost && (
-              <Text style={{ fontSize: 13, color: "#2E5DAA" }}>
-                {post.user.name}
-              </Text>
+  const handleDownvote = () => {
+    if (voteStatus === "down") {
+      // Remove downvote
+      setUpvotes(upvotes + 1);
+      setVoteStatus(null);
+    } else {
+      // Add downvote
+      setUpvotes(voteStatus === "up" ? upvotes - 2 : upvotes - 1);
+      setVoteStatus("down");
+    }
+  };
+
+  // Uses native share functionality
+
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        message: `${post.title}\n\nCheck out this post in ${post.group.name}!`,
+        title: post.title,
+      });
+    } catch (error) {
+      console.error("Error sharing:", error);
+    }
+  };
+
+  // Shows confirmation and toggles award state
+
+  const handleAward = () => {
+    if (hasAwarded) {
+      setHasAwarded(false);
+      Alert.alert("Award Removed", "You removed your award from this post");
+    } else {
+      setHasAwarded(true);
+      Alert.alert("Award Given!", "You gave an award to this post! 🏆");
+    }
+  };
+
+  // Need to implement join functionality
+
+  const handleJoinCommunity = () => {
+    Alert.alert("Join Community", `Join ${post.group.name}?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Join",
+        onPress: () => {
+          console.log("Joined community:", post.group.id);
+          // For this - Add to groupMembers atom
+        },
+      },
+    ]);
+  };
+
+  // Post content wrapper
+  const PostContent = (
+    <View style={styles.container}>
+      {/*  Group info and user */}
+      <View style={styles.header}>
+        <Image source={{ uri: post.group.image }} style={styles.groupImage} />
+
+        <View style={styles.headerInfo}>
+          <View style={styles.headerRow}>
+            {/* Group name */}
+            <Text style={styles.groupName}>{post.group.name}</Text>
+
+            {/* User streak */}
+            {streak && streak.current_streak > 0 && (
+              <View style={styles.streakBadge}>
+                <MaterialCommunityIcons name="fire" size={14} color="#FF6A00" />
+                <Text style={styles.streakText}>{streak.current_streak}</Text>
+              </View>
             )}
+
+            {/* Time ago */}
+            <Text style={styles.timeText}>
+              {formatDistanceToNowStrict(new Date(post.created_at))}
+            </Text>
           </View>
 
-          {/* JOIN COMMUNITY */}
-          {showJoinButton && !isJoined && (
-            <Pressable
-              onPress={() => console.log("Join community", post.group.id)}
-              style={{
-                marginLeft: "auto",
-                backgroundColor: COLORS.border,
-                borderRadius: 10,
-              }}
-            >
-              <Text
-                style={{
-                  color: "white",
-                  paddingVertical: 2,
-                  paddingHorizontal: 7,
-                  fontWeight: "bold",
-                  fontSize: 13,
-                }}
-              >
-                Join
-              </Text>
-            </Pressable>
+          {/* Author name  */}
+          {isDetailedPost && (
+            <Text style={styles.authorName}>{post.user.name}</Text>
           )}
         </View>
 
-        {/* CONTENT */}
-        <Text style={{ fontWeight: "bold", fontSize: 17, letterSpacing: 0.5 }}>
-          {post.title}
+        {/* Join button */}
+        {showJoinButton && !isJoined && (
+          <Pressable onPress={handleJoinCommunity} style={styles.joinButton}>
+            <Text style={styles.joinButtonText}>Join</Text>
+          </Pressable>
+        )}
+      </View>
+
+      {/* Title, image, description */}
+      <Text style={styles.title}>{post.title}</Text>
+
+      {shouldShowImage && post.image && (
+        <Image source={{ uri: post.image }} style={styles.postImage} />
+      )}
+
+      {shouldShowDescription && post.description && (
+        <Text
+          numberOfLines={isDetailedPost ? undefined : 4}
+          style={styles.description}
+        >
+          {post.description}
         </Text>
-        {shouldShowImage && post.image && (
-          <Image
-            source={{ uri: post.image }}
-            style={{ width: "100%", aspectRatio: 4 / 3, borderRadius: 15 }}
-          />
-        )}
+      )}
 
-        {shouldShowDescription && post.description && (
-          <Text numberOfLines={isDetailedPost ? undefined : 4}>
-            {post.description}
-          </Text>
-        )}
+      {/*  Interactions */}
+      <View style={styles.footer}>
+        <View style={styles.leftActions}>
+          {/* Voting */}
+          <View style={styles.voteContainer}>
+            <Pressable onPress={handleUpvote} hitSlop={10}>
+              <MaterialCommunityIcons
+                name={
+                  voteStatus === "up"
+                    ? "arrow-up-bold"
+                    : "arrow-up-bold-outline"
+                }
+                size={19}
+                color={voteStatus === "up" ? COLORS.primary : COLORS.border}
+              />
+            </Pressable>
 
-        {/* FOOTER */}
-        <View style={{ flexDirection: "row" }}>
-          <View style={{ flexDirection: "row", gap: 10 }}>
-            <View style={[{ flexDirection: "row" }, styles.iconBox]}>
+            <Text style={styles.voteCount}>{upvotes}</Text>
+
+            <View style={styles.voteDivider} />
+
+            <Pressable onPress={handleDownvote} hitSlop={10}>
               <MaterialCommunityIcons
-                name="arrow-up-bold-outline"
+                name={
+                  voteStatus === "down"
+                    ? "arrow-down-bold"
+                    : "arrow-down-bold-outline"
+                }
                 size={19}
-                color={COLORS.border}
+                color={voteStatus === "down" ? "#DC2626" : COLORS.border}
               />
-              <Text
-                style={{
-                  fontWeight: "500",
-                  marginLeft: 5,
-                  alignSelf: "center",
-                }}
-              >
-                {post.upvotes}
-              </Text>
-              <View
-                style={{
-                  width: 1,
-                  backgroundColor: "#D4D4D4",
-                  height: 14,
-                  marginHorizontal: 7,
-                  alignSelf: "center",
-                }}
-              />
-              <MaterialCommunityIcons
-                name="arrow-down-bold-outline"
-                size={19}
-                color={COLORS.border}
-              />
-            </View>
-            <View style={[{ flexDirection: "row" }, styles.iconBox]}>
-              <MaterialCommunityIcons
-                name="comment-outline"
-                size={19}
-                color={COLORS.border}
-              />
-              <Text
-                style={{
-                  fontWeight: "500",
-                  marginLeft: 5,
-                  alignSelf: "center",
-                }}
-              >
-                {post.nr_of_comments}
-              </Text>
-            </View>
+            </Pressable>
           </View>
-          <View style={{ marginLeft: "auto", flexDirection: "row", gap: 10 }}>
+
+          {/* Comments */}
+          <View style={styles.actionButton}>
             <MaterialCommunityIcons
-              name="trophy-outline"
+              name="comment-outline"
               size={19}
               color={COLORS.border}
-              style={styles.iconBox}
             />
+            <Text style={styles.actionText}>{post.nr_of_comments}</Text>
+          </View>
+        </View>
+
+        <View style={styles.rightActions}>
+          {/* Award/Trophy */}
+          <Pressable onPress={handleAward} hitSlop={10}>
+            <MaterialCommunityIcons
+              name={hasAwarded ? "trophy" : "trophy-outline"}
+              size={19}
+              color={hasAwarded ? "#F59E0B" : COLORS.border}
+              style={styles.iconButton}
+            />
+          </Pressable>
+
+          {/* Share */}
+          <Pressable onPress={handleShare} hitSlop={10}>
             <MaterialCommunityIcons
               name="share-outline"
               size={19}
               color={COLORS.border}
-              style={styles.iconBox}
+              style={styles.iconButton}
             />
-          </View>
+          </Pressable>
         </View>
       </View>
-    </Link>
+    </View>
   );
+
+  // Wrap with Link for navigation
+  if (isDetailedPost) {
+    return PostContent;
+  }
+
+  return <Link href={`/post/${post.id}`}>{PostContent}</Link>;
 }
 
 const styles = StyleSheet.create({
-  iconBox: {
+  container: {
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    gap: 7,
+    borderBottomColor: "#E5E7EB",
+    borderBottomWidth: 0.5,
+    backgroundColor: "white",
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  groupImage: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    marginRight: 5,
+  },
+  headerInfo: {
+    flex: 1,
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  groupName: {
+    fontWeight: "bold",
+    fontSize: 13,
+    color: "#3A3B3C",
+  },
+  streakBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  streakText: {
+    fontSize: 12,
+    color: "#FF6A00",
+    fontWeight: "600",
+  },
+  timeText: {
+    color: "grey",
+    fontSize: 13,
+  },
+  authorName: {
+    fontSize: 13,
+    color: COLORS.primary,
+    marginTop: 2,
+  },
+  joinButton: {
+    marginLeft: "auto",
+    backgroundColor: COLORS.button,
+    borderRadius: 10,
+    paddingVertical: 2,
+    paddingHorizontal: 7,
+  },
+  joinButtonText: {
+    color: "white",
+    fontWeight: "bold",
+    fontSize: 13,
+  },
+  title: {
+    fontWeight: "bold",
+    fontSize: 17,
+    letterSpacing: 0.5,
+    color: COLORS.textPrimary,
+  },
+  postImage: {
+    width: "100%",
+    aspectRatio: 4 / 3,
+    borderRadius: 15,
+  },
+  description: {
+    fontSize: 15,
+    lineHeight: 21,
+    color: COLORS.textPrimary,
+  },
+  footer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  leftActions: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  voteContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 0.5,
+    borderColor: COLORS.border,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+  voteCount: {
+    fontWeight: "500",
+    marginHorizontal: 5,
+    color: COLORS.textPrimary,
+  },
+  voteDivider: {
+    width: 1,
+    backgroundColor: "#D4D4D4",
+    height: 14,
+    marginHorizontal: 7,
+  },
+  actionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 0.5,
+    borderColor: COLORS.border,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+  actionText: {
+    fontWeight: "500",
+    marginLeft: 5,
+    color: COLORS.textPrimary,
+  },
+  rightActions: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  iconButton: {
     borderWidth: 0.5,
     borderColor: COLORS.border,
     paddingHorizontal: 10,
