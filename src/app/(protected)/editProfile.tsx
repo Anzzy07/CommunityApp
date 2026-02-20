@@ -1,4 +1,5 @@
 import { COLORS } from "@/src/colors";
+import { imageUriToClerkFile } from "@/src/utils/imageUtils";
 import { useUser } from "@clerk/clerk-expo";
 import { AntDesign, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
@@ -23,16 +24,28 @@ export default function EditProfileScreen() {
   const { user } = useUser();
   const router = useRouter();
 
-  // Local state for edits
   const [fullName, setFullName] = useState(user?.fullName || "");
   const [username, setUsername] = useState(user?.username || "");
   const [profileImage, setProfileImage] = useState(user?.imageUrl || "");
   const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Pick image from gallery
+  const uploadProfileImage = async (imageUri: string) => {
+    setIsUploading(true);
+    try {
+      const blob = await imageUriToClerkFile(imageUri);
+      await user?.setProfileImage({ file: blob });
+      setProfileImage(imageUri);
+      Alert.alert("Success", "Profile picture updated!");
+    } catch (error) {
+      console.error("Error uploading image:", error);
+      Alert.alert("Error", "Failed to upload image. Please try again.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const handlePickImage = async () => {
-    // Request permissions
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (status !== "granted") {
@@ -43,33 +56,18 @@ export default function EditProfileScreen() {
       return;
     }
 
-    // Launch image picker
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ["images"],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
     });
 
     if (!result.canceled && result.assets[0]) {
-      setIsUploading(true);
-      const imageUri = result.assets[0].uri;
-
-      try {
-        // Upload to Clerk
-        await user?.setProfileImage({ file: imageUri });
-        setProfileImage(imageUri);
-        Alert.alert("Success", "Profile picture updated!");
-      } catch (error) {
-        console.error("Error uploading image:", error);
-        Alert.alert("Error", "Failed to upload image. Please try again.");
-      } finally {
-        setIsUploading(false);
-      }
+      await uploadProfileImage(result.assets[0].uri);
     }
   };
 
-  // Take photo with camera
   const handleTakePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
 
@@ -88,23 +86,10 @@ export default function EditProfileScreen() {
     });
 
     if (!result.canceled && result.assets[0]) {
-      setIsUploading(true);
-      const imageUri = result.assets[0].uri;
-
-      try {
-        await user?.setProfileImage({ file: imageUri });
-        setProfileImage(imageUri);
-        Alert.alert("Success", "Profile picture updated!");
-      } catch (error) {
-        console.error("Error uploading image:", error);
-        Alert.alert("Error", "Failed to upload image. Please try again.");
-      } finally {
-        setIsUploading(false);
-      }
+      await uploadProfileImage(result.assets[0].uri);
     }
   };
 
-  // Show image picker options
   const handleChangePhoto = () => {
     Alert.alert("Change Profile Picture", "Choose an option", [
       { text: "Take Photo", onPress: handleTakePhoto },
@@ -113,7 +98,6 @@ export default function EditProfileScreen() {
     ]);
   };
 
-  // Save changes to Clerk
   const handleSave = async () => {
     if (!fullName.trim()) {
       Alert.alert("Error", "Full name cannot be empty");
@@ -128,7 +112,6 @@ export default function EditProfileScreen() {
     setIsSaving(true);
 
     try {
-      // Update Clerk user
       await user?.update({
         firstName: fullName.split(" ")[0],
         lastName: fullName.split(" ").slice(1).join(" ") || undefined,
@@ -144,7 +127,6 @@ export default function EditProfileScreen() {
     } catch (error: any) {
       console.error("Error updating profile:", error);
 
-      // Handle specific Clerk errors
       if (error.errors && error.errors[0]?.code === "form_identifier_exists") {
         Alert.alert("Error", "This username is already taken");
       } else {
