@@ -1,36 +1,45 @@
 import posts from "@/assets/data/posts.json";
+import { groupMembersAtom } from "@/src/atoms/GroupMembersAtom";
 import { COLORS } from "@/src/colors";
 import PostListItem from "@/src/components/PostListItem";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useAtomValue } from "jotai";
 import React, { useState } from "react";
 import { FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
 
-export default function HomeScreen() {
-  // Track refresh state
-  const [refreshing, setRefreshing] = useState(false);
+const CURRENT_USER_ID = "user-21";
 
-  // Mock posts data
+// Displaying all posts with pull-to-refresh
+export default function HomeScreen() {
+  const groupMembers = useAtomValue(groupMembersAtom);
+
+  const [refreshing, setRefreshing] = useState(false);
   const [postsList, setPostsList] = useState(posts);
 
+  // Checks if user is a member of the given community
+  const isJoined = (groupId: string) => {
+    return groupMembers.some(
+      (m) => m.group_id === groupId && m.user_id === CURRENT_USER_ID,
+    );
+  };
+
+  // Simulates fetching new posts from the server when user pulls to refresh
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
 
-    // Simulate API call
     setTimeout(() => {
-      // Need to fetch new posts from Supabase after backend
+      // Will be fetching new posts from Supabase
       console.log("Refreshing posts...");
       setRefreshing(false);
     }, 1500);
   }, []);
 
-  //  Render individual post item
-
+  // Renders individual post item with synced join status
   const renderPost = ({ item }: { item: (typeof posts)[0] }) => (
-    <PostListItem post={item} />
+    <PostListItem post={item} isJoined={isJoined(item.group.id)} />
   );
 
-  // Render empty state when no posts
-
+  // Renders empty state when there are no posts
   const renderEmpty = () => (
     <View style={styles.emptyContainer}>
       <View style={styles.emptyIconContainer}>
@@ -55,7 +64,6 @@ export default function HomeScreen() {
         renderItem={renderPost}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
-        // Pull to refresh
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -64,7 +72,6 @@ export default function HomeScreen() {
             colors={[COLORS.primary]}
           />
         }
-        // Empty state
         ListEmptyComponent={renderEmpty}
       />
     </View>

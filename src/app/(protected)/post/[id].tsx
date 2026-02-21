@@ -1,10 +1,12 @@
 import comments from "@/assets/data/comments.json";
 import posts from "@/assets/data/posts.json";
+import { groupMembersAtom } from "@/src/atoms/GroupMembersAtom";
 import { COLORS } from "@/src/colors";
 import CommentListItem from "@/src/components/CommentListItem";
 import PostListItem from "@/src/components/PostListItem";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useLocalSearchParams } from "expo-router";
+import { useAtomValue } from "jotai";
 import React, { useCallback, useRef, useState } from "react";
 import {
   FlatList,
@@ -18,36 +20,31 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-/**
- * DetailedPost - Displays a single post with all comments
- *
- * Features:
- * - Full post display with interactions
- * - Threaded comments with nesting
- * - Reply to comments
- * - Comment input with reply preview
- * - Keyboard avoidance
- * - Empty state for no comments
- */
+const CURRENT_USER_ID = "user-21";
+
+// Displays a single post with all its comments and reply functionality
 export default function DetailedPost() {
-  // Get post ID from route params
   const { id } = useLocalSearchParams();
   const insets = useSafeAreaInsets();
+  const groupMembers = useAtomValue(groupMembersAtom);
 
-  // Comment input state
   const [comment, setComment] = useState("");
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [isInputFocused, setIsInputFocused] = useState(false);
 
   const inputRef = useRef<TextInput | null>(null);
 
-  // Find the post
   const detailedPost = posts.find((post) => post.id === id);
-
-  // Get all comments for this post
   const postComments = comments.filter((c) => c.post_id === detailedPost?.id);
 
-  // Handle post not found
+  // Checks if user is a member of the post's community
+  const isJoined = detailedPost
+    ? groupMembers.some(
+        (m) =>
+          m.group_id === detailedPost.group.id && m.user_id === CURRENT_USER_ID,
+      )
+    : false;
+
   if (!detailedPost) {
     return (
       <View style={styles.notFoundContainer}>
@@ -64,10 +61,7 @@ export default function DetailedPost() {
     );
   }
 
-  /**
-   * Handle reply button press on a comment
-   * Sets reply state and focuses input
-   */
+  // Sets reply state and focuses the comment input
   const handleReplyPress = useCallback(
     (commentId: string, username: string) => {
       setReplyingTo(username);
@@ -76,10 +70,7 @@ export default function DetailedPost() {
     [],
   );
 
-  /**
-   * Handle sending comment
-   * TODO: Send to Supabase
-   */
+  // Submits the comment to the server
   const handleSend = () => {
     if (!comment.trim()) return;
 
@@ -92,21 +83,16 @@ export default function DetailedPost() {
     // TODO: Add comment to Supabase
     // TODO: Update local state
 
-    // Clear input and reply state
     setComment("");
     setReplyingTo(null);
   };
 
-  /**
-   * Cancel reply
-   */
+  // Clears the reply state
   const handleCancelReply = () => {
     setReplyingTo(null);
   };
 
-  /**
-   * Render individual comment
-   */
+  // Renders individual comment with proper nesting
   const renderComment = ({ item }: { item: (typeof comments)[0] }) => (
     <CommentListItem
       comment={item}
@@ -115,9 +101,7 @@ export default function DetailedPost() {
     />
   );
 
-  /**
-   * Render empty state when no comments
-   */
+  // Renders empty state when there are no comments
   const renderEmptyComments = () => (
     <View style={styles.emptyCommentsContainer}>
       <MaterialCommunityIcons
@@ -138,26 +122,23 @@ export default function DetailedPost() {
       style={styles.container}
       keyboardVerticalOffset={insets.top + 10}
     >
-      {/* Post and Comments List */}
       <FlatList
-        // Header: The full post
         ListHeaderComponent={
-          <PostListItem post={detailedPost} isDetailedPost />
+          <PostListItem
+            post={detailedPost}
+            isDetailedPost
+            isJoined={isJoined}
+          />
         }
-        // Data: All comments
         data={postComments}
         keyExtractor={(item) => item.id}
         renderItem={renderComment}
-        // Empty state
         ListEmptyComponent={renderEmptyComments}
-        // Styling
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
       />
 
-      {/* COMMENT INPUT */}
       <View style={[styles.inputContainer, { paddingBottom: insets.bottom }]}>
-        {/* Reply Preview */}
         {replyingTo && (
           <View style={styles.replyPreview}>
             <View style={styles.replyIndicator} />
@@ -175,7 +156,6 @@ export default function DetailedPost() {
           </View>
         )}
 
-        {/* Input and Send Button */}
         <View style={styles.inputRow}>
           <TextInput
             ref={inputRef}
@@ -189,7 +169,6 @@ export default function DetailedPost() {
             onBlur={() => setIsInputFocused(false)}
           />
 
-          {/* Send Button (shows when typing or focused) */}
           {(isInputFocused || comment.trim()) && (
             <Pressable
               disabled={!comment.trim()}

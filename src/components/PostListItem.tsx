@@ -1,9 +1,11 @@
 import userStreaks from "@/assets/data/userStreaks.json";
+import { groupMembersAtom } from "@/src/atoms/GroupMembersAtom";
 import { COLORS } from "@/src/colors";
 import { Post } from "@/src/types";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { formatDistanceToNowStrict } from "date-fns";
 import { Link } from "expo-router";
+import { useSetAtom } from "jotai";
 import React, { useState } from "react";
 import {
   Alert,
@@ -15,6 +17,8 @@ import {
   View,
 } from "react-native";
 
+const CURRENT_USER_ID = "user-21";
+
 type PostListItemProps = {
   post: Post;
   isDetailedPost?: boolean;
@@ -22,53 +26,46 @@ type PostListItemProps = {
   isJoined?: boolean;
 };
 
+// Component renders a single post with voting, sharing, and award functionality
 export default function PostListItem({
   post,
   isDetailedPost,
   showJoinButton = true,
   isJoined = false,
 }: PostListItemProps) {
-  // Local state for vote tracking
+  const setGroupMembers = useSetAtom(groupMembersAtom);
+
   const [upvotes, setUpvotes] = useState(post.upvotes);
   const [voteStatus, setVoteStatus] = useState<"up" | "down" | null>(null);
   const [hasAwarded, setHasAwarded] = useState(false);
 
-  // Get user's streak data
   const streak = userStreaks.find((s) => s.user_id === post.user.id);
-
-  // Determine what to show based on post type and view mode
   const shouldShowImage = isDetailedPost || post.image;
   const shouldShowDescription = isDetailedPost || !post.image;
 
-  //Toggles upvote state and updates count
+  // Handles upvoting the post, toggles between upvoted and neutral states
   const handleUpvote = () => {
     if (voteStatus === "up") {
-      // Remove upvote
       setUpvotes(upvotes - 1);
       setVoteStatus(null);
     } else {
-      // Add upvote
       setUpvotes(voteStatus === "down" ? upvotes + 2 : upvotes + 1);
       setVoteStatus("up");
     }
   };
 
-  // Toggles downvote state and updates count
-
+  // Handles downvoting the post, toggles between downvoted and neutral states
   const handleDownvote = () => {
     if (voteStatus === "down") {
-      // Remove downvote
       setUpvotes(upvotes + 1);
       setVoteStatus(null);
     } else {
-      // Add downvote
       setUpvotes(voteStatus === "up" ? upvotes - 2 : upvotes - 1);
       setVoteStatus("down");
     }
   };
 
-  // Uses native share functionality
-
+  // Opens native share menu to share the post
   const handleShare = async () => {
     try {
       await Share.share({
@@ -80,8 +77,7 @@ export default function PostListItem({
     }
   };
 
-  // Shows confirmation and toggles award state
-
+  // Toggles award status and shows confirmation alert
   const handleAward = () => {
     if (hasAwarded) {
       setHasAwarded(false);
@@ -92,34 +88,36 @@ export default function PostListItem({
     }
   };
 
-  // Need to implement join functionality
-
+  // Adds user to the community by updating the global atom, syncs across all screens
   const handleJoinCommunity = () => {
     Alert.alert("Join Community", `Join ${post.group.name}?`, [
       { text: "Cancel", style: "cancel" },
       {
         text: "Join",
         onPress: () => {
-          console.log("Joined community:", post.group.id);
-          // For this - Add to groupMembers atom
+          setGroupMembers((prev) => [
+            ...prev,
+            {
+              id: `gm-${Date.now()}`,
+              group_id: post.group.id,
+              user_id: CURRENT_USER_ID,
+              joined_at: new Date().toISOString(),
+            },
+          ]);
         },
       },
     ]);
   };
 
-  // Post content wrapper
   const PostContent = (
     <View style={styles.container}>
-      {/*  Group info and user */}
       <View style={styles.header}>
         <Image source={{ uri: post.group.image }} style={styles.groupImage} />
 
         <View style={styles.headerInfo}>
           <View style={styles.headerRow}>
-            {/* Group name */}
             <Text style={styles.groupName}>{post.group.name}</Text>
 
-            {/* User streak */}
             {streak && streak.current_streak > 0 && (
               <View style={styles.streakBadge}>
                 <MaterialCommunityIcons name="fire" size={14} color="#FF6A00" />
@@ -127,19 +125,16 @@ export default function PostListItem({
               </View>
             )}
 
-            {/* Time ago */}
             <Text style={styles.timeText}>
               {formatDistanceToNowStrict(new Date(post.created_at))}
             </Text>
           </View>
 
-          {/* Author name  */}
           {isDetailedPost && (
             <Text style={styles.authorName}>{post.user.name}</Text>
           )}
         </View>
 
-        {/* Join button */}
         {showJoinButton && !isJoined && (
           <Pressable onPress={handleJoinCommunity} style={styles.joinButton}>
             <Text style={styles.joinButtonText}>Join</Text>
@@ -147,7 +142,6 @@ export default function PostListItem({
         )}
       </View>
 
-      {/* Title, image, description */}
       <Text style={styles.title}>{post.title}</Text>
 
       {shouldShowImage && post.image && (
@@ -163,10 +157,8 @@ export default function PostListItem({
         </Text>
       )}
 
-      {/*  Interactions */}
       <View style={styles.footer}>
         <View style={styles.leftActions}>
-          {/* Voting */}
           <View style={styles.voteContainer}>
             <Pressable onPress={handleUpvote} hitSlop={10}>
               <MaterialCommunityIcons
@@ -197,7 +189,6 @@ export default function PostListItem({
             </Pressable>
           </View>
 
-          {/* Comments */}
           <View style={styles.actionButton}>
             <MaterialCommunityIcons
               name="comment-outline"
@@ -209,7 +200,6 @@ export default function PostListItem({
         </View>
 
         <View style={styles.rightActions}>
-          {/* Award/Trophy */}
           <Pressable onPress={handleAward} hitSlop={10}>
             <MaterialCommunityIcons
               name={hasAwarded ? "trophy" : "trophy-outline"}
@@ -219,7 +209,6 @@ export default function PostListItem({
             />
           </Pressable>
 
-          {/* Share */}
           <Pressable onPress={handleShare} hitSlop={10}>
             <MaterialCommunityIcons
               name="share-outline"
@@ -233,7 +222,6 @@ export default function PostListItem({
     </View>
   );
 
-  // Wrap with Link for navigation
   if (isDetailedPost) {
     return PostContent;
   }
