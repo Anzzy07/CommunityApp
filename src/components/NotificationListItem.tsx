@@ -6,6 +6,10 @@ import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import Swipeable from "react-native-gesture-handler/ReanimatedSwipeable";
 import type { SharedValue } from "react-native-reanimated";
+import Animated, {
+  useAnimatedStyle,
+  withTiming,
+} from "react-native-reanimated";
 
 type Props = {
   notification: Notification;
@@ -13,43 +17,43 @@ type Props = {
   onDelete: () => void;
 };
 
-// Get icon and color based on notification type
+// Returns icon configuration based on notification type
 const getNotificationIcon = (type: NotificationType) => {
   switch (type) {
     case "comment":
       return {
         name: "comment-outline" as const,
         IconComponent: MaterialCommunityIcons,
-        backgroundColor: "#E3F2FD",
-        iconColor: "#1976D2",
+        backgroundColor: "#EBF5FF",
+        iconColor: "#0369A1",
       };
     case "post":
       return {
         name: "post-outline" as const,
         IconComponent: MaterialCommunityIcons,
-        backgroundColor: "#F3E5F5",
-        iconColor: "#7B1FA2",
+        backgroundColor: "#F3E8FF",
+        iconColor: "#9333EA",
       };
     case "poll":
       return {
         name: "chart-bar" as const,
         IconComponent: MaterialCommunityIcons,
-        backgroundColor: "#FFF3E0",
-        iconColor: "#F57C00",
+        backgroundColor: "#FFF7ED",
+        iconColor: "#EA580C",
       };
     case "challenge":
       return {
         name: "trophy-outline" as const,
         IconComponent: MaterialCommunityIcons,
-        backgroundColor: "#FFF9C4",
-        iconColor: "#F9A825",
+        backgroundColor: "#FEF9C3",
+        iconColor: "#CA8A04",
       };
     case "message":
       return {
         name: "chatbubble-ellipses-outline" as const,
         IconComponent: Ionicons,
-        backgroundColor: "#E8F5E9",
-        iconColor: "#388E3C",
+        backgroundColor: "#ECFDF5",
+        iconColor: "#059669",
       };
     default:
       return {
@@ -61,6 +65,7 @@ const getNotificationIcon = (type: NotificationType) => {
   }
 };
 
+// Individual notification item with swipe-to-delete functionality
 export default function NotificationListItem({
   notification,
   onPress,
@@ -69,17 +74,27 @@ export default function NotificationListItem({
   const iconConfig = getNotificationIcon(notification.type);
   const { IconComponent, name, backgroundColor, iconColor } = iconConfig;
 
+  // Renders the delete action when swiping left
   const renderRightActions = (
-    _progress: SharedValue<number>,
+    progress: SharedValue<number>,
     _drag: SharedValue<number>,
   ) => {
+    const animatedStyle = useAnimatedStyle(() => {
+      const translateX = withTiming(progress.value > 0 ? 0 : 100);
+      return { transform: [{ translateX }] };
+    });
+
     return (
-      <View style={styles.deleteContainer}>
+      <Animated.View style={[styles.deleteContainer, animatedStyle]}>
         <Pressable onPress={onDelete} style={styles.deleteButton}>
-          <MaterialCommunityIcons name="trash-can" size={24} color="white" />
+          <MaterialCommunityIcons
+            name="trash-can-outline"
+            size={24}
+            color="white"
+          />
           <Text style={styles.deleteText}>Delete</Text>
         </Pressable>
-      </View>
+      </Animated.View>
     );
   };
 
@@ -95,34 +110,21 @@ export default function NotificationListItem({
           style={[
             styles.container,
             {
-              backgroundColor: notification.is_read
-                ? "white"
-                : COLORS.background,
-              borderLeftWidth: notification.is_read ? 0 : 4,
+              backgroundColor: notification.is_read ? "white" : "#F0FDF4",
+              borderLeftWidth: notification.is_read ? 0 : 3,
               borderLeftColor: COLORS.primary,
             },
           ]}
         >
-          {/* ICON */}
-          <View
-            style={[
-              styles.iconContainer,
-              {
-                backgroundColor: backgroundColor,
-              },
-            ]}
-          >
-            <IconComponent name={name} size={22} color={iconColor} />
+          <View style={[styles.iconContainer, { backgroundColor }]}>
+            <IconComponent name={name} size={24} color={iconColor} />
           </View>
 
-          {/* CONTENT */}
           <View style={styles.contentContainer}>
             <Text
               style={[
                 styles.message,
-                {
-                  fontWeight: notification.is_read ? "400" : "600",
-                },
+                { fontWeight: notification.is_read ? "400" : "600" },
               ]}
               numberOfLines={2}
             >
@@ -144,7 +146,6 @@ export default function NotificationListItem({
             </View>
           </View>
 
-          {/* UNREAD INDICATOR */}
           {!notification.is_read && (
             <View style={styles.unreadIndicator}>
               <View style={styles.unreadDot} />
@@ -159,38 +160,38 @@ export default function NotificationListItem({
 const styles = StyleSheet.create({
   swipeableWrapper: {
     marginHorizontal: 12,
-    marginVertical: 6,
+    marginVertical: 4,
   },
   container: {
     padding: 16,
     borderRadius: 16,
     flexDirection: "row",
-    gap: 12,
+    gap: 14,
     shadowColor: "#000",
     shadowOffset: {
       width: 0,
       height: 1,
     },
     shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowRadius: 3,
     elevation: 2,
   },
   iconContainer: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: "center",
     alignItems: "center",
   },
   contentContainer: {
     flex: 1,
     justifyContent: "center",
+    gap: 6,
   },
   message: {
     fontSize: 15,
     color: COLORS.textPrimary,
     lineHeight: 20,
-    marginBottom: 6,
   },
   metaContainer: {
     flexDirection: "row",
@@ -206,6 +207,7 @@ const styles = StyleSheet.create({
   unreadIndicator: {
     justifyContent: "center",
     alignItems: "center",
+    paddingLeft: 4,
   },
   unreadDot: {
     width: 10,
@@ -215,17 +217,16 @@ const styles = StyleSheet.create({
   },
   deleteContainer: {
     justifyContent: "center",
-    alignItems: "center",
-    width: 90,
+    alignItems: "flex-end",
+    paddingRight: 12,
   },
   deleteButton: {
-    backgroundColor: COLORS.error,
+    backgroundColor: "#DC2626",
     justifyContent: "center",
     alignItems: "center",
-    width: "100%",
+    width: 90,
     height: "100%",
-    borderTopRightRadius: 16,
-    borderBottomRightRadius: 16,
+    borderRadius: 16,
     gap: 4,
   },
   deleteText: {

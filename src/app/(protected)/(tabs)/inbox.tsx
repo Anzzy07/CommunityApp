@@ -19,18 +19,19 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 type FilterType = "all" | "unread";
 
+// Main inbox screen displaying all notifications with filtering and actions
 export default function InboxScreen() {
   const [notifications, setNotifications] = useAtom(notificationsAtom);
   const [filter, setFilter] = useState<FilterType>("all");
 
-  // Clear badge when screen is focused
+  // Clears badge when screen is focused
   useFocusEffect(
     useCallback(() => {
       clearBadge();
     }, []),
   );
 
-  // Update badge count when notifications change
+  // Updates badge count when notifications change
   React.useEffect(() => {
     const unreadCount = notifications.filter((n) => !n.is_read).length;
     if (Platform.OS === "ios") {
@@ -38,7 +39,7 @@ export default function InboxScreen() {
     }
   }, [notifications]);
 
-  // Filter notifications based on selected filter
+  // Filters notifications based on selected filter
   const filteredNotifications = useMemo(() => {
     if (filter === "unread") {
       return notifications.filter((n) => !n.is_read);
@@ -46,7 +47,7 @@ export default function InboxScreen() {
     return notifications;
   }, [notifications, filter]);
 
-  // Separate notifications into today and earlier
+  // Separates notifications into today and earlier sections
   const { todayNotifications, earlierNotifications } = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -71,7 +72,7 @@ export default function InboxScreen() {
     };
   }, [filteredNotifications]);
 
-  // Combine with section headers
+  // Combines notifications with section headers for FlatList
   const sectionsData = useMemo(() => {
     const data: Array<Notification | { type: "header"; title: string }> = [];
 
@@ -90,14 +91,12 @@ export default function InboxScreen() {
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
-  // Handle notification press
+  // Marks notification as read and navigates to relevant screen
   const handlePress = (id: string, type: string, ref: string) => {
-    // Mark as read
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)),
     );
 
-    // Navigate based on type
     if (type === "comment" || type === "post" || type === "poll") {
       router.push(`/post/${ref}`);
     }
@@ -109,32 +108,33 @@ export default function InboxScreen() {
     }
   };
 
-  // Delete notification
+  // Removes notification from the list
   const handleDelete = (id: string) => {
     setNotifications((prev) => prev.filter((n) => n.id !== id));
   };
 
-  // Mark all as read
+  // Marks all notifications as read
   const handleMarkAllRead = () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
     clearBadge();
   };
 
+  // Renders either section header or notification item
   const renderItem = ({
     item,
   }: {
     item: Notification | { type: "header"; title: string };
   }) => {
-    // Render section header
     if ("type" in item && item.type === "header") {
       return (
         <View style={styles.sectionHeader}>
+          <View style={styles.sectionHeaderLine} />
           <Text style={styles.sectionTitle}>{item.title}</Text>
+          <View style={styles.sectionHeaderLine} />
         </View>
       );
     }
 
-    // Render notification item
     const notification = item as Notification;
     return (
       <NotificationListItem
@@ -151,9 +151,9 @@ export default function InboxScreen() {
     );
   };
 
+  // Renders filter tabs and mark all as read button
   const renderHeader = () => (
     <View style={styles.header}>
-      {/* Filter Tabs with Mark as Read */}
       <View style={styles.filterContainer}>
         <Pressable
           onPress={() => setFilter("all")}
@@ -165,8 +165,23 @@ export default function InboxScreen() {
               filter === "all" && styles.activeFilterText,
             ]}
           >
-            All ({notifications.length})
+            All
           </Text>
+          <View
+            style={[
+              styles.filterBadge,
+              filter === "all" && styles.activeFilterBadge,
+            ]}
+          >
+            <Text
+              style={[
+                styles.filterBadgeText,
+                filter === "all" && styles.activeFilterBadgeText,
+              ]}
+            >
+              {notifications.length}
+            </Text>
+          </View>
         </Pressable>
 
         <Pressable
@@ -182,11 +197,25 @@ export default function InboxScreen() {
               filter === "unread" && styles.activeFilterText,
             ]}
           >
-            Unread ({unreadCount})
+            Unread
           </Text>
+          <View
+            style={[
+              styles.filterBadge,
+              filter === "unread" && styles.activeFilterBadge,
+            ]}
+          >
+            <Text
+              style={[
+                styles.filterBadgeText,
+                filter === "unread" && styles.activeFilterBadgeText,
+              ]}
+            >
+              {unreadCount}
+            </Text>
+          </View>
         </Pressable>
 
-        {/* Mark all as read button */}
         {unreadCount > 0 && (
           <Pressable
             onPress={handleMarkAllRead}
@@ -197,13 +226,14 @@ export default function InboxScreen() {
               size={18}
               color={COLORS.primary}
             />
-            <Text style={styles.markAsReadText}>Mark as read</Text>
+            <Text style={styles.markAsReadText}>Mark all read</Text>
           </Pressable>
         )}
       </View>
     </View>
   );
 
+  // Renders empty state when no notifications
   const renderEmpty = () => (
     <View style={styles.emptyContainer}>
       <View style={styles.emptyIconContainer}>
@@ -246,66 +276,96 @@ export default function InboxScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: COLORS.background,
   },
   contentContainer: {
     flexGrow: 1,
   },
   header: {
     backgroundColor: "white",
-    paddingTop: 12,
-    paddingBottom: 12,
+    paddingTop: 16,
+    paddingBottom: 16,
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: "#E5E7EB",
   },
   filterContainer: {
     flexDirection: "row",
-    paddingHorizontal: 12,
     gap: 8,
     alignItems: "center",
   },
   filterTab: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 20,
-    backgroundColor: "#F3F4F6",
+    backgroundColor: COLORS.surface,
+    gap: 6,
   },
   activeFilterTab: {
     backgroundColor: COLORS.primary,
   },
   filterText: {
     fontSize: 14,
-    fontWeight: "500",
+    fontWeight: "600",
     color: COLORS.textSecondary,
   },
   activeFilterText: {
     color: "white",
-    fontWeight: "600",
+  },
+  filterBadge: {
+    backgroundColor: "white",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    minWidth: 24,
+    alignItems: "center",
+  },
+  activeFilterBadge: {
+    backgroundColor: "rgba(255,255,255,0.3)",
+  },
+  filterBadgeText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+  },
+  activeFilterBadgeText: {
+    color: "white",
   },
   markAsReadButton: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
     paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     borderRadius: 20,
-    backgroundColor: "#F3F4F6",
+    backgroundColor: COLORS.background,
     marginLeft: "auto",
+    borderWidth: 1,
+    borderColor: COLORS.primary,
   },
   markAsReadText: {
     fontSize: 13,
-    fontWeight: "500",
+    fontWeight: "600",
     color: COLORS.primary,
   },
   sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: "#F9FAFB",
+    paddingVertical: 16,
+    gap: 12,
+  },
+  sectionHeaderLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#E5E7EB",
   },
   sectionTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "700",
-    color: COLORS.textPrimary,
+    color: COLORS.textSecondary,
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
@@ -320,10 +380,18 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: COLORS.background,
+    backgroundColor: "white",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 20,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
   },
   emptyTitle: {
     fontSize: 20,

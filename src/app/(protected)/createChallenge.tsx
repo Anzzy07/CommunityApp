@@ -1,6 +1,6 @@
 import { challengesAtom } from "@/src/atoms/ChallangesAtom";
 import { COLORS } from "@/src/colors";
-import { AntDesign } from "@expo/vector-icons";
+import { AntDesign, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSetAtom } from "jotai";
 import React, { useState } from "react";
@@ -18,15 +18,28 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 const CURRENT_USER_ID = "user-21";
 
+// Screen for creating a new challenge within a community
 export default function CreateChallengeScreen() {
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
   const setChallenges = useSetAtom(challengesAtom);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [duration, setDuration] = useState("7d");
 
+  const durations = [
+    { label: "3 days", value: "3d", days: 3 },
+    { label: "7 days", value: "7d", days: 7 },
+    { label: "14 days", value: "14d", days: 14 },
+    { label: "30 days", value: "30d", days: 30 },
+  ];
+
+  // Creates new challenge and navigates back
   const handleCreate = () => {
     if (!title.trim() || !groupId) return;
+
+    const selectedDuration = durations.find((d) => d.value === duration);
+    const daysToAdd = selectedDuration?.days || 7;
 
     setChallenges((prev) => [
       {
@@ -35,7 +48,7 @@ export default function CreateChallengeScreen() {
         title: title.trim(),
         description: description.trim() || null,
         start_date: new Date().toISOString(),
-        end_date: new Date(Date.now() + 7 * 86400000).toISOString(),
+        end_date: new Date(Date.now() + daysToAdd * 86400000).toISOString(),
         created_by: CURRENT_USER_ID,
       },
       ...prev,
@@ -46,15 +59,14 @@ export default function CreateChallengeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* HEADER */}
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()}>
+        <Pressable onPress={() => router.back()} hitSlop={10}>
           <AntDesign name="close" size={26} color="white" />
         </Pressable>
 
         <Text style={styles.headerTitle}>Create Challenge</Text>
 
-        <Pressable onPress={handleCreate} disabled={!title.trim()}>
+        <Pressable onPress={handleCreate} disabled={!title.trim()} hitSlop={10}>
           <Text style={[styles.createText, !title.trim() && { opacity: 0.5 }]}>
             Create
           </Text>
@@ -65,26 +77,90 @@ export default function CreateChallengeScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1 }}
       >
-        <ScrollView contentContainerStyle={{ padding: 16 }}>
-          <View style={styles.inputWrapper}>
-            <Text style={styles.label}>Challenge title</Text>
-            <TextInput
-              placeholder="e.g. 30 Day Fitness"
-              value={title}
-              onChangeText={setTitle}
-              style={styles.input}
-            />
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.iconSection}>
+            <View style={styles.iconContainer}>
+              <MaterialCommunityIcons
+                name="trophy-outline"
+                size={48}
+                color={COLORS.primary}
+              />
+            </View>
+            <Text style={styles.iconLabel}>Challenge</Text>
           </View>
 
           <View style={styles.inputWrapper}>
-            <Text style={styles.label}>Description (optional)</Text>
+            <Text style={styles.label}>Challenge Title</Text>
             <TextInput
-              placeholder="What’s the goal?"
+              placeholder="e.g., 30 Day Fitness Challenge"
+              placeholderTextColor="#9CA3AF"
+              value={title}
+              onChangeText={setTitle}
+              style={styles.input}
+              maxLength={60}
+            />
+            <Text style={styles.charCount}>{title.length}/60</Text>
+          </View>
+
+          <View style={styles.inputWrapper}>
+            <Text style={styles.label}>Description (Optional)</Text>
+            <TextInput
+              placeholder="What's the goal of this challenge?"
+              placeholderTextColor="#9CA3AF"
               value={description}
               onChangeText={setDescription}
               multiline
-              style={[styles.input, { minHeight: 100 }]}
+              style={[styles.input, styles.textArea]}
+              maxLength={200}
             />
+            <Text style={styles.charCount}>{description.length}/200</Text>
+          </View>
+
+          <View style={styles.durationSection}>
+            <Text style={styles.sectionTitle}>Duration</Text>
+            <View style={styles.durationGrid}>
+              {durations.map((item) => (
+                <Pressable
+                  key={item.value}
+                  onPress={() => setDuration(item.value)}
+                  style={[
+                    styles.durationButton,
+                    duration === item.value && styles.durationButtonActive,
+                  ]}
+                >
+                  <MaterialCommunityIcons
+                    name="calendar-clock"
+                    size={20}
+                    color={
+                      duration === item.value ? "white" : COLORS.textSecondary
+                    }
+                  />
+                  <Text
+                    style={[
+                      styles.durationText,
+                      duration === item.value && styles.durationTextActive,
+                    ]}
+                  >
+                    {item.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.infoBox}>
+            <MaterialCommunityIcons
+              name="information"
+              size={20}
+              color={COLORS.primary}
+            />
+            <Text style={styles.infoText}>
+              Members can track their progress and compete with each other
+              during this challenge.
+            </Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -98,7 +174,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.headerMain,
   },
   header: {
-    height: 48,
+    height: 56,
     paddingHorizontal: 15,
     flexDirection: "row",
     alignItems: "center",
@@ -106,26 +182,128 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     color: "white",
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "600",
   },
   createText: {
     color: "white",
     fontWeight: "600",
-    fontSize: 15,
+    fontSize: 16,
+  },
+  scrollContent: {
+    padding: 20,
+  },
+  iconSection: {
+    alignItems: "center",
+    marginBottom: 32,
+    paddingTop: 10,
+  },
+  iconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    borderWidth: 3,
+    borderColor: "white",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  iconLabel: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "white",
   },
   inputWrapper: {
     backgroundColor: "white",
     borderRadius: 12,
-    padding: 12,
+    padding: 16,
     marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   label: {
-    fontSize: 13,
-    color: "#6B7280",
-    marginBottom: 6,
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.textSecondary,
+    marginBottom: 8,
   },
   input: {
     fontSize: 16,
+    color: COLORS.textPrimary,
+    padding: 0,
+  },
+  textArea: {
+    minHeight: 100,
+    textAlignVertical: "top",
+  },
+  charCount: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    textAlign: "right",
+    marginTop: 8,
+  },
+  durationSection: {
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "white",
+    marginBottom: 12,
+  },
+  durationGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+  },
+  durationButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "white",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    gap: 8,
+    minWidth: "47%",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  durationButtonActive: {
+    backgroundColor: COLORS.primary,
+  },
+  durationText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: COLORS.textPrimary,
+  },
+  durationTextActive: {
+    color: "white",
+  },
+  infoBox: {
+    flexDirection: "row",
+    backgroundColor: "rgba(255,255,255,0.15)",
+    padding: 16,
+    borderRadius: 12,
+    gap: 12,
+    marginTop: 8,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 14,
+    color: "white",
+    lineHeight: 20,
   },
 });
