@@ -1,14 +1,24 @@
 import groupMembers from "@/assets/data/groupMembers.json";
 import messages from "@/assets/data/groupMessage.json";
+import { groupMembersAtom } from "@/src/atoms/GroupMembersAtom";
 import { COLORS } from "@/src/colors";
 import ChatMessageItem from "@/src/components/ChatMessageItem";
 import JoinGroupView from "@/src/components/JoinGroupView";
 import { GroupMessage } from "@/src/types";
-import { AntDesign, MaterialCommunityIcons } from "@expo/vector-icons";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useRef, useState } from "react";
 import {
+  AntDesign,
+  Feather,
+  Ionicons,
+  MaterialCommunityIcons,
+} from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useSetAtom } from "jotai";
+import React, { useEffect, useRef, useState } from "react";
+import {
+  Alert,
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -19,8 +29,9 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const CURRENT_USER_ID = "user-21"; // We will get it from Clerk
+const CURRENT_USER_ID = "user-21";
 
+// Individual group chat screen with messaging, image sending, and leave functionality
 export default function GroupChatScreen() {
   const { id: groupId, name: groupName } = useLocalSearchParams<{
     id: string;
@@ -29,19 +40,33 @@ export default function GroupChatScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const flatListRef = useRef<FlatList>(null);
+  const setGroupMembers = useSetAtom(groupMembersAtom);
 
   const [replyTo, setReplyTo] = useState<GroupMessage | null>(null);
   const [text, setText] = useState("");
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
-  // Check if user is a group member
+  // Checks if user is a member of this group
   const isMember = groupMembers.some(
     (m) => m.group_id === groupId && m.user_id === CURRENT_USER_ID,
   );
 
-  // Filter messages for this group
+  // Filters messages for this group
   const groupMessages = messages.filter((m) => m.group_id === groupId);
 
-  // Determine which messages should show avatar and username
+  // Finds the current group to check leadership
+  const currentGroup = groupMembers.find((m) => m.group_id === groupId);
+  const isLeader = false; // TODO: Check if user is leader from groups data
+
+  // Marks messages as seen when opening chat
+  useEffect(() => {
+    if (isMember) {
+      console.log("Marking messages as seen for group:", groupId);
+      // TODO: Mark all messages in this group as seen in Supabase
+    }
+  }, [groupId, isMember]);
+
+  // Determines which messages should show avatar and username
   const getMessageDisplay = (index: number) => {
     const currentMessage = groupMessages[index];
     const nextMessage = groupMessages[index + 1];
@@ -49,35 +74,55 @@ export default function GroupChatScreen() {
 
     const isMe = currentMessage.user.id === CURRENT_USER_ID;
 
-    // For "my" messages, never show avatar or username
     if (isMe) {
       return { showAvatar: false, showUsername: false };
     }
 
-    // Show username if:
-    // - First message OR
-    // - Previous message is from a different user
     const showUsername =
       !prevMessage || prevMessage.user.id !== currentMessage.user.id;
 
-    // Show avatar if:
-    // - Last message OR
-    // - Next message is from a different user
     const showAvatar =
       !nextMessage || nextMessage.user.id !== currentMessage.user.id;
 
     return { showAvatar, showUsername };
   };
 
-  // Handle send message
+  // Opens image picker to select image
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (status !== "granted") {
+      Alert.alert("Permission Required", "Please allow access to your photos.");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: "images",
+      allowsEditing: true,
+      aspect: [16, 9],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      setSelectedImage(result.assets[0].uri);
+    }
+  };
+
+  // Removes selected image
+  const removeImage = () => {
+    setSelectedImage(null);
+  };
+
+  // Sends message with text and/or image
   const handleSend = () => {
-    if (!text.trim() || !isMember) return;
+    if ((!text.trim() && !selectedImage) || !isMember) return;
 
     const newMessage = {
       id: Math.random().toString(),
       group_id: groupId,
       user_id: CURRENT_USER_ID,
-      message: text,
+      message: text.trim(),
+      image: selectedImage,
       reply_to: replyTo
         ? {
             id: replyTo.id,
@@ -88,22 +133,59 @@ export default function GroupChatScreen() {
       created_at: new Date().toISOString(),
     };
 
-    console.log("Sending message:", newMessage); // TODO: Send to Supabase
+    console.log("Sending message:", newMessage);
+    // TODO: Send to Supabase
+    // TODO: Update local state
 
     setText("");
     setReplyTo(null);
+    setSelectedImage(null);
 
-    // Scroll to bottom
     setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated: true });
     }, 100);
   };
 
-  // If user is NOT a member, show join group UI
+  // Shows leave chat confirmation
+  const handleLeaveChat = () => {
+    if (isLeader) {
+      Alert.alert(
+        "Cannot Leave",
+        "You're the group leader. Transfer leadership before leaving.",
+        [{ text: "OK" }],
+      );
+      return;
+    }
+
+    Alert.alert("Leave Chat", `Are you sure you want to leave ${groupName}?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Leave",
+        style: "destructive",
+        onPress: () => {
+          setGroupMembers((prev) =>
+            prev.filter(
+              (m) => !(m.group_id === groupId && m.user_id === CURRENT_USER_ID),
+            ),
+          );
+          router.back();
+        },
+      },
+    ]);
+  };
+
+  // Shows chat options menu
+  const handleOptions = () => {
+    Alert.alert("Chat Options", "", [
+      { text: "Leave Chat", onPress: handleLeaveChat, style: "destructive" },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
+
+  // Shows join group UI if not a member
   if (!isMember) {
     return (
       <View style={styles.container}>
-        {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top }]}>
           <Pressable
             onPress={() => router.back()}
@@ -115,8 +197,6 @@ export default function GroupChatScreen() {
           <Text style={styles.headerTitle}>{groupName}</Text>
           <View style={{ width: 24 }} />
         </View>
-
-        {/* Join Group View */}
         <JoinGroupView />
       </View>
     );
@@ -140,12 +220,8 @@ export default function GroupChatScreen() {
         <Text style={styles.headerTitle} numberOfLines={1}>
           {groupName}
         </Text>
-        <Pressable hitSlop={10}>
-          <MaterialCommunityIcons
-            name="dots-vertical"
-            size={24}
-            color={COLORS.textPrimary}
-          />
+        <Pressable hitSlop={10} onPress={handleOptions}>
+          <Feather name="more-vertical" size={24} color={COLORS.textPrimary} />
         </Pressable>
       </View>
 
@@ -197,11 +273,17 @@ export default function GroupChatScreen() {
             </Text>
           </View>
           <Pressable onPress={() => setReplyTo(null)} hitSlop={10}>
-            <MaterialCommunityIcons
-              name="close-circle"
-              size={22}
-              color={COLORS.textSecondary}
-            />
+            <Ionicons name="close" size={20} color={COLORS.textSecondary} />
+          </Pressable>
+        </View>
+      )}
+
+      {/* IMAGE PREVIEW */}
+      {selectedImage && (
+        <View style={styles.imagePreviewContainer}>
+          <Image source={{ uri: selectedImage }} style={styles.imagePreview} />
+          <Pressable onPress={removeImage} style={styles.removeImageButton}>
+            <Ionicons name="close-circle" size={24} color="white" />
           </Pressable>
         </View>
       )}
@@ -209,6 +291,12 @@ export default function GroupChatScreen() {
       {/* MESSAGE INPUT */}
       <View style={[styles.inputContainer, { paddingBottom: insets.bottom }]}>
         <View style={styles.inputWrapper}>
+          {/* IMAGE BUTTON */}
+          <Pressable onPress={pickImage} style={styles.imageButton}>
+            <Ionicons name="image-outline" size={24} color={COLORS.primary} />
+          </Pressable>
+
+          {/* TEXT INPUT */}
           <TextInput
             placeholder="Type a message..."
             placeholderTextColor="#9CA3AF"
@@ -218,15 +306,17 @@ export default function GroupChatScreen() {
             multiline
             maxLength={1000}
           />
+
+          {/* SEND BUTTON */}
           <Pressable
             onPress={handleSend}
-            disabled={!text.trim()}
+            disabled={!text.trim() && !selectedImage}
             style={[
               styles.sendButton,
-              !text.trim() && styles.sendButtonDisabled,
+              !text.trim() && !selectedImage && styles.sendButtonDisabled,
             ]}
           >
-            <MaterialCommunityIcons name="send" size={20} color="white" />
+            <Ionicons name="send" size={20} color="white" />
           </Pressable>
         </View>
       </View>
@@ -309,6 +399,26 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textSecondary,
   },
+  imagePreviewContainer: {
+    position: "relative",
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    backgroundColor: "white",
+    borderTopWidth: 0.5,
+    borderTopColor: "#E5E7EB",
+  },
+  imagePreview: {
+    width: "100%",
+    height: 150,
+    borderRadius: 12,
+  },
+  removeImageButton: {
+    position: "absolute",
+    top: 20,
+    right: 23,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    borderRadius: 12,
+  },
   inputContainer: {
     backgroundColor: "white",
     borderTopWidth: 0.5,
@@ -320,6 +430,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-end",
     gap: 10,
+  },
+  imageButton: {
+    padding: 8,
+    justifyContent: "center",
+    alignItems: "center",
   },
   input: {
     flex: 1,
