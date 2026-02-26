@@ -1,12 +1,13 @@
 import { notificationsAtom } from "@/src/atoms/NotificationAtom";
 import { NotificationType } from "@/src/types";
+import { syncClerkUserToSupabase } from "@/src/utils/clerkSupabaseSync";
 import {
   clearBadge,
   handleNotificationResponse,
   registerForPushNotificationsAsync,
   setBadgeCount,
 } from "@/src/utils/notificationService";
-import { ClerkProvider } from "@clerk/clerk-expo";
+import { ClerkProvider, useUser } from "@clerk/clerk-expo";
 import { tokenCache } from "@clerk/clerk-expo/token-cache";
 import * as Notifications from "expo-notifications";
 import { Slot } from "expo-router";
@@ -14,6 +15,20 @@ import { useAtom } from "jotai";
 import { useEffect, useRef } from "react";
 import { Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+
+// Component that syncs Clerk user to Supabase
+function UserSync() {
+  const { user, isLoaded } = useUser();
+
+  useEffect(() => {
+    // When user is loaded and signed in then sync to Supabase
+    if (isLoaded && user) {
+      syncClerkUserToSupabase(user);
+    }
+  }, [isLoaded, user]);
+
+  return null; // This component doesn't render anything
+}
 
 export default function RootLayout() {
   const [notifications, setNotifications] = useAtom(notificationsAtom);
@@ -91,6 +106,7 @@ export default function RootLayout() {
 
   return (
     <ClerkProvider tokenCache={tokenCache}>
+      <UserSync />
       <GestureHandlerRootView style={{ flex: 1 }}>
         <Slot />
       </GestureHandlerRootView>

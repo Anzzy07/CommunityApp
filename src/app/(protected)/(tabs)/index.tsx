@@ -1,38 +1,44 @@
-import posts from "@/assets/data/posts.json";
 import { groupMembersAtom } from "@/src/atoms/GroupMembersAtom";
 import { COLORS } from "@/src/colors";
 import PostListItem from "@/src/components/PostListItem";
+import { useSupabasePosts } from "@/src/hooks/useSupabasePosts";
+import { useUser } from "@clerk/clerk-expo";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAtomValue } from "jotai";
 import React, { useState } from "react";
-import { FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  FlatList,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
-const CURRENT_USER_ID = "user-21";
-
-// Displaying all posts with pull-to-refresh
+// Main home feed screen displaying all posts with pull-to-refresh
 export default function HomeScreen() {
+  const { user } = useUser(); // Get current user from Clerk
   const groupMembers = useAtomValue(groupMembersAtom);
 
+  // Fetch posts from Supabase
+  const { posts, loading, error, refetch } = useSupabasePosts();
+
   const [refreshing, setRefreshing] = useState(false);
-  const [postsList, setPostsList] = useState(posts);
 
   // Checks if user is a member of the given community
   const isJoined = (groupId: string) => {
+    if (!user?.id) return false;
     return groupMembers.some(
-      (m) => m.group_id === groupId && m.user_id === CURRENT_USER_ID,
+      (m) => m.group_id === groupId && m.user_id === user.id,
     );
   };
 
-  // Simulates fetching new posts from the server when user pulls to refresh
-  const onRefresh = React.useCallback(() => {
+  // Fetches latest posts from Supabase when user pulls to refresh
+  const onRefresh = React.useCallback(async () => {
     setRefreshing(true);
-
-    setTimeout(() => {
-      // Will be fetching new posts from Supabase
-      console.log("Refreshing posts...");
-      setRefreshing(false);
-    }, 1500);
-  }, []);
+    await refetch();
+    setRefreshing(false);
+  }, [refetch]);
 
   // Renders individual post item with synced join status
   const renderPost = ({ item }: { item: (typeof posts)[0] }) => (
@@ -56,10 +62,35 @@ export default function HomeScreen() {
     </View>
   );
 
+  // Shows loading spinner while fetching initial posts
+  if (loading && posts.length === 0) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={styles.loadingText}>Loading posts...</Text>
+      </View>
+    );
+  }
+
+  // Shows error message if fetch failed
+  if (error) {
+    return (
+      <View style={styles.errorContainer}>
+        <MaterialCommunityIcons
+          name="alert-circle-outline"
+          size={64}
+          color={COLORS.error}
+        />
+        <Text style={styles.errorTitle}>Oops! Something went wrong</Text>
+        <Text style={styles.errorText}>{error}</Text>
+      </View>
+    );
+  }
+
   return (
-    <View>
+    <View style={styles.container}>
       <FlatList
-        data={postsList}
+        data={posts}
         keyExtractor={(item) => item.id}
         renderItem={renderPost}
         contentContainerStyle={styles.contentContainer}
@@ -85,6 +116,36 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     flexGrow: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: COLORS.background,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: COLORS.textSecondary,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 40,
+    backgroundColor: COLORS.background,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: COLORS.textPrimary,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  errorText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: "center",
   },
   emptyContainer: {
     flex: 1,
