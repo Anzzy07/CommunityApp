@@ -17,7 +17,7 @@ import {
 
 // Main home feed screen displaying all posts with pull-to-refresh
 export default function HomeScreen() {
-  const { user } = useUser(); // Get current user from Clerk
+  const { user } = useUser(); // Getting current user from Clerk
   const groupMembers = useAtomValue(groupMembersAtom);
 
   // Fetch posts from Supabase

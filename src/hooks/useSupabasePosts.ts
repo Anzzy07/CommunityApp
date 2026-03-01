@@ -3,7 +3,6 @@ import { Post } from "@/src/types";
 import { useEffect, useState } from "react";
 
 // Fetches all posts from Supabase with user and group details
-
 export function useSupabasePosts() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -13,11 +12,13 @@ export function useSupabasePosts() {
     fetchPosts();
   }, []);
 
+  // Fetches posts with all related data from database
   const fetchPosts = async () => {
     try {
       setLoading(true);
       setError(null);
 
+      // Fetch posts with user and group information
       const { data, error: fetchError } = await supabase
         .from("posts")
         .select(
@@ -46,26 +47,64 @@ export function useSupabasePosts() {
 
       if (fetchError) throw fetchError;
 
-      // Get comment counts for each post
+      // For each post, fetch counts and poll data
       const postsWithCounts = await Promise.all(
         (data || []).map(async (post: any) => {
+          // Count comments for this post
           const { count: commentCount } = await supabase
             .from("comments")
             .select("*", { count: "exact", head: true })
             .eq("post_id", post.id);
 
+          // Count awards for this post
           const { count: awardCount } = await supabase
             .from("post_awards")
             .select("*", { count: "exact", head: true })
             .eq("post_id", post.id);
 
-          // Supabase returns user as array, we need first item
+          // Fetch poll if this post has one
+          const { data: pollData } = await supabase
+            .from("polls")
+            .select(
+              `
+              id,
+              post_id,
+              question,
+              created_at,
+              poll_options (
+                id,
+                poll_id,
+                text,
+                votes_count
+              )
+            `,
+            )
+            .eq("post_id", post.id)
+            .single();
+
+          // Supabase returns user/group as array, extract first item
           const userData = Array.isArray(post.user) ? post.user[0] : post.user;
           const groupData = Array.isArray(post.group)
             ? post.group[0]
             : post.group;
 
-          // Transform to match your Post type
+          // Transform poll data to match app types
+          const pollTransformed = pollData
+            ? {
+                id: pollData.id,
+                post_id: pollData.post_id,
+                question: pollData.question,
+                created_at: pollData.created_at,
+                options: (pollData.poll_options || []).map((opt: any) => ({
+                  id: opt.id,
+                  poll_id: opt.poll_id,
+                  text: opt.text,
+                  votes_count: opt.votes_count,
+                })),
+              }
+            : null;
+
+          // Transform to match Post type
           return {
             id: post.id,
             title: post.title,
@@ -85,7 +124,7 @@ export function useSupabasePosts() {
               image: groupData.image_url,
               leader_id: groupData.leader_id,
             },
-            poll: null, // TODO: Fetch poll if exists
+            poll: pollTransformed,
           };
         }),
       );
@@ -99,59 +138,10 @@ export function useSupabasePosts() {
     }
   };
 
+  // Refetches posts from database
   const refetch = () => {
     fetchPosts();
   };
 
   return { posts, loading, error, refetch };
-}
-
-import { Group } from "@/src/types";
-
-/**
- * Fetches all groups with member counts
- */
-export function useSupabaseGroups() {
-  const [groups, setGroups] = useState<Group[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchGroups();
-  }, []);
-
-  const fetchGroups = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const { data, error: fetchError } = await supabase
-        .from("groups")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (fetchError) throw fetchError;
-
-      // Transform to match your Group type
-      const groupsData = (data || []).map((group) => ({
-        id: group.id,
-        name: group.name,
-        image: group.image_url,
-        leader_id: group.leader_id,
-      }));
-
-      setGroups(groupsData as Group[]);
-    } catch (err: any) {
-      console.error("Error fetching groups:", err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const refetch = () => {
-    fetchGroups();
-  };
-
-  return { groups, loading, error, refetch };
 }
