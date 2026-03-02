@@ -1,14 +1,15 @@
-import comments from "@/assets/data/comments.json";
-import posts from "@/assets/data/posts.json";
 import { groupMembersAtom } from "@/src/atoms/GroupMembersAtom";
 import { COLORS } from "@/src/colors";
 import CommentListItem from "@/src/components/CommentListItem";
 import PostListItem from "@/src/components/PostListItem";
+import { useSupabasePostDetails } from "@/src/hooks/useSupabasePostDetails";
+import { useUser } from "@clerk/clerk-expo";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useLocalSearchParams } from "expo-router";
 import { useAtomValue } from "jotai";
 import React, { useCallback, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -20,12 +21,11 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const CURRENT_USER_ID = "user-21";
-
 // Displays a single post with all its comments and reply functionality
 export default function DetailedPost() {
   const { id } = useLocalSearchParams();
   const insets = useSafeAreaInsets();
+  const { user } = useUser();
   const groupMembers = useAtomValue(groupMembersAtom);
 
   const [comment, setComment] = useState("");
@@ -34,18 +34,28 @@ export default function DetailedPost() {
 
   const inputRef = useRef<TextInput | null>(null);
 
-  const detailedPost = posts.find((post) => post.id === id);
-  const postComments = comments.filter((c) => c.post_id === detailedPost?.id);
+  // Fetch post and comments from Supabase
+  const { data, isLoading, error } = useSupabasePostDetails(id as string);
 
   // Checks if user is a member of the post's community
-  const isJoined = detailedPost
+  const isJoined = data?.post
     ? groupMembers.some(
-        (m) =>
-          m.group_id === detailedPost.group.id && m.user_id === CURRENT_USER_ID,
+        (m) => m.group_id === data.post.group.id && m.user_id === user?.id,
       )
     : false;
 
-  if (!detailedPost) {
+  // Shows loading spinner while fetching
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={styles.loadingText}>Loading post...</Text>
+      </View>
+    );
+  }
+
+  // Shows error if post not found or fetch failed
+  if (error || !data) {
     return (
       <View style={styles.notFoundContainer}>
         <MaterialCommunityIcons
@@ -55,11 +65,13 @@ export default function DetailedPost() {
         />
         <Text style={styles.notFoundTitle}>Post Not Found</Text>
         <Text style={styles.notFoundSubtitle}>
-          This post may have been deleted or doesn't exist
+          {error?.message || "This post may have been deleted or doesn't exist"}
         </Text>
       </View>
     );
   }
+
+  const { post, comments } = data;
 
   // Sets reply state and focuses the comment input
   const handleReplyPress = useCallback(
@@ -70,18 +82,23 @@ export default function DetailedPost() {
     [],
   );
 
-  // Submits the comment to the server
-  const handleSend = () => {
-    if (!comment.trim()) return;
+  // Submits the comment to Supabase
+  const handleSend = async () => {
+    if (!comment.trim() || !user?.id) return;
 
     console.log("Sending comment:", {
-      postId: detailedPost.id,
+      postId: post.id,
       comment: comment.trim(),
       replyTo: replyingTo,
     });
 
     // TODO: Add comment to Supabase
-    // TODO: Update local state
+    // const { error } = await supabase.from('comments').insert({
+    //   post_id: post.id,
+    //   user_id: user.id,
+    //   comment: comment.trim(),
+    //   parent_id: replyingTo ? findCommentId(replyingTo) : null
+    // });
 
     setComment("");
     setReplyingTo(null);
@@ -124,13 +141,9 @@ export default function DetailedPost() {
     >
       <FlatList
         ListHeaderComponent={
-          <PostListItem
-            post={detailedPost}
-            isDetailedPost
-            isJoined={isJoined}
-          />
+          <PostListItem post={post} isDetailedPost isJoined={isJoined} />
         }
-        data={postComments}
+        data={comments}
         keyExtractor={(item) => item.id}
         renderItem={renderComment}
         ListEmptyComponent={renderEmptyComments}
@@ -195,6 +208,17 @@ const styles = StyleSheet.create({
   listContent: {
     paddingBottom: 100,
     flexGrow: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: COLORS.background,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: COLORS.textSecondary,
   },
   notFoundContainer: {
     flex: 1,

@@ -1,23 +1,12 @@
 import { supabase } from "@/src/lib/supabase";
 import { Post } from "@/src/types";
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
-// Fetches all posts from Supabase with user and group details
+// Fetches all posts from Supabase with user and group details using React Query
 export function useSupabasePosts() {
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchPosts();
-  }, []);
-
-  // Fetches posts with all related data from database
-  const fetchPosts = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
+  return useQuery({
+    queryKey: ["posts"],
+    queryFn: async () => {
       // Fetch posts with user and group information
       const { data, error: fetchError } = await supabase
         .from("posts")
@@ -129,19 +118,9 @@ export function useSupabasePosts() {
         }),
       );
 
-      setPosts(postsWithCounts as Post[]);
-    } catch (err: any) {
-      console.error("Error fetching posts:", err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Refetches posts from database
-  const refetch = () => {
-    fetchPosts();
-  };
-
-  return { posts, loading, error, refetch };
+      return postsWithCounts as Post[];
+    },
+    staleTime: 1000 * 60 * 5, // Data stays fresh for 5 minutes
+    gcTime: 1000 * 60 * 10, // Cache for 10 minutes
+  });
 }

@@ -5,7 +5,7 @@ import { useSupabasePosts } from "@/src/hooks/useSupabasePosts";
 import { useUser } from "@clerk/clerk-expo";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAtomValue } from "jotai";
-import React, { useState } from "react";
+import React from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -15,15 +15,19 @@ import {
   View,
 } from "react-native";
 
-// Main home feed screen displaying all posts with pull-to-refresh
+// Main home feed screen displaying all posts with pull-to-refresh using React Query
 export default function HomeScreen() {
-  const { user } = useUser(); // Getting current user from Clerk
+  const { user } = useUser();
   const groupMembers = useAtomValue(groupMembersAtom);
 
-  // Fetch posts from Supabase
-  const { posts, loading, error, refetch } = useSupabasePosts();
-
-  const [refreshing, setRefreshing] = useState(false);
+  // Fetch posts from Supabase with React Query
+  const {
+    data: posts = [],
+    isLoading,
+    error,
+    refetch,
+    isRefetching,
+  } = useSupabasePosts();
 
   // Checks if user is a member of the given community
   const isJoined = (groupId: string) => {
@@ -32,13 +36,6 @@ export default function HomeScreen() {
       (m) => m.group_id === groupId && m.user_id === user.id,
     );
   };
-
-  // Fetches latest posts from Supabase when user pulls to refresh
-  const onRefresh = React.useCallback(async () => {
-    setRefreshing(true);
-    await refetch();
-    setRefreshing(false);
-  }, [refetch]);
 
   // Renders individual post item with synced join status
   const renderPost = ({ item }: { item: (typeof posts)[0] }) => (
@@ -63,7 +60,7 @@ export default function HomeScreen() {
   );
 
   // Shows loading spinner while fetching initial posts
-  if (loading && posts.length === 0) {
+  if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={COLORS.primary} />
@@ -82,7 +79,7 @@ export default function HomeScreen() {
           color={COLORS.error}
         />
         <Text style={styles.errorTitle}>Oops! Something went wrong</Text>
-        <Text style={styles.errorText}>{error}</Text>
+        <Text style={styles.errorText}>{error.message}</Text>
       </View>
     );
   }
@@ -97,8 +94,8 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
+            refreshing={isRefetching}
+            onRefresh={() => refetch()}
             tintColor={COLORS.primary}
             colors={[COLORS.primary]}
           />

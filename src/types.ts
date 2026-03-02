@@ -17,8 +17,8 @@ export type Group = {
 export type Post = {
   id: string;
   title: string;
-  created_at: string;
-  upvotes: number;
+  created_at: string | null;
+  upvotes: number | null;
   nr_of_comments: number;
   image: string | null;
   description: string | null;
@@ -34,8 +34,8 @@ export type Comment = {
   user_id: string;
   parent_id: string | null;
   comment: string;
-  created_at: string;
-  upvotes: number;
+  created_at: string | null;
+  upvotes: number | null;
   user: User;
   replies: Comment[];
 };
@@ -45,7 +45,7 @@ export type GroupMember = {
   id: string;
   group_id: string;
   user_id: string;
-  joined_at: string;
+  joined_at: string | null;
 };
 
 // GROUP CHAT
@@ -54,7 +54,7 @@ export type GroupMessage = {
   group_id: string;
   user: User;
   message: string;
-  created_at: string;
+  created_at: string | null;
   reply_to?: {
     id: string;
     message: string;
@@ -67,7 +67,7 @@ export type Poll = {
   id: string;
   post_id: string;
   question: string;
-  created_at: string;
+  created_at: string | null;
   options: PollOption[];
 };
 
@@ -75,7 +75,7 @@ export type PollOption = {
   id: string;
   poll_id: string;
   text: string;
-  votes_count: number;
+  votes_count: number | null;
 };
 
 export type PollVote = {
@@ -87,9 +87,9 @@ export type PollVote = {
 // USER STREAKS
 export type UserStreak = {
   user_id: string;
-  current_streak: number;
-  longest_streak: number;
-  last_active_date: string;
+  current_streak: number | null;
+  longest_streak: number | null;
+  last_active_date: string | null;
 };
 
 // CHALLENGES
@@ -108,8 +108,8 @@ export type ChallengeEntry = {
   challenge_id: string;
   user_id: string;
   content: string;
-  created_at: string;
-  votes: number;
+  created_at: string | null;
+  votes: number | null;
 };
 
 // NOTIFICATIONS
