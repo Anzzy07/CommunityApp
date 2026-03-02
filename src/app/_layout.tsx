@@ -9,12 +9,16 @@ import {
 } from "@/src/utils/notificationService";
 import { ClerkProvider, useUser } from "@clerk/clerk-expo";
 import { tokenCache } from "@clerk/clerk-expo/token-cache";
+import { useReactQueryDevTools } from "@dev-plugins/react-query";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as Notifications from "expo-notifications";
 import { Slot } from "expo-router";
 import { useAtom } from "jotai";
 import { useEffect, useRef } from "react";
 import { Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+
+const queryClient = new QueryClient();
 
 // Component that syncs Clerk user to Supabase
 function UserSync() {
@@ -31,6 +35,7 @@ function UserSync() {
 }
 
 export default function RootLayout() {
+  useReactQueryDevTools(queryClient);
   const [notifications, setNotifications] = useAtom(notificationsAtom);
 
   const notificationListener = useRef<Notifications.EventSubscription | null>(
@@ -105,11 +110,13 @@ export default function RootLayout() {
   }, [notifications]);
 
   return (
-    <ClerkProvider tokenCache={tokenCache}>
-      <UserSync />
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <Slot />
-      </GestureHandlerRootView>
-    </ClerkProvider>
+    <QueryClientProvider client={queryClient}>
+      <ClerkProvider tokenCache={tokenCache}>
+        <UserSync />
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <Slot />
+        </GestureHandlerRootView>
+      </ClerkProvider>
+    </QueryClientProvider>
   );
 }
