@@ -2,7 +2,9 @@ import { groupMembersAtom } from "@/src/atoms/GroupMembersAtom";
 import { COLORS } from "@/src/colors";
 import CommentListItem from "@/src/components/CommentListItem";
 import PostListItem from "@/src/components/PostListItem";
-import { useSupabasePostDetails } from "@/src/hooks/useSupabasePostDetails";
+import { useCreateComment } from "@/src/hooks/mutations/useCommentMutations";
+import { useSupabasePostDetails } from "@/src/hooks/queries/useSupabasePostDetails";
+
 import { useUser } from "@clerk/clerk-expo";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useLocalSearchParams } from "expo-router";
@@ -10,6 +12,7 @@ import { useAtomValue } from "jotai";
 import React, { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -29,13 +32,61 @@ export default function DetailedPost() {
   const groupMembers = useAtomValue(groupMembersAtom);
 
   const [comment, setComment] = useState("");
-  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyingTo, setReplyingTo] = useState<{
+    username: string;
+    commentId: string;
+  } | null>(null);
   const [isInputFocused, setIsInputFocused] = useState(false);
 
   const inputRef = useRef<TextInput | null>(null);
 
-  // Fetch post and comments from Supabase
+  // Fetch post and comments from Supabase - MUST be before any conditional returns
   const { data, isLoading, error } = useSupabasePostDetails(id as string);
+
+  // Create comment mutation - MUST be before any conditional returns
+  const createCommentMutation = useCreateComment();
+
+  // Sets reply state and focuses the comment input - MUST be before any conditional returns
+  const handleReplyPress = useCallback(
+    (commentId: string, username: string) => {
+      setReplyingTo({ username, commentId });
+      inputRef.current?.focus();
+    },
+    [],
+  );
+
+  // Submits the comment to Supabase
+  const handleSend = async () => {
+    if (!comment.trim() || !user?.id) {
+      if (!user?.id) {
+        Alert.alert("Sign in required", "Please sign in to comment");
+      }
+      return;
+    }
+
+    try {
+      await createCommentMutation.mutateAsync({
+        postId: data!.post.id,
+        userId: user.id,
+        comment: comment.trim(),
+        parentId: replyingTo?.commentId || null,
+      });
+
+      // Clear input and reply state on success
+      setComment("");
+      setReplyingTo(null);
+
+      // Show success message
+      Alert.alert("Success", "Comment posted!");
+    } catch (error: any) {
+      Alert.alert("Error", error.message || "Failed to post comment");
+    }
+  };
+
+  // Clears the reply state
+  const handleCancelReply = () => {
+    setReplyingTo(null);
+  };
 
   // Checks if user is a member of the post's community
   const isJoined = data?.post
@@ -44,6 +95,7 @@ export default function DetailedPost() {
       )
     : false;
 
+  // NOW we can do conditional returns AFTER all hooks are called
   // Shows loading spinner while fetching
   if (isLoading) {
     return (
@@ -72,42 +124,6 @@ export default function DetailedPost() {
   }
 
   const { post, comments } = data;
-
-  // Sets reply state and focuses the comment input
-  const handleReplyPress = useCallback(
-    (commentId: string, username: string) => {
-      setReplyingTo(username);
-      inputRef.current?.focus();
-    },
-    [],
-  );
-
-  // Submits the comment to Supabase
-  const handleSend = async () => {
-    if (!comment.trim() || !user?.id) return;
-
-    console.log("Sending comment:", {
-      postId: post.id,
-      comment: comment.trim(),
-      replyTo: replyingTo,
-    });
-
-    // TODO: Add comment to Supabase
-    // const { error } = await supabase.from('comments').insert({
-    //   post_id: post.id,
-    //   user_id: user.id,
-    //   comment: comment.trim(),
-    //   parent_id: replyingTo ? findCommentId(replyingTo) : null
-    // });
-
-    setComment("");
-    setReplyingTo(null);
-  };
-
-  // Clears the reply state
-  const handleCancelReply = () => {
-    setReplyingTo(null);
-  };
 
   // Renders individual comment with proper nesting
   const renderComment = ({ item }: { item: (typeof comments)[0] }) => (
@@ -157,7 +173,7 @@ export default function DetailedPost() {
             <View style={styles.replyIndicator} />
             <Text style={styles.replyText}>
               Replying to{" "}
-              <Text style={styles.replyUsername}>@{replyingTo}</Text>
+              <Text style={styles.replyUsername}>@{replyingTo.username}</Text>
             </Text>
             <Pressable onPress={handleCancelReply} hitSlop={10}>
               <MaterialCommunityIcons
@@ -180,18 +196,24 @@ export default function DetailedPost() {
             style={styles.input}
             onFocus={() => setIsInputFocused(true)}
             onBlur={() => setIsInputFocused(false)}
+            editable={!createCommentMutation.isPending}
           />
 
           {(isInputFocused || comment.trim()) && (
             <Pressable
-              disabled={!comment.trim()}
+              disabled={!comment.trim() || createCommentMutation.isPending}
               onPress={handleSend}
               style={[
                 styles.sendButton,
-                !comment.trim() && styles.sendButtonDisabled,
+                (!comment.trim() || createCommentMutation.isPending) &&
+                  styles.sendButtonDisabled,
               ]}
             >
-              <MaterialCommunityIcons name="send" size={18} color="white" />
+              {createCommentMutation.isPending ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <MaterialCommunityIcons name="send" size={18} color="white" />
+              )}
             </Pressable>
           )}
         </View>

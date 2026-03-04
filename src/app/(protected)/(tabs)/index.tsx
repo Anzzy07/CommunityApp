@@ -1,7 +1,7 @@
 import { groupMembersAtom } from "@/src/atoms/GroupMembersAtom";
 import { COLORS } from "@/src/colors";
 import PostListItem from "@/src/components/PostListItem";
-import { useSupabasePosts } from "@/src/hooks/useSupabasePosts";
+import { useSupabasePosts } from "@/src/hooks/queries/useSupabasePosts";
 import { useUser } from "@clerk/clerk-expo";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAtomValue } from "jotai";

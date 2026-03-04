@@ -1,23 +1,23 @@
 import userStreaks from "@/assets/data/userStreaks.json";
 import { groupMembersAtom } from "@/src/atoms/GroupMembersAtom";
 import { COLORS } from "@/src/colors";
+import {
+  usePostAward,
+  usePostShare,
+  usePostVote,
+} from "@/src/hooks/mutations/usePostMutations";
 import { Post } from "@/src/types";
+import { useUser } from "@clerk/clerk-expo";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { formatDistanceToNowStrict } from "date-fns";
 import { Link } from "expo-router";
 import { useSetAtom } from "jotai";
-import React, { useState } from "react";
+import React, { memo } from "react";
+import { Alert, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import {
-  Alert,
-  Image,
-  Pressable,
-  Share,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
-
-const CURRENT_USER_ID = "user-21";
+  useUserPostAward,
+  useUserPostVote,
+} from "../hooks/mutations/useUserVotes";
 
 type PostListItemProps = {
   post: Post;
@@ -26,70 +26,99 @@ type PostListItemProps = {
   isJoined?: boolean;
 };
 
-// Component renders a single post with voting, sharing, and award functionality
-export default function PostListItem({
+function PostListItem({
   post,
   isDetailedPost,
   showJoinButton = true,
   isJoined = false,
 }: PostListItemProps) {
+  const { user } = useUser();
   const setGroupMembers = useSetAtom(groupMembersAtom);
 
-  const [upvotes, setUpvotes] = useState(post.upvotes);
-  const [voteStatus, setVoteStatus] = useState<"up" | "down" | null>(null);
-  const [hasAwarded, setHasAwarded] = useState(false);
+  // These are the source of truth — driven by React Query cache
+  const { data: voteStatus } = useUserPostVote(post.id, user?.id);
+  const { data: hasAwarded } = useUserPostAward(post.id, user?.id);
+
+  const voteMutation = usePostVote();
+  const awardMutation = usePostAward();
+  const shareMutation = usePostShare();
+
+  // Read upvotes directly from the post prop — which is driven by the React Query cache
+  // (optimistically updated in usePostVote). No local state needed — avoids drift.
+  const upvotes = post.upvotes ?? 0;
+  const awarded = hasAwarded ?? false;
+  const currentVote = voteStatus ?? null;
 
   const streak = userStreaks.find((s) => s.user_id === post.user.id);
   const shouldShowImage = isDetailedPost || post.image;
   const shouldShowDescription = isDetailedPost || !post.image;
 
-  // Handles upvoting the post, toggles between upvoted and neutral states
-  const handleUpvote = () => {
-    if (voteStatus === "up") {
-      setUpvotes(upvotes - 1);
-      setVoteStatus(null);
-    } else {
-      setUpvotes(voteStatus === "down" ? upvotes + 2 : upvotes + 1);
-      setVoteStatus("up");
+  const handleUpvote = async () => {
+    if (!user?.id) {
+      Alert.alert("Sign in required", "Please sign in to vote");
+      return;
+    }
+    try {
+      await voteMutation.mutateAsync({
+        postId: post.id,
+        userId: user.id,
+        voteType: "up",
+      });
+    } catch {
+      Alert.alert("Error", "Failed to vote. Please try again.");
     }
   };
 
-  // Handles downvoting the post, toggles between downvoted and neutral states
-  const handleDownvote = () => {
-    if (voteStatus === "down") {
-      setUpvotes(upvotes + 1);
-      setVoteStatus(null);
-    } else {
-      setUpvotes(voteStatus === "up" ? upvotes - 2 : upvotes - 1);
-      setVoteStatus("down");
+  const handleDownvote = async () => {
+    if (!user?.id) {
+      Alert.alert("Sign in required", "Please sign in to vote");
+      return;
+    }
+    try {
+      await voteMutation.mutateAsync({
+        postId: post.id,
+        userId: user.id,
+        voteType: "down",
+      });
+    } catch {
+      Alert.alert("Error", "Failed to vote. Please try again.");
     }
   };
 
-  // Opens native share menu to share the post
   const handleShare = async () => {
     try {
-      await Share.share({
-        message: `${post.title}\n\nCheck out this post in ${post.group.name}!`,
-        title: post.title,
+      await shareMutation.mutateAsync({
+        postId: post.id,
+        postTitle: post.title,
       });
     } catch (error) {
       console.error("Error sharing:", error);
     }
   };
 
-  // Toggles award status and shows confirmation alert
-  const handleAward = () => {
-    if (hasAwarded) {
-      setHasAwarded(false);
-      Alert.alert("Award Removed", "You removed your award from this post");
-    } else {
-      setHasAwarded(true);
-      Alert.alert("Award Given!", "You gave an award to this post! 🏆");
+  const handleAward = async () => {
+    if (!user?.id) {
+      Alert.alert("Sign in required", "Please sign in to give awards");
+      return;
+    }
+    try {
+      await awardMutation.mutateAsync({
+        postId: post.id,
+        userId: user.id,
+        remove: awarded,
+      });
+      if (!awarded)
+        Alert.alert("Award Given!", "You gave an award to this post! 🏆");
+    } catch {
+      Alert.alert("Error", "Failed to give award. Please try again.");
     }
   };
 
-  // Adds user to the community by updating the global atom, syncs across all screens
   const handleJoinCommunity = () => {
+    if (!user?.id) {
+      Alert.alert("Sign in required", "Please sign in to join communities");
+      return;
+    }
     Alert.alert("Join Community", `Join ${post.group.name}?`, [
       { text: "Cancel", style: "cancel" },
       {
@@ -100,7 +129,7 @@ export default function PostListItem({
             {
               id: `gm-${Date.now()}`,
               group_id: post.group.id,
-              user_id: CURRENT_USER_ID,
+              user_id: user.id,
               joined_at: new Date().toISOString(),
             },
           ]);
@@ -126,7 +155,9 @@ export default function PostListItem({
             )}
 
             <Text style={styles.timeText}>
-              {formatDistanceToNowStrict(new Date(post.created_at))}
+              {formatDistanceToNowStrict(
+                new Date(post.created_at ?? Date.now()),
+              )}
             </Text>
           </View>
 
@@ -160,15 +191,19 @@ export default function PostListItem({
       <View style={styles.footer}>
         <View style={styles.leftActions}>
           <View style={styles.voteContainer}>
-            <Pressable onPress={handleUpvote} hitSlop={10}>
+            <Pressable
+              onPress={handleUpvote}
+              hitSlop={10}
+              disabled={voteMutation.isPending}
+            >
               <MaterialCommunityIcons
                 name={
-                  voteStatus === "up"
+                  currentVote === "up"
                     ? "arrow-up-bold"
                     : "arrow-up-bold-outline"
                 }
                 size={19}
-                color={voteStatus === "up" ? COLORS.primary : COLORS.border}
+                color={currentVote === "up" ? COLORS.primary : COLORS.border}
               />
             </Pressable>
 
@@ -176,15 +211,19 @@ export default function PostListItem({
 
             <View style={styles.voteDivider} />
 
-            <Pressable onPress={handleDownvote} hitSlop={10}>
+            <Pressable
+              onPress={handleDownvote}
+              hitSlop={10}
+              disabled={voteMutation.isPending}
+            >
               <MaterialCommunityIcons
                 name={
-                  voteStatus === "down"
+                  currentVote === "down"
                     ? "arrow-down-bold"
                     : "arrow-down-bold-outline"
                 }
                 size={19}
-                color={voteStatus === "down" ? "#DC2626" : COLORS.border}
+                color={currentVote === "down" ? "#DC2626" : COLORS.border}
               />
             </Pressable>
           </View>
@@ -200,16 +239,24 @@ export default function PostListItem({
         </View>
 
         <View style={styles.rightActions}>
-          <Pressable onPress={handleAward} hitSlop={10}>
+          <Pressable
+            onPress={handleAward}
+            hitSlop={10}
+            disabled={awardMutation.isPending}
+          >
             <MaterialCommunityIcons
-              name={hasAwarded ? "trophy" : "trophy-outline"}
+              name={awarded ? "trophy" : "trophy-outline"}
               size={19}
-              color={hasAwarded ? "#F59E0B" : COLORS.border}
+              color={awarded ? "#F59E0B" : COLORS.border}
               style={styles.iconButton}
             />
           </Pressable>
 
-          <Pressable onPress={handleShare} hitSlop={10}>
+          <Pressable
+            onPress={handleShare}
+            hitSlop={10}
+            disabled={shareMutation.isPending}
+          >
             <MaterialCommunityIcons
               name="share-outline"
               size={19}
@@ -222,10 +269,7 @@ export default function PostListItem({
     </View>
   );
 
-  if (isDetailedPost) {
-    return PostContent;
-  }
-
+  if (isDetailedPost) return PostContent;
   return <Link href={`/post/${post.id}`}>{PostContent}</Link>;
 }
 
@@ -362,3 +406,5 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
 });
+
+export default memo(PostListItem);

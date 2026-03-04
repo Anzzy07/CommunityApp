@@ -1,9 +1,28 @@
 import { COLORS } from "@/src/colors";
+import {
+  useCommentAward,
+  useCommentVote,
+  useDeleteComment,
+  useEditComment,
+} from "@/src/hooks/mutations/useCommentMutations";
 import { Comment } from "@/src/types";
+import { useUser } from "@clerk/clerk-expo";
 import { Entypo, MaterialCommunityIcons, Octicons } from "@expo/vector-icons";
 import { formatDistanceToNowStrict } from "date-fns";
 import { memo, useState } from "react";
-import { Alert, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  Alert,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import {
+  useUserCommentAward,
+  useUserCommentVote,
+} from "../hooks/mutations/useUserVotes";
 
 type CommentListItemProps = {
   comment: Comment;
@@ -21,46 +40,137 @@ const CommentListItem = ({
   depth,
   handleReplyPress,
 }: CommentListItemProps) => {
-  // State for UI interactions
+  const { user } = useUser();
+
+  // Source of truth from React Query cache — no local state copies needed
+  const { data: voteStatus } = useUserCommentVote(comment.id, user?.id);
+  const { data: userHasAwarded } = useUserCommentAward(comment.id, user?.id);
+
+  const voteMutation = useCommentVote();
+  const awardMutation = useCommentAward();
+  const editMutation = useEditComment();
+  const deleteMutation = useDeleteComment();
+
+  // Only UI state lives locally — not data state
   const [showReplies, setShowReplies] = useState(false);
-  const [upvotes, setUpvotes] = useState(comment.upvotes);
-  const [voteStatus, setVoteStatus] = useState<"up" | "down" | null>(null);
-  const [hasAwarded, setHasAwarded] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState(comment.comment);
+  const [showMenu, setShowMenu] = useState(false);
 
-  // Handle upvote
-  // Toggles upvote state and updates count
+  const currentVote = voteStatus ?? null;
+  const hasAwarded = userHasAwarded ?? false;
+  // Upvotes come from the comment prop which is driven by the cache
+  const upvotes = comment.upvotes ?? 0;
 
-  const handleUpvote = () => {
-    if (voteStatus === "up") {
-      setUpvotes(upvotes - 1);
-      setVoteStatus(null);
-    } else {
-      setUpvotes(voteStatus === "down" ? upvotes + 2 : upvotes + 1);
-      setVoteStatus("up");
+  const isOwner = user?.id === comment.user_id;
+
+  const handleUpvote = async () => {
+    if (!user?.id) {
+      Alert.alert("Sign in required", "Please sign in to vote");
+      return;
+    }
+    try {
+      await voteMutation.mutateAsync({
+        commentId: comment.id,
+        userId: user.id,
+        voteType: "up",
+        postId: comment.post_id,
+      });
+    } catch {
+      Alert.alert("Error", "Failed to vote. Please try again.");
     }
   };
 
-  // Handle downvote
-  // Toggles downvote state and updates count
-  const handleDownvote = () => {
-    if (voteStatus === "down") {
-      setUpvotes(upvotes + 1);
-      setVoteStatus(null);
-    } else {
-      setUpvotes(voteStatus === "up" ? upvotes - 2 : upvotes - 1);
-      setVoteStatus("down");
+  const handleDownvote = async () => {
+    if (!user?.id) {
+      Alert.alert("Sign in required", "Please sign in to vote");
+      return;
+    }
+    try {
+      await voteMutation.mutateAsync({
+        commentId: comment.id,
+        userId: user.id,
+        voteType: "down",
+        postId: comment.post_id,
+      });
+    } catch {
+      Alert.alert("Error", "Failed to vote. Please try again.");
     }
   };
 
-  // Handle award/trophy
-
-  const handleAward = () => {
-    if (hasAwarded) {
-      setHasAwarded(false);
-    } else {
-      setHasAwarded(true);
-      Alert.alert("Award Given!", "You gave an award to this comment! 🏆");
+  const handleAward = async () => {
+    if (!user?.id) {
+      Alert.alert("Sign in required", "Please sign in to give awards");
+      return;
     }
+    try {
+      await awardMutation.mutateAsync({
+        commentId: comment.id,
+        userId: user.id,
+        remove: hasAwarded,
+        postId: comment.post_id,
+      });
+      if (!hasAwarded)
+        Alert.alert("Award Given!", "You gave an award to this comment! 🏆");
+    } catch {
+      Alert.alert("Error", "Failed to give award. Please try again.");
+    }
+  };
+
+  const handleEdit = () => {
+    setShowMenu(false);
+    setIsEditing(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editText.trim()) return;
+    try {
+      await editMutation.mutateAsync({
+        commentId: comment.id,
+        comment: editText.trim(),
+        postId: comment.post_id,
+      });
+      setIsEditing(false);
+    } catch (error: any) {
+      // Log full error so you can see exactly what Supabase says
+      console.error("Edit error:", JSON.stringify(error));
+      Alert.alert("Error", error?.message || "Failed to edit comment");
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditText(comment.comment);
+    setIsEditing(false);
+  };
+
+  const handleDelete = () => {
+    setShowMenu(false);
+    Alert.alert(
+      "Delete Comment",
+      "Are you sure you want to delete this comment?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteMutation.mutateAsync({
+                commentId: comment.id,
+                postId: comment.post_id,
+              });
+              // No alert needed — comment disappears immediately from the list
+            } catch (error: any) {
+              console.error("Delete error:", JSON.stringify(error));
+              Alert.alert(
+                "Error",
+                error?.message || "Failed to delete comment",
+              );
+            }
+          },
+        },
+      ],
+    );
   };
 
   return (
@@ -74,29 +184,55 @@ const CommentListItem = ({
         },
       ]}
     >
-      {/* USER INFO */}
       <View style={styles.userInfo}>
         <Image
           source={{ uri: comment.user.image || DEFAULT_AVATAR }}
           style={styles.avatar}
         />
-
         <View style={styles.userDetails}>
           <Text style={styles.username}>{comment.user.name}</Text>
           <Text style={styles.timestamp}>
-            · {formatDistanceToNowStrict(new Date(comment.created_at))}
+            ·{" "}
+            {formatDistanceToNowStrict(
+              new Date(comment.created_at ?? Date.now()),
+            )}
           </Text>
         </View>
       </View>
 
-      {/* COMMENT TEXT */}
-      <Text style={styles.commentText}>{comment.comment}</Text>
+      {isEditing ? (
+        <View style={styles.editContainer}>
+          <TextInput
+            value={editText}
+            onChangeText={setEditText}
+            multiline
+            style={styles.editInput}
+            autoFocus
+          />
+          <View style={styles.editButtons}>
+            <Pressable onPress={handleCancelEdit} style={styles.cancelButton}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </Pressable>
+            <Pressable
+              onPress={handleSaveEdit}
+              style={[
+                styles.saveButton,
+                editMutation.isPending && { opacity: 0.6 },
+              ]}
+              disabled={editMutation.isPending}
+            >
+              <Text style={styles.saveText}>
+                {editMutation.isPending ? "Saving..." : "Save"}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : (
+        <Text style={styles.commentText}>{comment.comment}</Text>
+      )}
 
-      {/* ACTION BAR */}
       <View style={styles.actionBar}>
-        {/* LEFT ACTIONS */}
         <View style={styles.leftActions}>
-          {/* Reply */}
           <Pressable
             hitSlop={10}
             onPress={() => handleReplyPress(comment.id, comment.user.name)}
@@ -105,11 +241,11 @@ const CommentListItem = ({
             <Octicons name="reply" size={16} color={COLORS.textSecondary} />
           </Pressable>
 
-          {/* Award */}
           <Pressable
             hitSlop={10}
             onPress={handleAward}
             style={styles.actionIcon}
+            disabled={awardMutation.isPending}
           >
             <MaterialCommunityIcons
               name={hasAwarded ? "trophy" : "trophy-outline"}
@@ -118,50 +254,75 @@ const CommentListItem = ({
             />
           </Pressable>
 
-          {/* More options */}
-          <Pressable hitSlop={10} style={styles.actionIcon}>
-            <Entypo
-              name="dots-three-horizontal"
-              size={14}
-              color={COLORS.textSecondary}
-            />
-          </Pressable>
+          {isOwner && (
+            <Pressable
+              hitSlop={10}
+              onPress={() => setShowMenu(!showMenu)}
+              style={styles.actionIcon}
+            >
+              <Entypo
+                name="dots-three-horizontal"
+                size={14}
+                color={COLORS.textSecondary}
+              />
+            </Pressable>
+          )}
         </View>
 
-        {/* VOTING */}
         <View style={styles.votingContainer}>
-          {/* Upvote */}
-          <Pressable hitSlop={10} onPress={handleUpvote}>
+          <Pressable
+            hitSlop={10}
+            onPress={handleUpvote}
+            disabled={voteMutation.isPending}
+          >
             <MaterialCommunityIcons
               name={
-                voteStatus === "up" ? "arrow-up-bold" : "arrow-up-bold-outline"
+                currentVote === "up" ? "arrow-up-bold" : "arrow-up-bold-outline"
               }
               size={18}
               color={
-                voteStatus === "up" ? COLORS.primary : COLORS.textSecondary
+                currentVote === "up" ? COLORS.primary : COLORS.textSecondary
               }
             />
           </Pressable>
 
-          {/* Vote count */}
           <Text style={styles.voteCount}>{upvotes}</Text>
 
-          {/* Downvote */}
-          <Pressable hitSlop={10} onPress={handleDownvote}>
+          <Pressable
+            hitSlop={10}
+            onPress={handleDownvote}
+            disabled={voteMutation.isPending}
+          >
             <MaterialCommunityIcons
               name={
-                voteStatus === "down"
+                currentVote === "down"
                   ? "arrow-down-bold"
                   : "arrow-down-bold-outline"
               }
               size={18}
-              color={voteStatus === "down" ? "#DC2626" : COLORS.textSecondary}
+              color={currentVote === "down" ? "#DC2626" : COLORS.textSecondary}
             />
           </Pressable>
         </View>
       </View>
 
-      {/* SHOW / HIDE REPLIES */}
+      {showMenu && isOwner && (
+        <View style={styles.menu}>
+          <Pressable onPress={handleEdit} style={styles.menuItem}>
+            <MaterialCommunityIcons
+              name="pencil"
+              size={16}
+              color={COLORS.textPrimary}
+            />
+            <Text style={styles.menuText}>Edit</Text>
+          </Pressable>
+          <Pressable onPress={handleDelete} style={styles.menuItem}>
+            <MaterialCommunityIcons name="delete" size={16} color="#DC2626" />
+            <Text style={[styles.menuText, { color: "#DC2626" }]}>Delete</Text>
+          </Pressable>
+        </View>
+      )}
+
       {comment.replies.length > 0 && depth < MAX_DEPTH && (
         <Pressable onPress={() => setShowReplies((v) => !v)}>
           <Text style={styles.repliesToggle}>
@@ -174,7 +335,6 @@ const CommentListItem = ({
         </Pressable>
       )}
 
-      {/* NESTED REPLIES */}
       {showReplies &&
         comment.replies.map((reply) => (
           <CommentListItem
@@ -225,6 +385,43 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: "#262626",
   },
+  editContainer: {
+    gap: 8,
+  },
+  editInput: {
+    backgroundColor: "#F3F4F6",
+    padding: 8,
+    borderRadius: 8,
+    fontSize: 14,
+    minHeight: 60,
+  },
+  editButtons: {
+    flexDirection: "row",
+    gap: 8,
+    justifyContent: "flex-end",
+  },
+  cancelButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: "#E5E7EB",
+  },
+  saveButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: COLORS.primary,
+  },
+  cancelText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: COLORS.textPrimary,
+  },
+  saveText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "white",
+  },
   actionBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -245,6 +442,27 @@ const styles = StyleSheet.create({
   },
   voteCount: {
     fontSize: 13,
+    fontWeight: "500",
+    color: COLORS.textPrimary,
+  },
+  menu: {
+    backgroundColor: "white",
+    borderRadius: 8,
+    padding: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  menuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 8,
+  },
+  menuText: {
+    fontSize: 14,
     fontWeight: "500",
     color: COLORS.textPrimary,
   },

@@ -2,7 +2,6 @@ import { supabase } from "@/src/lib/supabase";
 import type { UserResource } from "@clerk/types";
 
 // Syncs Clerk user data to Supabase users table
-// Call this after successful Clerk sign in
 
 export async function syncClerkUserToSupabase(clerkUser: UserResource) {
   try {
@@ -18,38 +17,17 @@ export async function syncClerkUserToSupabase(clerkUser: UserResource) {
       image_url: imageUrl || null,
     };
 
-    // First, try to check if user exists
-    const { data: existingUser } = await supabase
+    // Use upsert to insert or update
+    const { error } = await supabase
       .from("users")
-      .select("id")
-      .eq("id", id)
-      .single();
+      .upsert(userData, { onConflict: "id" });
 
-    if (existingUser) {
-      // User exists, update it
-      const { error } = await supabase
-        .from("users")
-        .update(userData)
-        .eq("id", id);
-
-      if (error) {
-        console.error("Error updating user in Supabase:", error);
-        return { success: false, error };
-      }
-    } else {
-      // User doesn't exist, insert it
-      const { error } = await supabase.from("users").insert(userData);
-
-      if (error) {
-        console.error("Error inserting user in Supabase:", error);
-        console.log(
-          "⚠️ RLS Policy Error: You need to run fix-users-rls.sql in Supabase",
-        );
-        return { success: false, error };
-      }
+    if (error) {
+      console.error("Error syncing user to Supabase:", error);
+      return { success: false, error };
     }
 
-    console.log(" 🙈 User synced to Supabase:", userData.username);
+    console.log("✅ User synced to Supabase:", userData.username);
     return { success: true, user: userData };
   } catch (err) {
     console.error("Error in syncClerkUserToSupabase:", err);
