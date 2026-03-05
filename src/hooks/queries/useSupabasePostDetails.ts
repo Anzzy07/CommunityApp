@@ -2,53 +2,70 @@ import { supabase } from "@/src/lib/supabase";
 import { Comment, Post } from "@/src/types";
 import { useQuery } from "@tanstack/react-query";
 
+// Helper function to build nested comment tree
+function buildCommentTree(comments: any[]): Comment[] {
+  const commentMap = new Map<string, Comment>();
+  const rootComments: Comment[] = [];
+
+  // First pass: create all comment objects
+  comments.forEach((comment: any) => {
+    const commentUser = Array.isArray(comment.user)
+      ? comment.user[0]
+      : comment.user;
+
+    const commentObj: Comment = {
+      id: comment.id,
+      post_id: comment.post_id,
+      user_id: comment.user_id,
+      parent_id: comment.parent_id,
+      comment: comment.comment,
+      created_at: comment.created_at,
+      upvotes: comment.upvotes ?? 0,
+      user: {
+        id: commentUser?.id || comment.user_id,
+        name: commentUser?.full_name || commentUser?.username || "Unknown",
+        image: commentUser?.image_url || null,
+      },
+      replies: [],
+    };
+
+    commentMap.set(comment.id, commentObj);
+  });
+
+  // Second pass: build the tree
+  commentMap.forEach((comment) => {
+    if (comment.parent_id) {
+      // This is a reply then add it to parent's replies
+      const parent = commentMap.get(comment.parent_id);
+      if (parent) {
+        parent.replies.push(comment);
+      } else {
+        // Parent not found then treat as root
+        rootComments.push(comment);
+      }
+    } else {
+      // Root comment
+      rootComments.push(comment);
+    }
+  });
+
+  return rootComments;
+}
+
 // Fetches a single post with its comments from Supabase
 export function useSupabasePostDetails(postId: string) {
   return useQuery({
     queryKey: ["post", postId],
     queryFn: async () => {
-      // Fetch the post
+      // Fetch the post using the view
       const { data: postData, error: postError } = await supabase
-        .from("posts")
-        .select(
-          `
-          id,
-          title,
-          description,
-          image_url,
-          upvotes,
-          created_at,
-          user:users!user_id (
-            id,
-            username,
-            full_name,
-            image_url
-          ),
-          group:groups!group_id (
-            id,
-            name,
-            image_url,
-            leader_id
-          )
-        `,
-        )
+        .from("posts_with_details")
+        .select("*")
         .eq("id", postId)
         .single();
 
       if (postError) throw postError;
       if (!postData) throw new Error("Post not found");
-
-      // Count comments
-      const { count: commentCount } = await supabase
-        .from("comments")
-        .select("*", { count: "exact", head: true })
-        .eq("post_id", postId);
-
-      // Count awards
-      const { count: awardCount } = await supabase
-        .from("post_awards")
-        .select("*", { count: "exact", head: true })
-        .eq("post_id", postId);
 
       // Fetch poll if exists
       const { data: pollData } = await supabase
@@ -95,14 +112,7 @@ export function useSupabasePostDetails(postId: string) {
 
       if (commentsError) throw commentsError;
 
-      // Transform post data
-      const userData = Array.isArray(postData.user)
-        ? postData.user[0]
-        : postData.user;
-      const groupData = Array.isArray(postData.group)
-        ? postData.group[0]
-        : postData.group;
-
+      // Transform poll data
       const pollTransformed = pollData
         ? {
             id: pollData.id,
@@ -118,54 +128,34 @@ export function useSupabasePostDetails(postId: string) {
           }
         : null;
 
+      // Transform post data with proper null handling
       const post: Post = {
-        id: postData.id,
-        title: postData.title,
+        id: postData.id || "",
+        title: postData.title || "Untitled",
         description: postData.description,
         image: postData.image_url,
-        upvotes: postData.upvotes,
-        nr_of_comments: commentCount || 0,
+        upvotes: postData.upvotes ?? 0,
+        nr_of_comments: postData.comment_count ?? 0,
         created_at: postData.created_at,
         user: {
-          id: userData.id,
-          name: userData.full_name || userData.username,
-          image: userData.image_url,
+          id: postData.user_id || "",
+          name: postData.full_name || postData.username || "Unknown",
+          image: postData.user_image || null,
         },
         group: {
-          id: groupData.id,
-          name: groupData.name,
-          image: groupData.image_url,
-          leader_id: groupData.leader_id,
+          id: postData.group_id || "",
+          name: postData.group_name || "Unknown Group",
+          image: postData.group_image || "",
         },
         poll: pollTransformed,
       };
 
-      // Transform comments data
-      const comments: Comment[] = (commentsData || []).map((comment: any) => {
-        const commentUser = Array.isArray(comment.user)
-          ? comment.user[0]
-          : comment.user;
-
-        return {
-          id: comment.id,
-          post_id: comment.post_id,
-          user_id: comment.user_id,
-          parent_id: comment.parent_id,
-          comment: comment.comment,
-          created_at: comment.created_at,
-          upvotes: comment.upvotes,
-          user: {
-            id: commentUser.id,
-            name: commentUser.full_name || commentUser.username,
-            image: commentUser.image_url,
-          },
-          replies: [], // Will need to build reply tree if needed
-        };
-      });
+      // Build comment tree
+      const comments = buildCommentTree(commentsData || []);
 
       return { post, comments };
     },
     enabled: !!postId,
-    staleTime: 1000 * 60 * 2, // Data stays fresh for 2 minutes
+    staleTime: 1000 * 60 * 2, // 2 minutes
   });
 }

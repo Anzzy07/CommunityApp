@@ -59,10 +59,15 @@ export function usePostVote() {
         return { action: "created", voteType };
       }
     },
-    onSuccess: (_, variables) => {
-      // Invalidate both posts list and post details
-      queryClient.invalidateQueries({ queryKey: ["posts"] });
-      queryClient.invalidateQueries({ queryKey: ["post", variables.postId] });
+    onSuccess: async (_, variables) => {
+      // Refetch queries to get updated vote count from database
+      await queryClient.refetchQueries({ queryKey: ["posts"] });
+      await queryClient.refetchQueries({
+        queryKey: ["post", variables.postId],
+      });
+      await queryClient.refetchQueries({
+        queryKey: ["post-vote", variables.postId, variables.userId],
+      });
     },
   });
 }
@@ -102,10 +107,38 @@ export function usePostAward() {
         return { action: "created" };
       }
     },
-    onSuccess: (_, variables) => {
-      // Invalidate both posts list and post details
-      queryClient.invalidateQueries({ queryKey: ["posts"] });
-      queryClient.invalidateQueries({ queryKey: ["post", variables.postId] });
+    onMutate: async ({ postId, userId, remove }) => {
+      // Cancel outgoing queries to avoid race conditions
+      await queryClient.cancelQueries({
+        queryKey: ["post-award", postId, userId],
+      });
+
+      // Snapshot previous value
+      const previousAward = queryClient.getQueryData([
+        "post-award",
+        postId,
+        userId,
+      ]);
+
+      // Optimistically update award status
+      queryClient.setQueryData(["post-award", postId, userId], !remove);
+
+      return { previousAward };
+    },
+    onError: (err, variables, context) => {
+      // Rollback on error
+      if (context?.previousAward !== undefined) {
+        queryClient.setQueryData(
+          ["post-award", variables.postId, variables.userId],
+          context.previousAward,
+        );
+      }
+    },
+    onSettled: (_, __, variables) => {
+      // Refetch to ensure sync with server
+      queryClient.invalidateQueries({
+        queryKey: ["post-award", variables.postId, variables.userId],
+      });
     },
   });
 }
@@ -120,7 +153,7 @@ export function usePostShare() {
       postId: string;
       postTitle: string;
     }) => {
-      // Create shareable link (adjust domain to your app's domain)
+      // Create shareable link
       const shareUrl = `https://yourapp.com/post/${postId}`;
       const shareMessage = `Check out this post: ${postTitle}\n\n${shareUrl}`;
 
@@ -128,7 +161,7 @@ export function usePostShare() {
         // Try native share first
         const result = await Share.share({
           message: shareMessage,
-          url: shareUrl, // iOS will use this
+          url: shareUrl,
           title: postTitle,
         });
 
@@ -138,7 +171,7 @@ export function usePostShare() {
           return { success: false, method: "dismissed" };
         }
       } catch (error: any) {
-        // If share fails (Android doesn't support url prop), copy to clipboard
+        // If share fails, copy to clipboard
         await Clipboard.setStringAsync(shareUrl);
         Alert.alert("Link Copied!", "Post link copied to clipboard");
         return { success: true, method: "copied" };

@@ -180,10 +180,7 @@ function PostListItem({
       )}
 
       {shouldShowDescription && post.description && (
-        <Text
-          numberOfLines={isDetailedPost ? undefined : 4}
-          style={styles.description}
-        >
+        <Text numberOfLines={isDetailedPost ? undefined : 4}>
           {post.description}
         </Text>
       )}
@@ -407,4 +404,12 @@ const styles = StyleSheet.create({
   },
 });
 
-export default memo(PostListItem);
+export default memo(PostListItem, (prevProps, nextProps) => {
+  // Only re-render if these specific values change
+  return (
+    prevProps.post.id === nextProps.post.id &&
+    prevProps.post.upvotes === nextProps.post.upvotes &&
+    prevProps.post.nr_of_comments === nextProps.post.nr_of_comments &&
+    prevProps.isJoined === nextProps.isJoined
+  );
+});

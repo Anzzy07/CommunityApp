@@ -2,56 +2,23 @@ import { supabase } from "@/src/lib/supabase";
 import { Post } from "@/src/types";
 import { useQuery } from "@tanstack/react-query";
 
-// Fetches all posts from Supabase with user and group details using React Query
+// Fetches all posts from Supabase using the posts_with_details view
 export function useSupabasePosts() {
   return useQuery({
     queryKey: ["posts"],
     queryFn: async () => {
-      // Fetch posts with user and group information
-      const { data, error: fetchError } = await supabase
-        .from("posts")
-        .select(
-          `
-          id,
-          title,
-          description,
-          image_url,
-          upvotes,
-          created_at,
-          user:users!user_id (
-            id,
-            username,
-            full_name,
-            image_url
-          ),
-          group:groups!group_id (
-            id,
-            name,
-            image_url,
-            leader_id
-          )
-        `,
-        )
+      // Use the posts_with_details view which has everything pre-joined
+      const { data, error } = await supabase
+        .from("posts_with_details")
+        .select("*")
         .order("created_at", { ascending: false });
 
-      if (fetchError) throw fetchError;
+      if (error) throw error;
 
-      // For each post, fetch counts and poll data
-      const postsWithCounts = await Promise.all(
+      // For each post, fetch poll data if needed
+      const postsWithPolls = await Promise.all(
         (data || []).map(async (post: any) => {
-          // Count comments for this post
-          const { count: commentCount } = await supabase
-            .from("comments")
-            .select("*", { count: "exact", head: true })
-            .eq("post_id", post.id);
-
-          // Count awards for this post
-          const { count: awardCount } = await supabase
-            .from("post_awards")
-            .select("*", { count: "exact", head: true })
-            .eq("post_id", post.id);
-
-          // Fetch poll if this post has one
+          // Fetch poll if exists
           const { data: pollData } = await supabase
             .from("polls")
             .select(
@@ -71,13 +38,7 @@ export function useSupabasePosts() {
             .eq("post_id", post.id)
             .single();
 
-          // Supabase returns user/group as array, extract first item
-          const userData = Array.isArray(post.user) ? post.user[0] : post.user;
-          const groupData = Array.isArray(post.group)
-            ? post.group[0]
-            : post.group;
-
-          // Transform poll data to match app types
+          // Transform poll data
           const pollTransformed = pollData
             ? {
                 id: pollData.id,
@@ -93,34 +54,33 @@ export function useSupabasePosts() {
               }
             : null;
 
-          // Transform to match Post type
+          // Transform to match Post type with proper null handling
           return {
-            id: post.id,
-            title: post.title,
+            id: post.id || "",
+            title: post.title || "Untitled",
             description: post.description,
             image: post.image_url,
-            upvotes: post.upvotes,
-            nr_of_comments: commentCount || 0,
+            upvotes: post.upvotes ?? 0,
+            nr_of_comments: post.comment_count ?? 0,
             created_at: post.created_at,
             user: {
-              id: userData.id,
-              name: userData.full_name || userData.username,
-              image: userData.image_url,
+              id: post.user_id || "",
+              name: post.full_name || post.username || "Unknown",
+              image: post.user_image || null,
             },
             group: {
-              id: groupData.id,
-              name: groupData.name,
-              image: groupData.image_url,
-              leader_id: groupData.leader_id,
+              id: post.group_id || "",
+              name: post.group_name || "Unknown Group",
+              image: post.group_image || "",
             },
             poll: pollTransformed,
-          };
+          } as Post;
         }),
       );
 
-      return postsWithCounts as Post[];
+      return postsWithPolls;
     },
-    staleTime: 1000 * 60 * 5, // Data stays fresh for 5 minutes
-    gcTime: 1000 * 60 * 10, // Cache for 10 minutes
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    gcTime: 1000 * 60 * 10, // 10 minutes
   });
 }

@@ -10,10 +10,12 @@ export function useCommentVote() {
       commentId,
       userId,
       voteType,
+      postId,
     }: {
       commentId: string;
       userId: string;
       voteType: "up" | "down";
+      postId: string;
     }) => {
       // Check if user already voted
       const { data: existingVote } = await supabase
@@ -24,7 +26,7 @@ export function useCommentVote() {
         .single();
 
       if (existingVote) {
-        // If same vote type, remove it (un-vote)
+        // If same vote type then remove it (un-vote)
         if (existingVote.vote_type === voteType) {
           const { error } = await supabase
             .from("comment_votes")
@@ -35,7 +37,7 @@ export function useCommentVote() {
           if (error) throw error;
           return { action: "removed", voteType: null };
         } else {
-          // If different vote type, update it
+          // If different vote type then update it
           const { error } = await supabase
             .from("comment_votes")
             .update({ vote_type: voteType })
@@ -46,7 +48,7 @@ export function useCommentVote() {
           return { action: "updated", voteType };
         }
       } else {
-        // No existing vote, create new one
+        // No existing vote then create new one
         const { error } = await supabase.from("comment_votes").insert({
           comment_id: commentId,
           user_id: userId,
@@ -57,9 +59,41 @@ export function useCommentVote() {
         return { action: "created", voteType };
       }
     },
-    onSuccess: (_, variables) => {
-      // Invalidate post details query to refetch comments with updated votes
-      queryClient.invalidateQueries({ queryKey: ["post"] });
+    onMutate: async ({ commentId, userId, voteType }) => {
+      // Cancel outgoing queries to avoid race conditions
+      await queryClient.cancelQueries({
+        queryKey: ["comment-vote", commentId, userId],
+      });
+
+      // Snapshot previous vote
+      const previousVote = queryClient.getQueryData([
+        "comment-vote",
+        commentId,
+        userId,
+      ]);
+
+      // Optimistically update vote status
+      queryClient.setQueryData(["comment-vote", commentId, userId], voteType);
+
+      return { previousVote };
+    },
+    onError: (err, variables, context) => {
+      // Rollback on error
+      if (context?.previousVote !== undefined) {
+        queryClient.setQueryData(
+          ["comment-vote", variables.commentId, variables.userId],
+          context.previousVote,
+        );
+      }
+    },
+    onSettled: async (_, __, variables) => {
+      // Refetch to get updated comment vote count from database
+      await queryClient.refetchQueries({
+        queryKey: ["post", variables.postId],
+      });
+      await queryClient.refetchQueries({
+        queryKey: ["comment-vote", variables.commentId, variables.userId],
+      });
     },
   });
 }
@@ -73,10 +107,12 @@ export function useCommentAward() {
       commentId,
       userId,
       remove = false,
+      postId,
     }: {
       commentId: string;
       userId: string;
       remove?: boolean;
+      postId: string;
     }) => {
       if (remove) {
         // Remove award
@@ -99,14 +135,44 @@ export function useCommentAward() {
         return { action: "created" };
       }
     },
-    onSuccess: () => {
-      // Invalidate post details query to refetch comments with updated awards
-      queryClient.invalidateQueries({ queryKey: ["post"] });
+    onMutate: async ({ commentId, userId, remove }) => {
+      // Cancel outgoing queries
+      await queryClient.cancelQueries({
+        queryKey: ["comment-award", commentId, userId],
+      });
+
+      // Snapshot previous award status
+      const previousAward = queryClient.getQueryData([
+        "comment-award",
+        commentId,
+        userId,
+      ]);
+
+      // Optimistically update award status
+      queryClient.setQueryData(["comment-award", commentId, userId], !remove);
+
+      return { previousAward };
+    },
+    onError: (err, variables, context) => {
+      // Rollback on error
+      if (context?.previousAward !== undefined) {
+        queryClient.setQueryData(
+          ["comment-award", variables.commentId, variables.userId],
+          context.previousAward,
+        );
+      }
+    },
+    onSettled: (_, __, variables) => {
+      // Refetch to ensure sync with server
+      queryClient.invalidateQueries({ queryKey: ["post", variables.postId] });
+      queryClient.invalidateQueries({
+        queryKey: ["comment-award", variables.commentId, variables.userId],
+      });
     },
   });
 }
 
-// Create a new comment
+// Create a new comment or reply
 export function useCreateComment() {
   const queryClient = useQueryClient();
 
@@ -122,6 +188,7 @@ export function useCreateComment() {
       comment: string;
       parentId?: string | null;
     }) => {
+      // Insert new comment
       const { data, error } = await supabase
         .from("comments")
         .insert({
@@ -137,7 +204,67 @@ export function useCreateComment() {
       return data;
     },
     onSuccess: (_, variables) => {
-      // Invalidate post details to refetch with new comment
+      // Refetch post details to show new comment
+      queryClient.invalidateQueries({ queryKey: ["post", variables.postId] });
+    },
+  });
+}
+
+// Edit an existing comment
+export function useEditComment() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      commentId,
+      comment,
+      postId,
+    }: {
+      commentId: string;
+      comment: string;
+      postId: string;
+    }) => {
+      // Update comment text
+      const { data, error } = await supabase
+        .from("comments")
+        .update({ comment })
+        .eq("id", commentId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_, variables) => {
+      // Refetch to show updated comment
+      queryClient.invalidateQueries({ queryKey: ["post", variables.postId] });
+    },
+  });
+}
+
+// Delete a comment
+export function useDeleteComment() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      commentId,
+      postId,
+    }: {
+      commentId: string;
+      postId: string;
+    }) => {
+      // Delete comment from database
+      const { error } = await supabase
+        .from("comments")
+        .delete()
+        .eq("id", commentId);
+
+      if (error) throw error;
+      return { commentId };
+    },
+    onSuccess: (_, variables) => {
+      // Refetch to remove deleted comment from UI
       queryClient.invalidateQueries({ queryKey: ["post", variables.postId] });
     },
   });
