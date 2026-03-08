@@ -22,11 +22,9 @@ export function useJoinGroup() {
       return { success: true };
     },
     onSuccess: (_, variables) => {
-      // Invalidate group members query to refetch
       queryClient.invalidateQueries({
         queryKey: ["group-members", variables.userId],
       });
-      // Also invalidate groups to update member counts if needed
       queryClient.invalidateQueries({ queryKey: ["groups"] });
     },
   });
@@ -54,12 +52,61 @@ export function useLeaveGroup() {
       return { success: true };
     },
     onSuccess: (_, variables) => {
-      // Invalidate group members query to refetch
       queryClient.invalidateQueries({
         queryKey: ["group-members", variables.userId],
       });
-      // Also invalidate groups to update member counts if needed
       queryClient.invalidateQueries({ queryKey: ["groups"] });
+    },
+  });
+}
+
+// Create a new group
+export function useCreateGroup() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      name,
+      description,
+      imageUrl,
+      userId,
+    }: {
+      name: string;
+      description?: string;
+      imageUrl: string;
+      userId: string;
+    }) => {
+      // Create the group
+      const { data: newGroup, error: groupError } = await supabase
+        .from("groups")
+        .insert({
+          name,
+          description,
+          image_url: imageUrl,
+          leader_id: userId,
+        })
+        .select()
+        .single();
+
+      if (groupError) throw groupError;
+
+      // Auto-join the creator as a member
+      const { error: memberError } = await supabase
+        .from("group_members")
+        .insert({
+          group_id: newGroup.id,
+          user_id: userId,
+        });
+
+      if (memberError) throw memberError;
+
+      return newGroup;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["groups"] });
+      queryClient.invalidateQueries({
+        queryKey: ["group-members", variables.userId],
+      });
     },
   });
 }

@@ -1,16 +1,22 @@
-import { groupMembersAtom } from "@/src/atoms/GroupMembersAtom";
-import { groupsAtom } from "@/src/atoms/GroupsAtom";
-import { selectedGroupAtom } from "@/src/atoms/SelectGroupAtom";
 import { COLORS } from "@/src/colors";
+import {
+  useJoinGroup,
+  useLeaveGroup,
+} from "@/src/hooks/mutations/useGroupMutations";
+import { useSupabaseGroupMembers } from "@/src/hooks/queries/useSupabaseGroupMembers";
+import { useSupabaseGroups } from "@/src/hooks/queries/useSupabaseGroups";
 import { Group } from "@/src/types";
+import { useUser } from "@clerk/clerk-expo";
 import { AntDesign, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Link } from "expo-router";
-import { useAtomValue, useSetAtom } from "jotai";
 import React, { useMemo, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   Pressable,
+  RefreshControl,
   StyleSheet,
   Text,
   TextInput,
@@ -18,43 +24,76 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const CURRENT_USER_ID = "user-21"; // Will get from Clerk
-
 export default function CommunitiesScreen() {
-  const groups = useAtomValue(groupsAtom);
-  const groupMembers = useAtomValue(groupMembersAtom);
-  const setSelectedGroup = useSetAtom(selectedGroupAtom);
-  const setGroupMembers = useSetAtom(groupMembersAtom);
-
+  const { user } = useUser();
   const [searchValue, setSearchValue] = useState("");
+
+  // Fetch groups and group members from Supabase
+  const {
+    data: groups = [],
+    isLoading: groupsLoading,
+    refetch: refetchGroups,
+  } = useSupabaseGroups();
+  const {
+    data: groupMembers = [],
+    isLoading: membersLoading,
+    refetch: refetchMembers,
+  } = useSupabaseGroupMembers(user?.id || "");
+
+  // Mutations
+  const joinMutation = useJoinGroup();
+  const leaveMutation = useLeaveGroup();
+
+  const isLoading = groupsLoading || membersLoading;
 
   // Check if user joined a group
   const isJoined = (groupId: string) => {
-    return groupMembers.some(
-      (m) => m.group_id === groupId && m.user_id === CURRENT_USER_ID,
-    );
+    return groupMembers.some((m) => m.group_id === groupId);
   };
 
   // Handle join/leave
-  const handleJoinToggle = (group: Group, joined: boolean) => {
+  const handleJoinToggle = async (group: Group, joined: boolean) => {
+    if (!user?.id) {
+      Alert.alert("Sign in required", "Please sign in to join communities");
+      return;
+    }
+
     if (joined) {
       // Leave group
-      setGroupMembers((prev) =>
-        prev.filter(
-          (m) => !(m.group_id === group.id && m.user_id === CURRENT_USER_ID),
-        ),
+      Alert.alert(
+        "Leave Community",
+        `Are you sure you want to leave ${group.name}?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Leave",
+            style: "destructive",
+            onPress: async () => {
+              try {
+                await leaveMutation.mutateAsync({
+                  groupId: group.id,
+                  userId: user.id,
+                });
+              } catch (error) {
+                Alert.alert(
+                  "Error",
+                  "Failed to leave group. Please try again.",
+                );
+              }
+            },
+          },
+        ],
       );
     } else {
       // Join group
-      setGroupMembers((prev) => [
-        ...prev,
-        {
-          id: `gm-${Date.now()}`,
-          group_id: group.id,
-          user_id: CURRENT_USER_ID,
-          joined_at: new Date().toISOString(),
-        },
-      ]);
+      try {
+        await joinMutation.mutateAsync({
+          groupId: group.id,
+          userId: user.id,
+        });
+      } catch (error) {
+        Alert.alert("Error", "Failed to join group. Please try again.");
+      }
     }
   };
 
@@ -72,11 +111,11 @@ export default function CommunitiesScreen() {
 
   const renderCommunity = ({ item }: { item: Group }) => {
     const joined = isJoined(item.id);
-    const isLeader = joined && item.leader_id === CURRENT_USER_ID; // Only show crown if joined AND leader
+    const isLeader = joined && item.leader_id === user?.id;
 
     return (
       <Link href={`/community/${item.id}`} asChild>
-        <Pressable style={styles.card} onPress={() => setSelectedGroup(item)}>
+        <Pressable style={styles.card}>
           {/* Community Image */}
           <Image source={{ uri: item.image }} style={styles.image} />
 
@@ -111,34 +150,44 @@ export default function CommunitiesScreen() {
                 handleJoinToggle(item, joined);
               }
             }}
+            disabled={joinMutation.isPending || leaveMutation.isPending}
             style={[
               styles.joinButton,
               joined && styles.joinedButton,
               isLeader && styles.leaderButton,
             ]}
           >
-            {joined ? (
-              <MaterialCommunityIcons
-                name="check-circle"
-                size={18}
-                color={isLeader ? "#F59E0B" : COLORS.primary}
+            {joinMutation.isPending || leaveMutation.isPending ? (
+              <ActivityIndicator
+                size="small"
+                color={joined ? COLORS.primary : "white"}
               />
             ) : (
-              <MaterialCommunityIcons
-                name="plus-circle"
-                size={18}
-                color="white"
-              />
+              <>
+                {joined ? (
+                  <MaterialCommunityIcons
+                    name="check-circle"
+                    size={18}
+                    color={isLeader ? "#F59E0B" : COLORS.primary}
+                  />
+                ) : (
+                  <MaterialCommunityIcons
+                    name="plus-circle"
+                    size={18}
+                    color="white"
+                  />
+                )}
+                <Text
+                  style={[
+                    styles.joinText,
+                    joined && styles.joinedText,
+                    isLeader && styles.leaderText,
+                  ]}
+                >
+                  {joined ? (isLeader ? "Leader" : "Joined") : "Join"}
+                </Text>
+              </>
             )}
-            <Text
-              style={[
-                styles.joinText,
-                joined && styles.joinedText,
-                isLeader && styles.leaderText,
-              ]}
-            >
-              {joined ? (isLeader ? "Leader" : "Joined") : "Join"}
-            </Text>
           </Pressable>
         </Pressable>
       </Link>
@@ -160,6 +209,11 @@ export default function CommunitiesScreen() {
     </>
   );
 
+  // Handle refresh
+  const handleRefresh = async () => {
+    await Promise.all([refetchGroups(), refetchMembers()]);
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={["bottom"]}>
       {/* Search Bar */}
@@ -179,37 +233,53 @@ export default function CommunitiesScreen() {
         )}
       </View>
 
-      {/* Communities List */}
-      <FlatList
-        data={[
-          ...(joinedGroups.length > 0
-            ? [{ id: "joined", title: "My Communities", data: joinedGroups }]
-            : []),
-          ...(discoverGroups.length > 0
-            ? [{ id: "discover", title: "Discover", data: discoverGroups }]
-            : []),
-        ]}
-        keyExtractor={(item) => item.id}
-        renderItem={renderSection}
-        contentContainerStyle={styles.listContent}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <View style={styles.emptyIconContainer}>
-              <Feather name="users" size={48} color={COLORS.textSecondary} />
+      {/* Loading State */}
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Loading communities...</Text>
+        </View>
+      ) : (
+        /* Communities List */
+        <FlatList
+          data={[
+            ...(joinedGroups.length > 0
+              ? [{ id: "joined", title: "My Communities", data: joinedGroups }]
+              : []),
+            ...(discoverGroups.length > 0
+              ? [{ id: "discover", title: "Discover", data: discoverGroups }]
+              : []),
+          ]}
+          keyExtractor={(item) => item.id}
+          renderItem={renderSection}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={false}
+              onRefresh={handleRefresh}
+              tintColor={COLORS.primary}
+            />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <View style={styles.emptyIconContainer}>
+                <Feather name="users" size={48} color={COLORS.textSecondary} />
+              </View>
+              <Text style={styles.emptyTitle}>No communities found</Text>
+              <Text style={styles.emptySubtitle}>
+                Try a different search or create a new community
+              </Text>
             </View>
-            <Text style={styles.emptyTitle}>No communities found</Text>
-            <Text style={styles.emptySubtitle}>
-              Try a different search or create a new community
-            </Text>
-          </View>
-        }
-      />
+          }
+        />
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
     backgroundColor: COLORS.background,
   },
   searchContainer: {
@@ -236,6 +306,16 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     color: COLORS.textPrimary,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 15,
+    color: COLORS.textSecondary,
   },
   sectionHeader: {
     flexDirection: "row",
@@ -311,6 +391,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
     gap: 6,
+    minWidth: 90,
+    justifyContent: "center",
   },
   joinedButton: {
     backgroundColor: COLORS.background,

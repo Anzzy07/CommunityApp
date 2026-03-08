@@ -1,11 +1,9 @@
-import { groupMembersAtom } from "@/src/atoms/GroupMembersAtom";
-import { groupsAtom } from "@/src/atoms/GroupsAtom";
-import { selectedGroupAtom } from "@/src/atoms/SelectGroupAtom";
 import { COLORS } from "@/src/colors";
+import { useCreateGroup } from "@/src/hooks/mutations/useGroupMutations";
+import { useUser } from "@clerk/clerk-expo";
 import { AntDesign, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
-import { useSetAtom } from "jotai";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -22,13 +20,9 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const CURRENT_USER_ID = "user-21";
-
-// Screen for creating a new community with image upload
 export default function CreateCommunityScreen() {
-  const setGroups = useSetAtom(groupsAtom);
-  const setGroupMembers = useSetAtom(groupMembersAtom);
-  const setSelectedGroup = useSetAtom(selectedGroupAtom);
+  const { user } = useUser();
+  const createGroupMutation = useCreateGroup();
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -56,6 +50,8 @@ export default function CreateCommunityScreen() {
 
     if (!result.canceled && result.assets[0]) {
       setIsUploading(true);
+      // TODO: Upload to Supabase Storage and get URL
+      // For now, just use the local URI
       setCommunityImage(result.assets[0].uri);
       setIsUploading(false);
     }
@@ -81,6 +77,7 @@ export default function CreateCommunityScreen() {
 
     if (!result.canceled && result.assets[0]) {
       setIsUploading(true);
+      // TODO: Upload to Supabase Storage and get URL
       setCommunityImage(result.assets[0].uri);
       setIsUploading(false);
     }
@@ -96,37 +93,35 @@ export default function CreateCommunityScreen() {
   };
 
   // Creates new community and redirects to community details
-  const handleCreate = () => {
-    if (!name.trim()) return;
+  const handleCreate = async () => {
+    if (!name.trim()) {
+      Alert.alert("Name Required", "Please enter a community name");
+      return;
+    }
 
-    const newGroupId = `group-${Date.now()}`;
+    if (!user?.id) {
+      Alert.alert("Sign in required", "Please sign in to create a community");
+      return;
+    }
 
-    const newGroup = {
-      id: newGroupId,
-      name: name.trim(),
-      image: communityImage || "https://via.placeholder.com/80",
-      leader_id: CURRENT_USER_ID,
-    };
+    try {
+      const newGroup = await createGroupMutation.mutateAsync({
+        name: name.trim(),
+        description: description.trim() || undefined,
+        imageUrl: communityImage || "https://via.placeholder.com/80",
+        userId: user.id,
+      });
 
-    setGroups((prev) => [newGroup, ...prev]);
+      // Reset form
+      setName("");
+      setDescription("");
+      setCommunityImage(null);
 
-    setGroupMembers((prev) => [
-      ...prev,
-      {
-        id: `gm-${Date.now()}`,
-        group_id: newGroupId,
-        user_id: CURRENT_USER_ID,
-        joined_at: new Date().toISOString(),
-      },
-    ]);
-
-    setSelectedGroup(newGroup);
-
-    setName("");
-    setDescription("");
-    setCommunityImage(null);
-
-    router.replace(`/community/${newGroupId}`);
+      // Navigate to the new community
+      router.replace(`/community/${newGroup.id}`);
+    } catch (error) {
+      Alert.alert("Error", "Failed to create community. Please try again.");
+    }
   };
 
   return (
@@ -138,10 +133,18 @@ export default function CreateCommunityScreen() {
 
         <Text style={styles.headerTitle}>Create Community</Text>
 
-        <Pressable onPress={handleCreate} disabled={!name.trim()} hitSlop={10}>
-          <Text style={[styles.createText, !name.trim() && { opacity: 0.5 }]}>
-            Create
-          </Text>
+        <Pressable
+          onPress={handleCreate}
+          disabled={!name.trim() || createGroupMutation.isPending}
+          hitSlop={10}
+        >
+          {createGroupMutation.isPending ? (
+            <ActivityIndicator color="white" size="small" />
+          ) : (
+            <Text style={[styles.createText, !name.trim() && { opacity: 0.5 }]}>
+              Create
+            </Text>
+          )}
         </Pressable>
       </View>
 

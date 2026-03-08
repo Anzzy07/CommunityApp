@@ -1,16 +1,18 @@
-import posts from "@/assets/data/posts.json";
-import { challengesAtom } from "@/src/atoms/ChallangesAtom";
-import { chatGroupAtom } from "@/src/atoms/ChatGroupAtom";
-import { groupMembersAtom } from "@/src/atoms/GroupMembersAtom";
-import { groupsAtom } from "@/src/atoms/GroupsAtom";
 import { COLORS } from "@/src/colors";
-import ChallengeListItem from "@/src/components/ChallengeListItem";
 import PostListItem from "@/src/components/PostListItem";
+import {
+  useJoinGroup,
+  useLeaveGroup,
+} from "@/src/hooks/mutations/useGroupMutations";
+import { useSupabaseGroupMembers } from "@/src/hooks/queries/useSupabaseGroupMembers";
+import { useSupabaseGroups } from "@/src/hooks/queries/useSupabaseGroups";
+import { useSupabasePosts } from "@/src/hooks/queries/useSupabasePosts";
+import { useUser } from "@clerk/clerk-expo";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { useAtomValue, useSetAtom } from "jotai";
 import React, { useMemo } from "react";
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   Image,
@@ -21,63 +23,62 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const CURRENT_USER_ID = "user-21"; // Get from Clerk
-
 export default function CommunityDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { user } = useUser();
 
-  // Use atoms for real-time sync
-  const groups = useAtomValue(groupsAtom);
-  const groupMembers = useAtomValue(groupMembersAtom);
-  const challenges = useAtomValue(challengesAtom);
+  // Fetch data from Supabase
+  const { data: groups = [], isLoading: groupsLoading } = useSupabaseGroups();
+  const { data: groupMembers = [], isLoading: membersLoading } =
+    useSupabaseGroupMembers(user?.id || "");
+  const { data: posts = [], isLoading: postsLoading } = useSupabasePosts();
 
-  const setChatGroup = useSetAtom(chatGroupAtom);
-  const setGroupMembers = useSetAtom(groupMembersAtom);
+  // Mutations
+  const joinMutation = useJoinGroup();
+  const leaveMutation = useLeaveGroup();
 
   // Find current group
   const group = groups.find((g) => g.id === id);
 
   // Check if user has joined this community
-  const isJoined = groupMembers.some(
-    (m) => m.group_id === id && m.user_id === CURRENT_USER_ID,
-  );
+  const isJoined = groupMembers.some((m) => m.group_id === id);
 
   // Check if current user is the community leader
-  const isLeader = group?.leader_id === CURRENT_USER_ID;
-
-  // Get challenges of community
-  const groupChallenges = useMemo(
-    () => challenges.filter((c) => c.group_id === id),
-    [challenges, id],
-  );
+  const isLeader = group?.leader_id === user?.id;
 
   // Get posts belonging to this community
   const groupPosts = useMemo(
-    () => posts.filter((p) => p.group.id === id),
-    [id],
+    () => posts.filter((p) => p.group?.id === id),
+    [posts, id],
   );
 
-  // Get member count
+  // Get member count for this group
   const memberCount = useMemo(
     () => groupMembers.filter((m) => m.group_id === id).length,
-    [id],
+    [groupMembers, id],
   );
 
   // Handle join
-  const handleJoin = () => {
-    setGroupMembers((prev) => [
-      ...prev,
-      {
-        id: `gm-${Date.now()}`,
-        group_id: id,
-        user_id: CURRENT_USER_ID,
-        joined_at: new Date().toISOString(),
-      },
-    ]);
+  const handleJoin = async () => {
+    if (!user?.id) {
+      Alert.alert("Sign in required", "Please sign in to join communities");
+      return;
+    }
+
+    try {
+      await joinMutation.mutateAsync({
+        groupId: id,
+        userId: user.id,
+      });
+    } catch (error) {
+      Alert.alert("Error", "Failed to join community. Please try again.");
+    }
   };
 
   // Handle leave
   const handleLeave = () => {
+    if (!user?.id) return;
+
     if (isLeader) {
       Alert.alert(
         "Cannot Leave",
@@ -94,22 +95,44 @@ export default function CommunityDetailsScreen() {
         {
           text: "Leave",
           style: "destructive",
-          onPress: () => {
-            setGroupMembers((prev) =>
-              prev.filter(
-                (m) => !(m.group_id === id && m.user_id === CURRENT_USER_ID),
-              ),
-            );
+          onPress: async () => {
+            try {
+              await leaveMutation.mutateAsync({
+                groupId: id,
+                userId: user.id,
+              });
+            } catch (error) {
+              Alert.alert(
+                "Error",
+                "Failed to leave community. Please try again.",
+              );
+            }
           },
         },
       ],
     );
   };
 
+  // Loading state
+  if (groupsLoading || membersLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={styles.loadingText}>Loading community...</Text>
+      </View>
+    );
+  }
+
+  // Not found
   if (!group) {
     return (
       <View style={styles.notFound}>
-        <Text>Community not found</Text>
+        <MaterialCommunityIcons
+          name="alert-circle"
+          size={48}
+          color={COLORS.textSecondary}
+        />
+        <Text style={styles.notFoundText}>Community not found</Text>
       </View>
     );
   }
@@ -173,7 +196,6 @@ export default function CommunityDetailsScreen() {
             <Pressable
               style={[styles.actionButton, styles.secondaryAction]}
               onPress={() => {
-                setChatGroup(group);
                 router.push({
                   pathname: "/groupChat/[id]",
                   params: { id: group.id, name: group.name },
@@ -212,13 +234,20 @@ export default function CommunityDetailsScreen() {
           <Pressable
             style={[styles.actionButton, styles.joinAction]}
             onPress={handleJoin}
+            disabled={joinMutation.isPending}
           >
-            <MaterialCommunityIcons
-              name="account-plus"
-              size={20}
-              color="white"
-            />
-            <Text style={styles.joinActionText}>Join Community</Text>
+            {joinMutation.isPending ? (
+              <ActivityIndicator color="white" size="small" />
+            ) : (
+              <>
+                <MaterialCommunityIcons
+                  name="account-plus"
+                  size={20}
+                  color="white"
+                />
+                <Text style={styles.joinActionText}>Join Community</Text>
+              </>
+            )}
           </Pressable>
         )}
 
@@ -227,12 +256,17 @@ export default function CommunityDetailsScreen() {
           <Pressable
             style={[styles.actionButton, styles.leaveAction]}
             onPress={handleLeave}
+            disabled={leaveMutation.isPending}
           >
-            <MaterialCommunityIcons
-              name="exit-to-app"
-              size={18}
-              color="#DC2626"
-            />
+            {leaveMutation.isPending ? (
+              <ActivityIndicator color="#DC2626" size="small" />
+            ) : (
+              <MaterialCommunityIcons
+                name="exit-to-app"
+                size={18}
+                color="#DC2626"
+              />
+            )}
           </Pressable>
         )}
       </View>
@@ -255,24 +289,6 @@ export default function CommunityDetailsScreen() {
         </View>
       )}
 
-      {/* Challenges Section */}
-      {groupChallenges.length > 0 && (
-        <>
-          <View style={styles.sectionHeader}>
-            <MaterialCommunityIcons
-              name="trophy"
-              size={20}
-              color={COLORS.primary}
-            />
-            <Text style={styles.sectionTitle}>Active Challenges</Text>
-            <Text style={styles.challengeCount}>{groupChallenges.length}</Text>
-          </View>
-          {groupChallenges.map((challenge) => (
-            <ChallengeListItem key={challenge.id} challenge={challenge} />
-          ))}
-        </>
-      )}
-
       {/* Posts Header */}
       <View style={styles.postsHeader}>
         <Text style={styles.postsTitle}>Community Posts</Text>
@@ -287,7 +303,11 @@ export default function CommunityDetailsScreen() {
         data={groupPosts}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <PostListItem post={item} showJoinButton={false} />
+          <PostListItem
+            post={item}
+            showJoinButton={false}
+            isJoined={isJoined}
+          />
         )}
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={
@@ -315,10 +335,25 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 15,
+    color: COLORS.textSecondary,
+  },
   notFound: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    gap: 12,
+  },
+  notFoundText: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
   },
   heroSection: {
     height: 200,
@@ -454,28 +489,6 @@ const styles = StyleSheet.create({
   },
   leaderStatusText: {
     color: "#D97706",
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 15,
-    paddingVertical: 16,
-    gap: 8,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-    flex: 1,
-  },
-  challengeCount: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: COLORS.textSecondary,
-    backgroundColor: COLORS.surface,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
   },
   postsHeader: {
     flexDirection: "row",

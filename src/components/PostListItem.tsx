@@ -1,23 +1,22 @@
-import userStreaks from "@/assets/data/userStreaks.json";
-import { groupMembersAtom } from "@/src/atoms/GroupMembersAtom";
 import { COLORS } from "@/src/colors";
+import { useJoinGroup } from "@/src/hooks/mutations/useGroupMutations";
 import {
   usePostAward,
   usePostShare,
   usePostVote,
 } from "@/src/hooks/mutations/usePostMutations";
+import {
+  useUserPostAward,
+  useUserPostVote,
+} from "@/src/hooks/mutations/useUserVotes";
+import { useSupabaseUserStreaks } from "@/src/hooks/queries/useSupabaseUserStreaks";
 import { Post } from "@/src/types";
 import { useUser } from "@clerk/clerk-expo";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { formatDistanceToNowStrict } from "date-fns";
 import { Link } from "expo-router";
-import { useSetAtom } from "jotai";
 import React, { memo } from "react";
 import { Alert, Image, Pressable, StyleSheet, Text, View } from "react-native";
-import {
-  useUserPostAward,
-  useUserPostVote,
-} from "../hooks/mutations/useUserVotes";
 
 type PostListItemProps = {
   post: Post;
@@ -33,7 +32,9 @@ function PostListItem({
   isJoined = false,
 }: PostListItemProps) {
   const { user } = useUser();
-  const setGroupMembers = useSetAtom(groupMembersAtom);
+
+  // Fetch user streaks from Supabase
+  const { data: userStreaks = [] } = useSupabaseUserStreaks();
 
   // These are the source of truth — driven by React Query cache
   const { data: voteStatus } = useUserPostVote(post.id, user?.id);
@@ -42,16 +43,15 @@ function PostListItem({
   const voteMutation = usePostVote();
   const awardMutation = usePostAward();
   const shareMutation = usePostShare();
+  const joinMutation = useJoinGroup();
 
-  // Read upvotes directly from the post prop — which is driven by the React Query cache
-  // (optimistically updated in usePostVote). No local state needed — avoids drift.
+  // Read upvotes directly from the post prop
   const upvotes = post.upvotes ?? 0;
   const awarded = hasAwarded ?? false;
   const currentVote = voteStatus ?? null;
 
+  // Find streak for this post's author
   const streak = userStreaks.find((s) => s.user_id === post.user.id);
-  const shouldShowImage = isDetailedPost || post.image;
-  const shouldShowDescription = isDetailedPost || !post.image;
 
   const handleUpvote = async () => {
     if (!user?.id) {
@@ -123,16 +123,15 @@ function PostListItem({
       { text: "Cancel", style: "cancel" },
       {
         text: "Join",
-        onPress: () => {
-          setGroupMembers((prev) => [
-            ...prev,
-            {
-              id: `gm-${Date.now()}`,
-              group_id: post.group.id,
-              user_id: user.id,
-              joined_at: new Date().toISOString(),
-            },
-          ]);
+        onPress: async () => {
+          try {
+            await joinMutation.mutateAsync({
+              groupId: post.group.id,
+              userId: user.id,
+            });
+          } catch (error) {
+            Alert.alert("Error", "Failed to join community.");
+          }
         },
       },
     ]);
@@ -147,7 +146,7 @@ function PostListItem({
           <View style={styles.headerRow}>
             <Text style={styles.groupName}>{post.group.name}</Text>
 
-            {streak && streak.current_streak > 0 && (
+            {streak && (streak.current_streak ?? 0) > 0 && (
               <View style={styles.streakBadge}>
                 <MaterialCommunityIcons name="fire" size={14} color="#FF6A00" />
                 <Text style={styles.streakText}>{streak.current_streak}</Text>
@@ -175,12 +174,15 @@ function PostListItem({
 
       <Text style={styles.title}>{post.title}</Text>
 
-      {shouldShowImage && post.image && (
+      {post.image && (
         <Image source={{ uri: post.image }} style={styles.postImage} />
       )}
 
-      {shouldShowDescription && post.description && (
-        <Text numberOfLines={isDetailedPost ? undefined : 4}>
+      {post.description && (
+        <Text
+          numberOfLines={isDetailedPost ? undefined : 4}
+          style={styles.description}
+        >
           {post.description}
         </Text>
       )}
@@ -405,7 +407,6 @@ const styles = StyleSheet.create({
 });
 
 export default memo(PostListItem, (prevProps, nextProps) => {
-  // Only re-render if these specific values change
   return (
     prevProps.post.id === nextProps.post.id &&
     prevProps.post.upvotes === nextProps.post.upvotes &&

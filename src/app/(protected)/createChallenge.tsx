@@ -1,10 +1,12 @@
-import { challengesAtom } from "@/src/atoms/ChallangesAtom";
 import { COLORS } from "@/src/colors";
+import { useCreateChallenge } from "@/src/hooks/mutations/useChallengeMutations";
+import { useUser } from "@clerk/clerk-expo";
 import { AntDesign, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { useSetAtom } from "jotai";
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -16,12 +18,10 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const CURRENT_USER_ID = "user-21";
-
-// Screen for creating a new challenge within a community
 export default function CreateChallengeScreen() {
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
-  const setChallenges = useSetAtom(challengesAtom);
+  const { user } = useUser();
+  const createChallengeMutation = useCreateChallenge();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -34,27 +34,33 @@ export default function CreateChallengeScreen() {
     { label: "30 days", value: "30d", days: 30 },
   ];
 
-  // Creates new challenge and navigates back
-  const handleCreate = () => {
-    if (!title.trim() || !groupId) return;
+  const handleCreate = async () => {
+    if (!title.trim() || !groupId) {
+      Alert.alert("Title Required", "Please enter a challenge title");
+      return;
+    }
+
+    if (!user?.id) {
+      Alert.alert("Sign in required", "Please sign in to create challenges");
+      return;
+    }
 
     const selectedDuration = durations.find((d) => d.value === duration);
     const daysToAdd = selectedDuration?.days || 7;
 
-    setChallenges((prev) => [
-      {
-        id: `challenge-${Date.now()}`,
-        group_id: groupId,
+    try {
+      await createChallengeMutation.mutateAsync({
+        groupId,
         title: title.trim(),
-        description: description.trim() || null,
-        start_date: new Date().toISOString(),
-        end_date: new Date(Date.now() + daysToAdd * 86400000).toISOString(),
-        created_by: CURRENT_USER_ID,
-      },
-      ...prev,
-    ]);
+        description: description.trim() || undefined,
+        duration: daysToAdd,
+        userId: user.id,
+      });
 
-    router.back();
+      router.back();
+    } catch (error) {
+      Alert.alert("Error", "Failed to create challenge. Please try again.");
+    }
   };
 
   return (
@@ -66,10 +72,20 @@ export default function CreateChallengeScreen() {
 
         <Text style={styles.headerTitle}>Create Challenge</Text>
 
-        <Pressable onPress={handleCreate} disabled={!title.trim()} hitSlop={10}>
-          <Text style={[styles.createText, !title.trim() && { opacity: 0.5 }]}>
-            Create
-          </Text>
+        <Pressable
+          onPress={handleCreate}
+          disabled={!title.trim() || createChallengeMutation.isPending}
+          hitSlop={10}
+        >
+          {createChallengeMutation.isPending ? (
+            <ActivityIndicator color="white" size="small" />
+          ) : (
+            <Text
+              style={[styles.createText, !title.trim() && { opacity: 0.5 }]}
+            >
+              Create
+            </Text>
+          )}
         </Pressable>
       </View>
 
