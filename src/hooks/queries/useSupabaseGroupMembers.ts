@@ -2,20 +2,28 @@ import { supabase } from "@/src/lib/supabase";
 import { GroupMember } from "@/src/types";
 import { useQuery } from "@tanstack/react-query";
 
-// Fetches all group memberships for the current user using React Query
+// Fetches all group memberships for the current user
 export function useSupabaseGroupMembers(userId: string) {
   return useQuery({
     queryKey: ["group-members", userId],
     queryFn: async () => {
-      const { data, error: fetchError } = await supabase
+      // console.log(" Fetching group members for user:", userId);
+
+      const { data, error } = await supabase
         .from("group_members")
-        .select("*");
+        .select("*")
+        .eq("user_id", userId); // Only get THIS user's memberships
 
-      if (fetchError) throw fetchError;
+      if (error) {
+        console.error("Error fetching group members:", error);
+        throw error;
+      }
 
+      // console.log(" Fetched group members:", data?.length || 0);
       return (data || []) as GroupMember[];
     },
-    enabled: !!userId, // Only fetch if userId exists
-    staleTime: 1000 * 60 * 5, // Data stays fresh for 5 minutes
+    enabled: !!userId,
+    staleTime: 0, // Always refetch to get latest data
+    gcTime: 0, // Don't cache
   });
 }

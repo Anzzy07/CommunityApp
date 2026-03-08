@@ -21,11 +21,12 @@ export function useJoinGroup() {
       if (error) throw error;
       return { success: true };
     },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
+    onSuccess: async (_, variables) => {
+      // Refetch immediately instead of just invalidating
+      await queryClient.refetchQueries({
         queryKey: ["group-members", variables.userId],
       });
-      queryClient.invalidateQueries({ queryKey: ["groups"] });
+      await queryClient.refetchQueries({ queryKey: ["groups"] });
     },
   });
 }
@@ -51,11 +52,12 @@ export function useLeaveGroup() {
       if (error) throw error;
       return { success: true };
     },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
+    onSuccess: async (_, variables) => {
+      // Refetch immediately instead of just invalidating
+      await queryClient.refetchQueries({
         queryKey: ["group-members", variables.userId],
       });
-      queryClient.invalidateQueries({ queryKey: ["groups"] });
+      await queryClient.refetchQueries({ queryKey: ["groups"] });
     },
   });
 }
@@ -102,9 +104,9 @@ export function useCreateGroup() {
 
       return newGroup;
     },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["groups"] });
-      queryClient.invalidateQueries({
+    onSuccess: async (_, variables) => {
+      await queryClient.refetchQueries({ queryKey: ["groups"] });
+      await queryClient.refetchQueries({
         queryKey: ["group-members", variables.userId],
       });
     },

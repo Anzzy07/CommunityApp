@@ -1,9 +1,11 @@
 import { COLORS } from "@/src/colors";
+import ChallengeListItem from "@/src/components/ChallengeListItem";
 import PostListItem from "@/src/components/PostListItem";
 import {
   useJoinGroup,
   useLeaveGroup,
 } from "@/src/hooks/mutations/useGroupMutations";
+import { useSupabaseChallenges } from "@/src/hooks/queries/useSupabaseChallenges";
 import { useSupabaseGroupMembers } from "@/src/hooks/queries/useSupabaseGroupMembers";
 import { useSupabaseGroups } from "@/src/hooks/queries/useSupabaseGroups";
 import { useSupabasePosts } from "@/src/hooks/queries/useSupabasePosts";
@@ -32,6 +34,7 @@ export default function CommunityDetailsScreen() {
   const { data: groupMembers = [], isLoading: membersLoading } =
     useSupabaseGroupMembers(user?.id || "");
   const { data: posts = [], isLoading: postsLoading } = useSupabasePosts();
+  const { data: challenges = [] } = useSupabaseChallenges(id);
 
   // Mutations
   const joinMutation = useJoinGroup();
@@ -289,6 +292,24 @@ export default function CommunityDetailsScreen() {
         </View>
       )}
 
+      {/* Challenges Section */}
+      {challenges.length > 0 && (
+        <>
+          <View style={styles.sectionHeader}>
+            <MaterialCommunityIcons
+              name="trophy"
+              size={20}
+              color={COLORS.primary}
+            />
+            <Text style={styles.sectionTitle}>Active Challenges</Text>
+            <Text style={styles.challengeCount}>{challenges.length}</Text>
+          </View>
+          {challenges.map((challenge) => (
+            <ChallengeListItem key={challenge.id} challenge={challenge} />
+          ))}
+        </>
+      )}
+
       {/* Posts Header */}
       <View style={styles.postsHeader}>
         <Text style={styles.postsTitle}>Community Posts</Text>
@@ -489,6 +510,28 @@ const styles = StyleSheet.create({
   },
   leaderStatusText: {
     color: "#D97706",
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 15,
+    paddingVertical: 16,
+    gap: 8,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+    flex: 1,
+  },
+  challengeCount: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.textSecondary,
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   postsHeader: {
     flexDirection: "row",

@@ -59,6 +59,18 @@ export default function CommunitiesScreen() {
     }
 
     if (joined) {
+      // Check if user is leader
+      const isLeader = group.leader_id === user.id;
+
+      if (isLeader) {
+        Alert.alert(
+          "Cannot Leave",
+          "You're the leader of this community. You cannot leave a community you created.",
+          [{ text: "OK" }],
+        );
+        return;
+      }
+
       // Leave group
       Alert.alert(
         "Leave Community",
@@ -69,12 +81,15 @@ export default function CommunitiesScreen() {
             text: "Leave",
             style: "destructive",
             onPress: async () => {
+              // console.log(" Attempting to leave group:", group.id);
               try {
-                await leaveMutation.mutateAsync({
+                const result = await leaveMutation.mutateAsync({
                   groupId: group.id,
                   userId: user.id,
                 });
+                // console.log(" Leave successful:", result);
               } catch (error) {
+                console.error("Leave failed:", error);
                 Alert.alert(
                   "Error",
                   "Failed to leave group. Please try again.",
@@ -86,12 +101,15 @@ export default function CommunitiesScreen() {
       );
     } else {
       // Join group
+      // console.log(" Attempting to join group:", group.id);
       try {
-        await joinMutation.mutateAsync({
+        const result = await joinMutation.mutateAsync({
           groupId: group.id,
           userId: user.id,
         });
+        // console.log(" Join successful:", result);
       } catch (error) {
+        console.error("❌ Join failed:", error);
         Alert.alert("Error", "Failed to join group. Please try again.");
       }
     }
@@ -146,9 +164,7 @@ export default function CommunitiesScreen() {
           <Pressable
             onPress={(e) => {
               e.stopPropagation();
-              if (!isLeader) {
-                handleJoinToggle(item, joined);
-              }
+              handleJoinToggle(item, joined);
             }}
             disabled={joinMutation.isPending || leaveMutation.isPending}
             style={[
