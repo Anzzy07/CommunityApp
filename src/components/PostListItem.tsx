@@ -36,7 +36,7 @@ function PostListItem({
   // Fetch user streaks from Supabase
   const { data: userStreaks = [] } = useSupabaseUserStreaks();
 
-  // These are the source of truth — driven by React Query cache
+  // cache
   const { data: voteStatus } = useUserPostVote(post.id, user?.id);
   const { data: hasAwarded } = useUserPostAward(post.id, user?.id);
 
@@ -268,8 +268,13 @@ function PostListItem({
     </View>
   );
 
+  // Wrap in Pressable via asChild so Link will let post have full width layout
   if (isDetailedPost) return PostContent;
-  return <Link href={`/post/${post.id}`}>{PostContent}</Link>;
+  return (
+    <Link href={`/post/${post.id}`} asChild>
+      <Pressable style={{ width: "100%" }}>{PostContent}</Pressable>
+    </Link>
+  );
 }
 
 const styles = StyleSheet.create({
