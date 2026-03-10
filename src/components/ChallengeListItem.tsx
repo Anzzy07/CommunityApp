@@ -1,15 +1,15 @@
 import { Challenge } from "@/src/types";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { formatDistanceToNowStrict, isPast } from "date-fns";
+import { router } from "expo-router";
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 type Props = {
   challenge: Challenge;
-  onPress?: () => void;
 };
 
-export default function ChallengeListItem({ challenge, onPress }: Props) {
+export default function ChallengeListItem({ challenge }: Props) {
   const endDate = new Date(challenge.end_date);
   const isExpired = isPast(endDate);
   const timeRemaining = formatDistanceToNowStrict(endDate, {
@@ -18,7 +18,7 @@ export default function ChallengeListItem({ challenge, onPress }: Props) {
 
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => router.push(`/challenge/${challenge.id}`)}
       style={[styles.container, isExpired && styles.expiredContainer]}
     >
       {/* Icon & Title */}

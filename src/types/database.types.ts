@@ -59,6 +59,38 @@ export type Database = {
           },
         ];
       };
+      challenge_entry_votes: {
+        Row: {
+          created_at: string | null;
+          entry_id: string;
+          id: string;
+          user_id: string;
+          vote_type: string;
+        };
+        Insert: {
+          created_at?: string | null;
+          entry_id: string;
+          id?: string;
+          user_id: string;
+          vote_type: string;
+        };
+        Update: {
+          created_at?: string | null;
+          entry_id?: string;
+          id?: string;
+          user_id?: string;
+          vote_type?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "challenge_entry_votes_entry_id_fkey";
+            columns: ["entry_id"];
+            isOneToOne: false;
+            referencedRelation: "challenge_entries";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       challenges: {
         Row: {
           created_at: string | null;
