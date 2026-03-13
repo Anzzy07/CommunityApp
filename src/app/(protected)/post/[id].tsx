@@ -40,13 +40,13 @@ export default function DetailedPost() {
 
   const inputRef = useRef<TextInput | null>(null);
 
-  // Fetch post and comments from Supabase - MUST be before any conditional returns
+  // Fetch post and comments from Supabase
   const { data, isLoading, error } = useSupabasePostDetails(id as string);
 
-  // Create comment mutation - MUST be before any conditional returns
+  // Create comment mutation
   const createCommentMutation = useCreateComment();
 
-  // Sets reply state and focuses the comment input - MUST be before any conditional returns
+  // Sets reply state and focuses the comment input
   const handleReplyPress = useCallback(
     (commentId: string, username: string) => {
       setReplyingTo({ username, commentId });
@@ -88,14 +88,13 @@ export default function DetailedPost() {
     setReplyingTo(null);
   };
 
-  // Checks if user is a member of the post's community
+  // Checks if user is a member of the post community
   const isJoined = data?.post
     ? groupMembers.some(
         (m) => m.group_id === data.post.group.id && m.user_id === user?.id,
       )
     : false;
 
-  // NOW we can do conditional returns AFTER all hooks are called
   // Shows loading spinner while fetching
   if (isLoading) {
     return (

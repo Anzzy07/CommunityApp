@@ -109,29 +109,75 @@ export function useDeleteChallengeEntry() {
       challengeId: string;
       userId: string;
     }) => {
-      const { error } = await supabase
+      // First verify the entry exists and belongs to user
+      const { data: existingEntry, error: checkError } = await supabase
         .from("challenge_entries")
-        .delete()
-        .eq("id", entryId);
+        .select("*")
+        .eq("id", entryId)
+        .eq("user_id", userId)
+        .single();
 
-      if (error) throw error;
-      return { success: true };
+      // console.log(" Entry check:", existingEntry, "Error:", checkError);
+
+      if (checkError || !existingEntry) {
+        console.error("Entry not found or not owned by user");
+        throw new Error(
+          "Entry not found or you don't have permission to delete it",
+        );
+      }
+
+      // Now delete
+      const { error, count } = await supabase
+        .from("challenge_entries")
+        .delete({ count: "exact" })
+        .eq("id", entryId)
+        .eq("user_id", userId);
+
+      // console.log(" Deleted result - Error:", error, "Count:", count);
+
+      if (error) {
+        console.error("DELETE error:", error);
+        throw error;
+      }
+
+      if (count === 0) {
+        console.error(" No rows deleted");
+        throw new Error("Failed to delete entry");
+      }
+
+      // console.log(" DELETED successful", count, "row(s)");
+      return { success: true, deletedCount: count };
     },
-    onSuccess: async (_, variables) => {
-      // Force refetch instead of just invalidating
-      await queryClient.refetchQueries({
+    onSuccess: async (result, variables) => {
+      // console.log(
+      //   "Refetch starting after delete, deleted count:",
+      //   result.deletedCount,
+      // );
+
+      // Remove from cache immediately
+      queryClient.setQueryData(
+        ["challenge-entries", variables.challengeId],
+        (old: any) => {
+          if (!old) return old;
+          return old.filter((entry: any) => entry.id !== variables.entryId);
+        },
+      );
+
+      // Then refetch to be sure
+      await queryClient.invalidateQueries({
         queryKey: ["challenge-entries", variables.challengeId],
       });
-      await queryClient.refetchQueries({
+
+      await queryClient.invalidateQueries({
         queryKey: ["challenge-entries-count", variables.challengeId],
       });
+
       await queryClient.refetchQueries({
-        queryKey: [
-          "user-challenge-entry",
-          variables.challengeId,
-          variables.userId,
-        ],
+        queryKey: ["challenge-entries", variables.challengeId],
+        type: "active",
       });
+
+      // console.log("Refetch complete after delete");
     },
   });
 }
@@ -150,16 +196,23 @@ export function useVoteChallengeEntry() {
       userId: string;
       voteType: "up" | "down";
     }) => {
-      // Check if user already voted
-      const { data: existingVote } = await supabase
+      // console.log("Vote mutation starting:", { entryId, userId, voteType });
+
+      const { data: existingVote, error: fetchError } = await supabase
         .from("challenge_entry_votes")
         .select("*")
         .eq("entry_id", entryId)
         .eq("user_id", userId)
         .single();
 
+      // console.log(
+      //   "Existing vote check:",
+      //   existingVote,
+      //   "Error:",
+      //   fetchError,
+      // );
+
       if (existingVote) {
-        // If same vote type, remove it (un-vote)
         if (existingVote.vote_type === voteType) {
           const { error } = await supabase
             .from("challenge_entry_votes")
@@ -167,39 +220,77 @@ export function useVoteChallengeEntry() {
             .eq("entry_id", entryId)
             .eq("user_id", userId);
 
-          if (error) throw error;
-          return { action: "removed", voteType: null };
+          if (error) {
+            console.error("Delete error:", error);
+            throw error;
+          }
+          return { action: "removed", voteType: null, entryId };
         } else {
-          // If different vote type, update it
           const { error } = await supabase
             .from("challenge_entry_votes")
             .update({ vote_type: voteType })
             .eq("entry_id", entryId)
             .eq("user_id", userId);
 
-          if (error) throw error;
-          return { action: "updated", voteType };
+          if (error) {
+            console.error("Update error:", error);
+            throw error;
+          }
+          // console.log("Vote updated to:", voteType);
+          return { action: "updated", voteType, entryId };
         }
       } else {
-        // No existing vote, create new one
+        // console.log("Creating new vote");
         const { error } = await supabase.from("challenge_entry_votes").insert({
           entry_id: entryId,
           user_id: userId,
           vote_type: voteType,
         });
 
-        if (error) throw error;
-        return { action: "created", voteType };
+        if (error) {
+          console.error("Insert error:", error);
+          throw error;
+        }
+        // console.log("Vote created:", voteType);
+        return { action: "created", voteType, entryId };
       }
     },
-    onSuccess: (_, variables) => {
-      // Invalidate to refetch updated vote count
+    onSuccess: async (result, variables) => {
+      // Get the challenge_id
+      const { data: entryData } = await supabase
+        .from("challenge_entries")
+        .select("challenge_id")
+        .eq("id", variables.entryId)
+        .single();
+
+      const challengeId = entryData?.challenge_id;
+
+      if (!challengeId) {
+        console.error("Could not find challenge_id");
+        return;
+      }
+
+      // Update the vote status in cache immediately
+      queryClient.setQueryData(
+        ["challenge-entry-vote", variables.entryId, variables.userId],
+        result.voteType,
+      );
+
+      // Waiting for trigger to update vote count
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // ONLY refetch entries for vote counts not the vote status
       queryClient.invalidateQueries({
-        queryKey: ["challenge-entries"],
+        queryKey: ["challenge-entries", challengeId],
       });
-      queryClient.invalidateQueries({
-        queryKey: ["challenge-entry-vote", variables.entryId, variables.userId],
+
+      await queryClient.refetchQueries({
+        queryKey: ["challenge-entries", challengeId],
+        exact: true,
+        type: "active",
       });
+
+      // console.log("Entry list refetched - vote count updated");
     },
   });
 }

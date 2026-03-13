@@ -40,18 +40,24 @@ export default function ChallengeEntryCard({ entry, onDelete }: Props) {
   const isOwner = user?.id === entry.user_id;
 
   const handleVote = async (voteType: "up" | "down") => {
+    // console.log("Vote clicked:", voteType, "Entry ID:", entry.id);
+
     if (!user?.id) {
       Alert.alert("Sign in required", "Please sign in to vote");
       return;
     }
 
+    // console.log("User ID:", user.id, "Current vote:", currentVote);
+
     try {
-      await voteMutation.mutateAsync({
+      const result = await voteMutation.mutateAsync({
         entryId: entry.id,
         userId: user.id,
         voteType,
       });
+      // console.log(":) Vote result:", result);
     } catch (error) {
+      console.error(":( Vote error:", error);
       Alert.alert("Error", "Failed to vote");
     }
   };
@@ -66,10 +72,15 @@ export default function ChallengeEntryCard({ entry, onDelete }: Props) {
           {
             text: "Delete",
             style: "destructive",
-            onPress: onDelete,
+            onPress: () => {
+              console.log("🗑️ Executing delete...");
+              onDelete();
+            },
           },
         ],
       );
+    } else {
+      console.log(":( onDelete is undefined");
     }
   };
 
@@ -109,7 +120,7 @@ export default function ChallengeEntryCard({ entry, onDelete }: Props) {
         <Image source={{ uri: entry.image_url }} style={styles.image} />
       )}
 
-      {/* Footer - Votes */}
+      {/*  Votes */}
       <View style={styles.footer}>
         <View style={styles.voteContainer}>
           {/* Upvote */}

@@ -16,7 +16,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { formatDistanceToNowStrict, isPast } from "date-fns";
 import * as ImagePicker from "expo-image-picker";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -59,14 +59,6 @@ export default function ChallengeDetailsScreen() {
         addSuffix: false,
       })
     : "";
-
-  // Load existing entry if user has one
-  useEffect(() => {
-    if (userEntry) {
-      setEntryContent(userEntry.content || "");
-      setEntryImage(userEntry.image_url);
-    }
-  }, [userEntry]);
 
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -120,7 +112,7 @@ export default function ChallengeDetailsScreen() {
         Alert.alert("Success!", "Your entry has been submitted! 🎉");
       }
 
-      // Clear fields AFTER successful submission
+      // Clear fields after successful submission
       setEntryContent("");
       setEntryImage(null);
     } catch (error) {
@@ -130,7 +122,12 @@ export default function ChallengeDetailsScreen() {
   };
 
   const handleDeleteEntry = async (entryId: string) => {
-    if (!user?.id) return;
+    // console.log(" DeleteEntry called:", entryId, "User:", user?.id);
+
+    if (!user?.id) {
+      // console.log("No user ID");
+      return;
+    }
 
     try {
       await deleteMutation.mutateAsync({
@@ -138,9 +135,9 @@ export default function ChallengeDetailsScreen() {
         challengeId: id,
         userId: user.id,
       });
-      Alert.alert("Deleted", "Entry has been deleted");
+      // console.log("Delete successful");
     } catch (error) {
-      console.error("Delete error:", error);
+      console.error(":( Delete error:", error);
       Alert.alert("Error", "Failed to delete entry");
     }
   };
@@ -171,16 +168,19 @@ export default function ChallengeDetailsScreen() {
         <FlatList
           data={entries}
           keyExtractor={(item: any) => item.id}
-          renderItem={({ item }) => (
-            <ChallengeEntryCard
-              entry={item}
-              onDelete={
-                item.user_id === user?.id
-                  ? () => handleDeleteEntry(item.id)
-                  : undefined
-              }
-            />
-          )}
+          renderItem={({ item }) => {
+            const isOwner = item.user_id === user?.id;
+            console.log("🔍 Rendering entry:", item.id, "isOwner:", isOwner);
+
+            return (
+              <ChallengeEntryCard
+                entry={item}
+                onDelete={
+                  isOwner ? () => handleDeleteEntry(item.id) : undefined
+                }
+              />
+            );
+          }}
           ListHeaderComponent={
             <>
               {/* Challenge Info */}

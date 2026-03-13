@@ -1,7 +1,6 @@
 import { supabase } from "@/src/lib/supabase";
 import { useQuery } from "@tanstack/react-query";
 
-// Get user's vote for a specific challenge entry
 export function useSupabaseChallengeEntryVote(
   entryId: string,
   userId?: string,
@@ -9,7 +8,17 @@ export function useSupabaseChallengeEntryVote(
   return useQuery({
     queryKey: ["challenge-entry-vote", entryId, userId],
     queryFn: async () => {
-      if (!userId) return null;
+      // console.log(
+      //   "Fetching vote status for entry:",
+      //   entryId,
+      //   "user:",
+      //   userId,
+      // );
+
+      if (!userId) {
+        // console.log("No userId, returning null");
+        return null;
+      }
 
       const { data, error } = await supabase
         .from("challenge_entry_votes")
@@ -18,10 +27,20 @@ export function useSupabaseChallengeEntryVote(
         .eq("user_id", userId)
         .single();
 
-      if (error && error.code !== "PGRST116") throw error; // Ignore "not found"
-      return data?.vote_type || null;
+      if (error && error.code !== "PGRST116") {
+        console.error("Error fetching vote:", error);
+        throw error;
+      }
+
+      const voteType = data?.vote_type || null;
+      // console.log(" Vote status fetched:", voteType);
+      return voteType;
     },
     enabled: !!entryId && !!userId,
-    staleTime: 0,
+    staleTime: Infinity,
+    gcTime: Infinity,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 }

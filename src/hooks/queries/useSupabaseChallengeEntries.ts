@@ -5,6 +5,8 @@ export function useSupabaseChallengeEntries(challengeId: string) {
   return useQuery({
     queryKey: ["challenge-entries", challengeId],
     queryFn: async () => {
+      // console.log("Fetching challenge entries for:", challengeId);
+
       const { data, error } = await supabase
         .from("challenge_entries")
         .select(
@@ -21,9 +23,13 @@ export function useSupabaseChallengeEntries(challengeId: string) {
         .eq("challenge_id", challengeId)
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error(":( Error fetching entries:", error);
+        throw error;
+      }
 
-      // Transform the data
+      // console.log(":) Fetched entries count:", data?.length || 0);
+
       return (data || []).map((entry: any) => {
         const userData = Array.isArray(entry.user) ? entry.user[0] : entry.user;
 
@@ -38,7 +44,10 @@ export function useSupabaseChallengeEntries(challengeId: string) {
       });
     },
     enabled: !!challengeId,
-    staleTime: 1000 * 60 * 2, // 2 minutes
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -56,11 +65,12 @@ export function useSupabaseChallengeEntriesCount(challengeId: string) {
       return count || 0;
     },
     enabled: !!challengeId,
-    staleTime: 1000 * 60 * 2,
+    staleTime: 0,
+    gcTime: 0,
   });
 }
 
-// Get user's entry for a specific challenge
+// Get users entry for a specific challenge
 export function useSupabaseUserChallengeEntry(
   challengeId: string,
   userId?: string,
@@ -81,6 +91,7 @@ export function useSupabaseUserChallengeEntry(
       return data;
     },
     enabled: !!challengeId && !!userId,
-    staleTime: 1000 * 60 * 2,
+    staleTime: 0,
+    gcTime: 0,
   });
 }
