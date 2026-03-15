@@ -81,7 +81,7 @@ export default function ChatMessageItem({
 
         {/* TIMESTAMP */}
         <Text style={[styles.time, isMe && styles.myTime]}>
-          {formatDistanceToNowStrict(new Date(item.created_at), {
+          {formatDistanceToNowStrict(new Date(item.created_at ?? Date.now()), {
             addSuffix: true,
           })}
         </Text>

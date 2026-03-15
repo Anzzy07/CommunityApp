@@ -34,9 +34,12 @@ export default function GroupListItem({
           </Text>
           {lastMessage && (
             <Text style={styles.timestamp}>
-              {formatDistanceToNowStrict(new Date(lastMessage.timestamp), {
-                addSuffix: false,
-              })}
+              {formatDistanceToNowStrict(
+                new Date(lastMessage.timestamp ?? Date.now()),
+                {
+                  addSuffix: false,
+                },
+              )}
             </Text>
           )}
         </View>

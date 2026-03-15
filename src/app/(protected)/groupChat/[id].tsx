@@ -1,10 +1,18 @@
-import groupMembers from "@/assets/data/groupMembers.json";
-import messages from "@/assets/data/groupMessage.json";
-import { groupMembersAtom } from "@/src/atoms/GroupMembersAtom";
 import { COLORS } from "@/src/colors";
 import ChatMessageItem from "@/src/components/ChatMessageItem";
 import JoinGroupView from "@/src/components/JoinGroupView";
+import {
+  useMarkMessagesAsRead,
+  useSendMessage,
+} from "@/src/hooks/mutations/useGroupMessageMutations";
+import { useLeaveGroup } from "@/src/hooks/mutations/useGroupMutations";
+import { useSupabaseGroupMembers } from "@/src/hooks/queries/useSupabaseGroupMembers";
+import {
+  useGroupMessagesSubscription,
+  useSupabaseGroupMessages,
+} from "@/src/hooks/queries/useSupabaseGroupMessages";
 import { GroupMessage } from "@/src/types";
+import { useUser } from "@clerk/clerk-expo";
 import {
   AntDesign,
   Feather,
@@ -13,8 +21,7 @@ import {
 } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useSetAtom } from "jotai";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -29,50 +36,72 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const CURRENT_USER_ID = "user-21";
-
-// Individual group chat screen with messaging, image sending, and leave functionality
 export default function GroupChatScreen() {
   const { id: groupId, name: groupName } = useLocalSearchParams<{
     id: string;
     name: string;
   }>();
+  const { user } = useUser();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const flatListRef = useRef<FlatList>(null);
-  const setGroupMembers = useSetAtom(groupMembersAtom);
 
   const [replyTo, setReplyTo] = useState<GroupMessage | null>(null);
   const [text, setText] = useState("");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
-  // Checks if user is a member of this group
-  const isMember = groupMembers.some(
-    (m) => m.group_id === groupId && m.user_id === CURRENT_USER_ID,
-  );
+  // Queries
+  const {
+    data: messages = [],
+    isLoading: messagesLoading,
+    refetch: refetchMessages,
+  } = useSupabaseGroupMessages(groupId);
+  const { data: groupMembers = [] } = useSupabaseGroupMembers(user?.id || "");
 
-  // Filters messages for this group
-  const groupMessages = messages.filter((m) => m.group_id === groupId);
+  // Mutations
+  const sendMessageMutation = useSendMessage();
+  const markAsReadMutation = useMarkMessagesAsRead();
+  const leaveMutation = useLeaveGroup();
 
-  // Finds the current group to check leadership
-  const currentGroup = groupMembers.find((m) => m.group_id === groupId);
-  const isLeader = false; // TODO: Check if user is leader from groups data
+  // Check if user is a member
+  const isMember = groupMembers.some((m) => m.group_id === groupId);
 
-  // Marks messages as seen when opening chat
+  // Real-time subscription
+  const handleNewMessage = useCallback(() => {
+    refetchMessages();
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+  }, [refetchMessages]);
+
+  useGroupMessagesSubscription(groupId, handleNewMessage);
+
+  // Mark messages as read when opening chat
   useEffect(() => {
-    if (isMember) {
-      console.log("Marking messages as seen for group:", groupId);
-      // TODO: Mark all messages in this group as seen in Supabase
+    if (isMember && user?.id) {
+      markAsReadMutation.mutate({
+        groupId,
+        userId: user.id,
+      });
     }
-  }, [groupId, isMember]);
+  }, [groupId, isMember, user?.id]);
+
+  // Scroll to bottom when messages load
+  useEffect(() => {
+    if (messages.length > 0) {
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: false });
+      }, 100);
+    }
+  }, [messages.length]);
 
   // Determines which messages should show avatar and username
   const getMessageDisplay = (index: number) => {
-    const currentMessage = groupMessages[index];
-    const nextMessage = groupMessages[index + 1];
-    const prevMessage = groupMessages[index - 1];
+    const currentMessage = messages[index];
+    const nextMessage = messages[index + 1];
+    const prevMessage = messages[index - 1];
 
-    const isMe = currentMessage.user.id === CURRENT_USER_ID;
+    const isMe = currentMessage.user.id === user?.id;
 
     if (isMe) {
       return { showAvatar: false, showUsername: false };
@@ -87,7 +116,7 @@ export default function GroupChatScreen() {
     return { showAvatar, showUsername };
   };
 
-  // Opens image picker to select image
+  // Opens image picker
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
@@ -113,68 +142,56 @@ export default function GroupChatScreen() {
     setSelectedImage(null);
   };
 
-  // Sends message with text and/or image
-  const handleSend = () => {
-    if ((!text.trim() && !selectedImage) || !isMember) return;
+  // Sends message
+  const handleSend = async () => {
+    if ((!text.trim() && !selectedImage) || !isMember || !user?.id) return;
 
-    const newMessage = {
-      id: Math.random().toString(),
-      group_id: groupId,
-      user_id: CURRENT_USER_ID,
-      message: text.trim(),
-      image: selectedImage,
-      reply_to: replyTo
-        ? {
-            id: replyTo.id,
-            message: replyTo.message,
-            user_name: replyTo.user.name,
-          }
-        : null,
-      created_at: new Date().toISOString(),
-    };
+    try {
+      await sendMessageMutation.mutateAsync({
+        groupId,
+        userId: user.id,
+        message: text.trim(),
+        imageUrl: selectedImage || undefined,
+        replyToId: replyTo?.id,
+      });
 
-    console.log("Sending message:", newMessage);
-    // TODO: Send to Supabase
-    // TODO: Update local state
+      setText("");
+      setReplyTo(null);
+      setSelectedImage(null);
 
-    setText("");
-    setReplyTo(null);
-    setSelectedImage(null);
-
-    setTimeout(() => {
-      flatListRef.current?.scrollToEnd({ animated: true });
-    }, 100);
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    } catch (error) {
+      Alert.alert("Error", "Failed to send message");
+    }
   };
 
   // Shows leave chat confirmation
   const handleLeaveChat = () => {
-    if (isLeader) {
-      Alert.alert(
-        "Cannot Leave",
-        "You're the group leader. Transfer leadership before leaving.",
-        [{ text: "OK" }],
-      );
-      return;
-    }
+    if (!user?.id) return;
 
     Alert.alert("Leave Chat", `Are you sure you want to leave ${groupName}?`, [
       { text: "Cancel", style: "cancel" },
       {
         text: "Leave",
         style: "destructive",
-        onPress: () => {
-          setGroupMembers((prev) =>
-            prev.filter(
-              (m) => !(m.group_id === groupId && m.user_id === CURRENT_USER_ID),
-            ),
-          );
-          router.back();
+        onPress: async () => {
+          try {
+            await leaveMutation.mutateAsync({
+              groupId,
+              userId: user.id,
+            });
+            router.back();
+          } catch (error) {
+            Alert.alert("Error", "Failed to leave group");
+          }
         },
       },
     ]);
   };
 
-  // Shows chat options menu
+  // Shows chat options
   const handleOptions = () => {
     Alert.alert("Chat Options", "", [
       { text: "Leave Chat", onPress: handleLeaveChat, style: "destructive" },
@@ -182,7 +199,7 @@ export default function GroupChatScreen() {
     ]);
   };
 
-  // Shows join group UI if not a member
+  // Show join view if not a member
   if (!isMember) {
     return (
       <View style={styles.container}>
@@ -228,7 +245,7 @@ export default function GroupChatScreen() {
       {/* MESSAGES LIST */}
       <FlatList
         ref={flatListRef}
-        data={groupMessages}
+        data={messages}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.messagesList}
         renderItem={({ item, index }) => {
@@ -236,7 +253,7 @@ export default function GroupChatScreen() {
           return (
             <ChatMessageItem
               item={item}
-              isMe={item.user.id === CURRENT_USER_ID}
+              isMe={item.user.id === user?.id}
               isMember={isMember}
               onReply={setReplyTo}
               showAvatar={showAvatar}
@@ -248,15 +265,17 @@ export default function GroupChatScreen() {
           flatListRef.current?.scrollToEnd({ animated: false })
         }
         ListEmptyComponent={
-          <View style={styles.emptyMessages}>
-            <MaterialCommunityIcons
-              name="chat-outline"
-              size={48}
-              color={COLORS.textSecondary}
-            />
-            <Text style={styles.emptyText}>No messages yet</Text>
-            <Text style={styles.emptySubtext}>Start the conversation!</Text>
-          </View>
+          !messagesLoading ? (
+            <View style={styles.emptyMessages}>
+              <MaterialCommunityIcons
+                name="chat-outline"
+                size={48}
+                color={COLORS.textSecondary}
+              />
+              <Text style={styles.emptyText}>No messages yet</Text>
+              <Text style={styles.emptySubtext}>Start the conversation!</Text>
+            </View>
+          ) : null
         }
       />
 
@@ -310,7 +329,9 @@ export default function GroupChatScreen() {
           {/* SEND BUTTON */}
           <Pressable
             onPress={handleSend}
-            disabled={!text.trim() && !selectedImage}
+            disabled={
+              (!text.trim() && !selectedImage) || sendMessageMutation.isPending
+            }
             style={[
               styles.sendButton,
               !text.trim() && !selectedImage && styles.sendButtonDisabled,

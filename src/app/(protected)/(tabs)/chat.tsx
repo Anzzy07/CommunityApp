@@ -1,61 +1,46 @@
-import groupMembers from "@/assets/data/groupMembers.json";
-import messages from "@/assets/data/groupMessage.json";
-import posts from "@/assets/data/posts.json";
 import { COLORS } from "@/src/colors";
 import GroupListItem from "@/src/components/GroupListItem";
+import { useSupabaseGroupMembers } from "@/src/hooks/queries/useSupabaseGroupMembers";
+import { useSupabaseGroups } from "@/src/hooks/queries/useSupabaseGroups";
 import { Group } from "@/src/types";
+import { useUser } from "@clerk/clerk-expo";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useMemo } from "react";
-import { FlatList, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  FlatList,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const CURRENT_USER_ID = "user-21"; // TODO: Get from Clerk
-
 export default function ChatGroupsList() {
+  const { user } = useUser();
   const router = useRouter();
+
+  // Fetch groups and memberships from Supabase
+  const { data: groups = [], isLoading: groupsLoading } = useSupabaseGroups();
+  const { data: groupMembers = [], isLoading: membersLoading } =
+    useSupabaseGroupMembers(user?.id || "");
+
+  const isLoading = groupsLoading || membersLoading;
 
   // Get groups user is a member of
   const userGroups = useMemo(() => {
-    const memberGroups = groupMembers
-      .filter((m) => m.user_id === CURRENT_USER_ID)
-      .map((m) => m.group_id);
+    const memberGroupIds = groupMembers.map((m) => m.group_id);
+    return groups.filter((g) => memberGroupIds.includes(g.id));
+  }, [groups, groupMembers]);
 
-    // Get unique groups from posts
-    const uniqueGroups = new Map<string, Group>();
-    posts.forEach((post) => {
-      if (memberGroups.includes(post.group.id)) {
-        uniqueGroups.set(post.group.id, post.group);
-      }
-    });
-
-    return Array.from(uniqueGroups.values());
-  }, []);
-
-  // Get last message and unread count for each group
+  // TODO: Get last message and unread count from Supabase
   const getGroupData = (groupId: string) => {
-    const groupMessages = messages.filter((m) => m.group_id === groupId);
-
-    if (groupMessages.length === 0) {
-      return { lastMessage: undefined, unreadCount: 0 };
-    }
-
-    // Sort by timestamp, most recent first
-    const sorted = [...groupMessages].sort(
-      (a, b) =>
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-    );
-
-    const lastMessage = {
-      text: sorted[0].message,
-      timestamp: sorted[0].created_at,
-      sender: sorted[0].user.name,
+    // For now, return placeholder data
+    // We'll implement this properly with real-time queries later
+    return {
+      lastMessage: undefined,
+      unreadCount: 0,
     };
-
-    // Mock unread count
-    const unreadCount = Math.floor(Math.random() * 5);
-
-    return { lastMessage, unreadCount };
   };
 
   const handleGroupPress = (group: Group) => {
@@ -76,6 +61,17 @@ export default function ChatGroupsList() {
       </Text>
     </View>
   );
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container} edges={["bottom"]}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Loading chats...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={["bottom"]}>
@@ -104,6 +100,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 15,
+    color: COLORS.textSecondary,
   },
   emptyContainer: {
     flex: 1,
