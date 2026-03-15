@@ -1,13 +1,15 @@
-import groups from "@/assets/data/groups.json";
-import { groupMembersAtom } from "@/src/atoms/GroupMembersAtom";
 import { selectedGroupAtom } from "@/src/atoms/SelectGroupAtom";
 import { COLORS } from "@/src/colors";
+import { useSupabaseGroupMembers } from "@/src/hooks/queries/useSupabaseGroupMembers";
+import { useSupabaseGroups } from "@/src/hooks/queries/useSupabaseGroups";
 import { Group } from "@/src/types";
+import { useUser } from "@clerk/clerk-expo";
 import { AntDesign, Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useAtomValue, useSetAtom } from "jotai";
+import { useSetAtom } from "jotai";
 import React, { useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   Image,
   KeyboardAvoidingView,
@@ -20,23 +22,43 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const CURRENT_USER_ID = "user-21"; // current user ID
-
 export default function GroupSelector() {
+  const { user } = useUser();
   const [searchValue, setSearchValue] = useState("");
   const setGroup = useSetAtom(selectedGroupAtom);
-  const groupMembers = useAtomValue(groupMembersAtom);
+
+  // Fetch groups and memberships from Supabase
+  const { data: groups = [], isLoading: groupsLoading } = useSupabaseGroups();
+  const { data: groupMembers = [], isLoading: membersLoading } =
+    useSupabaseGroupMembers(user?.id || "");
+
+  const isLoading = groupsLoading || membersLoading;
+
+  console.log("🔍 Group Selector Debug:");
+  console.log("- User ID:", user?.id);
+  console.log("- Groups loading:", groupsLoading);
+  console.log("- Members loading:", membersLoading);
+  console.log("- Total groups:", groups.length);
+  console.log("- Groups:", groups);
+  console.log("- Group members:", groupMembers.length);
+  console.log("- Members:", groupMembers);
 
   // Filter to only show groups the user has joined
   const userGroups = useMemo(() => {
-    const userGroupIds = groupMembers
-      .filter((member) => member.user_id === CURRENT_USER_ID)
-      .map((member) => member.group_id);
+    const userGroupIds = groupMembers.map((m) => m.group_id);
+    console.log("- User group IDs:", userGroupIds);
 
-    return groups.filter((group) => userGroupIds.includes(group.id));
-  }, [groupMembers]);
+    const filtered = groups.filter((g) => userGroupIds.includes(g.id));
+    console.log("- Filtered user groups:", filtered.length, "groups");
+    console.log(
+      "- Group names:",
+      filtered.map((g) => g.name),
+    );
 
-  // Then filter by search query
+    return filtered;
+  }, [groups, groupMembers]);
+
+  // Filter by search query
   const filterGroups = useMemo(
     () =>
       userGroups.filter((group) =>
@@ -72,7 +94,6 @@ export default function GroupSelector() {
 
           <Text style={styles.headerTitle}>Select Community</Text>
 
-          {/* Invisible placeholder for symmetry */}
           <View style={{ width: 26 }} />
         </View>
 
@@ -119,8 +140,12 @@ export default function GroupSelector() {
           </View>
         )}
 
-        {/* LIST */}
-        {filterGroups.length > 0 ? (
+        {/* LOADING */}
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+          </View>
+        ) : filterGroups.length > 0 ? (
           <FlatList
             data={filterGroups}
             keyboardShouldPersistTaps="handled"
@@ -236,6 +261,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     color: COLORS.textSecondary,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
   listContainer: {
     paddingBottom: 24,

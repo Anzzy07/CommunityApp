@@ -1,3 +1,4 @@
+import { selectedGroupAtom } from "@/src/atoms/SelectGroupAtom";
 import { COLORS } from "@/src/colors";
 import ChallengeListItem from "@/src/components/ChallengeListItem";
 import PostListItem from "@/src/components/PostListItem";
@@ -12,6 +13,7 @@ import { useSupabasePosts } from "@/src/hooks/queries/useSupabasePosts";
 import { useUser } from "@clerk/clerk-expo";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
+import { useSetAtom } from "jotai";
 import React, { useMemo } from "react";
 import {
   ActivityIndicator,
@@ -28,6 +30,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 export default function CommunityDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useUser();
+  const setSelectedGroup = useSetAtom(selectedGroupAtom);
 
   // Fetch data from Supabase
   const { data: groups = [], isLoading: groupsLoading } = useSupabaseGroups();
@@ -184,12 +187,16 @@ export default function CommunityDetailsScreen() {
             {/* Create Post */}
             <Pressable
               style={[styles.actionButton, styles.primaryAction]}
-              onPress={() =>
-                router.push({
-                  pathname: "/create",
-                  params: { groupId: group.id },
-                })
-              }
+              onPress={() => {
+                // Pre-select this community before navigating
+                setSelectedGroup({
+                  id: group.id,
+                  name: group.name,
+                  image: group.image,
+                  leader_id: group.leader_id,
+                });
+                router.push("/create");
+              }}
             >
               <Feather name="edit-3" size={18} color="white" />
               <Text style={styles.primaryActionText}>Create Post</Text>

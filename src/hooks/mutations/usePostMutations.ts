@@ -1,4 +1,5 @@
 import { supabase } from "@/src/lib/supabase";
+import { uploadImage } from "@/src/utils/supabaseImages";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as Clipboard from "expo-clipboard";
 import { Alert, Share } from "react-native";
@@ -139,6 +140,145 @@ export function usePostAward() {
       queryClient.invalidateQueries({
         queryKey: ["post-award", variables.postId, variables.userId],
       });
+    },
+  });
+}
+
+export function useCreatePost() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      groupId,
+      userId,
+      title,
+      description,
+      imageUri,
+    }: {
+      groupId: string;
+      userId: string;
+      title: string;
+      description?: string;
+      imageUri?: string;
+    }) => {
+      console.log("📝 Creating post:", { groupId, userId, title });
+
+      const { data, error } = await supabase
+        .from("posts")
+        .insert({
+          group_id: groupId,
+          user_id: userId,
+          title,
+          description: description || null,
+          image_url: imageUri || null,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error("❌ Error creating post:", error);
+        throw error;
+      }
+
+      console.log("✅ Post created:", data);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["posts"] });
+    },
+  });
+}
+
+export function useCreatePoll() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      groupId,
+      userId,
+      question,
+      options,
+      durationHours,
+    }: {
+      groupId: string;
+      userId: string;
+      question: string;
+      options: { text: string; imageUri?: string }[]; // Changed to imageUri
+      durationHours: number;
+    }) => {
+      console.log("📊 Creating poll:", { groupId, userId, question });
+
+      // Create the post first
+      const { data: post, error: postError } = await supabase
+        .from("posts")
+        .insert({
+          group_id: groupId,
+          user_id: userId,
+          title: question,
+        })
+        .select()
+        .single();
+
+      if (postError) {
+        console.error("❌ Error creating poll post:", postError);
+        throw postError;
+      }
+
+      // Calculate end date
+      const endsAt = new Date();
+      endsAt.setHours(endsAt.getHours() + durationHours);
+
+      // Create the poll
+      const { data: poll, error: pollError } = await supabase
+        .from("polls")
+        .insert({
+          post_id: post.id,
+          question,
+          duration: `${durationHours}h`,
+          ends_at: endsAt.toISOString(),
+        })
+        .select()
+        .single();
+
+      if (pollError) {
+        console.error("❌ Error creating poll:", pollError);
+        throw pollError;
+      }
+
+      // Upload images for poll options if they have images
+      const optionsWithImages = await Promise.all(
+        options.map(async (opt) => {
+          let imagePath: string | undefined;
+          if (opt.imageUri) {
+            try {
+              imagePath = await uploadImage(opt.imageUri);
+            } catch (error) {
+              console.error("❌ Poll option image upload failed:", error);
+            }
+          }
+          return {
+            poll_id: poll.id,
+            text: opt.text,
+            image_url: imagePath || null,
+          };
+        }),
+      );
+
+      // Create poll options
+      const { error: optionsError } = await supabase
+        .from("poll_options")
+        .insert(optionsWithImages);
+
+      if (optionsError) {
+        console.error("❌ Error creating poll options:", optionsError);
+        throw optionsError;
+      }
+
+      console.log("✅ Poll created with options");
+      return { post, poll };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["posts"] });
     },
   });
 }

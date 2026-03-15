@@ -2,28 +2,41 @@ import { supabase } from "@/src/lib/supabase";
 import { GroupMember } from "@/src/types";
 import { useQuery } from "@tanstack/react-query";
 
-// Fetches all group memberships for the current user
 export function useSupabaseGroupMembers(userId: string) {
   return useQuery({
     queryKey: ["group-members", userId],
     queryFn: async () => {
-      // console.log(" Fetching group members for user:", userId);
+      console.log("🔍 Fetching group members for user:", userId);
+
+      if (!userId) {
+        console.log("⚠️ No userId provided");
+        return [];
+      }
 
       const { data, error } = await supabase
         .from("group_members")
         .select("*")
-        .eq("user_id", userId); // Only get THIS user's memberships
+        .eq("user_id", userId);
 
       if (error) {
-        console.error("Error fetching group members:", error);
+        console.error("❌ Error fetching group members:", error);
         throw error;
       }
 
-      // console.log(" Fetched group members:", data?.length || 0);
-      return (data || []) as GroupMember[];
+      console.log("✅ Fetched group members:", data);
+
+      const members: GroupMember[] = (data || []).map((m) => ({
+        id: m.id,
+        group_id: m.group_id,
+        user_id: m.user_id,
+        joined_at: m.joined_at,
+      }));
+
+      console.log("✅ Transformed members:", members);
+      return members;
     },
     enabled: !!userId,
-    staleTime: 0, // Always refetch to get latest data
-    gcTime: 0, // Don't cache
+    staleTime: 0,
+    gcTime: 0,
   });
 }

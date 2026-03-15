@@ -1,11 +1,17 @@
 import { selectedGroupAtom } from "@/src/atoms/SelectGroupAtom";
 import { COLORS } from "@/src/colors";
+import {
+  useCreatePoll,
+  useCreatePost,
+} from "@/src/hooks/mutations/usePostMutations";
+import { useUser } from "@clerk/clerk-expo";
 import { AntDesign, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { Link, router } from "expo-router";
 import { useAtom } from "jotai";
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Image,
   KeyboardAvoidingView,
@@ -28,6 +34,8 @@ interface PollOption {
 }
 
 export default function CreateScreen() {
+  const { user } = useUser();
+
   // Mode state
   const [mode, setMode] = useState<CreateMode>("post");
 
@@ -50,12 +58,16 @@ export default function CreateScreen() {
   const [bodyFocused, setBodyFocused] = useState(false);
   const [pollQuestionFocused, setPollQuestionFocused] = useState(false);
 
+  // Mutations
+  const createPostMutation = useCreatePost();
+  const createPollMutation = useCreatePoll();
+
   const pollDurations = [
-    { label: "1 hour", value: "1h" },
-    { label: "6 hours", value: "6h" },
-    { label: "24 hours", value: "24h" },
-    { label: "3 days", value: "3d" },
-    { label: "7 days", value: "7d" },
+    { label: "1 hour", value: "1h", hours: 1 },
+    { label: "6 hours", value: "6h", hours: 6 },
+    { label: "24 hours", value: "24h", hours: 24 },
+    { label: "3 days", value: "3d", hours: 72 },
+    { label: "7 days", value: "7d", hours: 168 },
   ];
 
   const goBack = () => {
@@ -104,7 +116,7 @@ export default function CreateScreen() {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: "images",
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
@@ -145,13 +157,50 @@ export default function CreateScreen() {
     );
   };
 
-  const handlePost = () => {
-    if (mode === "post") {
-      console.log("POST", { title, bodyText, postImage, group });
-      // Add your post logic here
-    } else {
-      console.log("POLL", { pollQuestion, pollOptions, pollDuration, group });
-      // Add your poll logic here
+  const handlePost = async () => {
+    if (!user?.id || !group) {
+      Alert.alert("Error", "Please select a community and sign in");
+      return;
+    }
+
+    try {
+      if (mode === "post") {
+        await createPostMutation.mutateAsync({
+          groupId: group.id,
+          userId: user.id,
+          title: title.trim(),
+          description: bodyText.trim() || undefined,
+          imageUri: postImage || undefined,
+        });
+
+        Alert.alert("Success!", "Your post has been created! 🎉");
+      } else {
+        const durationHours =
+          pollDurations.find((d) => d.value === pollDuration)?.hours || 24;
+
+        const validOptions = pollOptions
+          .filter((opt) => opt.text.trim().length > 0)
+          .map((opt) => ({
+            text: opt.text.trim(),
+            imageUri: opt.image,
+          }));
+
+        await createPollMutation.mutateAsync({
+          groupId: group.id,
+          userId: user.id,
+          question: pollQuestion.trim(),
+          options: validOptions,
+          durationHours,
+        });
+
+        Alert.alert("Success!", "Your poll has been created! 📊");
+      }
+
+      // Reset and go back
+      goBack();
+    } catch (error) {
+      console.error("Create error:", error);
+      Alert.alert("Error", "Failed to create post. Please try again.");
     }
   };
 
@@ -167,6 +216,9 @@ export default function CreateScreen() {
     }
   };
 
+  const isPosting =
+    createPostMutation.isPending || createPollMutation.isPending;
+
   return (
     <SafeAreaView
       style={{
@@ -177,17 +229,24 @@ export default function CreateScreen() {
     >
       {/* Header */}
       <View style={styles.header}>
-        <Pressable onPress={goBack} hitSlop={10}>
+        <Pressable onPress={goBack} hitSlop={10} disabled={isPosting}>
           <AntDesign name="close" size={28} color={COLORS.textPrimary} />
         </Pressable>
 
         <Pressable
           onPress={handlePost}
           hitSlop={10}
-          disabled={!canPost()}
-          style={[styles.postButton, !canPost() && styles.postButtonDisabled]}
+          disabled={!canPost() || isPosting}
+          style={[
+            styles.postButton,
+            (!canPost() || isPosting) && styles.postButtonDisabled,
+          ]}
         >
-          <Text style={styles.postText}>Post</Text>
+          {isPosting ? (
+            <ActivityIndicator color="white" size="small" />
+          ) : (
+            <Text style={styles.postText}>Post</Text>
+          )}
         </Pressable>
       </View>
 
@@ -195,6 +254,7 @@ export default function CreateScreen() {
       <View style={styles.modeToggle}>
         <Pressable
           onPress={() => setMode("post")}
+          disabled={isPosting}
           style={[
             styles.modeButton,
             mode === "post" && styles.modeButtonActive,
@@ -214,6 +274,7 @@ export default function CreateScreen() {
 
         <Pressable
           onPress={() => setMode("poll")}
+          disabled={isPosting}
           style={[
             styles.modeButton,
             mode === "poll" && styles.modeButtonActive,
@@ -242,7 +303,7 @@ export default function CreateScreen() {
         >
           {/* Community Selector */}
           <Link href={"groupSelector"} asChild>
-            <Pressable style={styles.communityContainer}>
+            <Pressable style={styles.communityContainer} disabled={isPosting}>
               {group ? (
                 <>
                   <Image
@@ -294,6 +355,7 @@ export default function CreateScreen() {
                   scrollEnabled={false}
                   selectionColor={COLORS.button}
                   maxLength={300}
+                  editable={!isPosting}
                 />
               </View>
 
@@ -315,6 +377,7 @@ export default function CreateScreen() {
                   multiline
                   scrollEnabled={false}
                   selectionColor={COLORS.button}
+                  editable={!isPosting}
                 />
               </View>
 
@@ -329,6 +392,7 @@ export default function CreateScreen() {
                   <Pressable
                     onPress={() => setPostImage(null)}
                     style={styles.removeImageButton}
+                    disabled={isPosting}
                   >
                     <Ionicons name="close-circle" size={28} color="#fff" />
                   </Pressable>
@@ -337,6 +401,7 @@ export default function CreateScreen() {
                 <Pressable
                   onPress={pickPostImage}
                   style={styles.addImageButton}
+                  disabled={isPosting}
                 >
                   <Ionicons
                     name="image-outline"
@@ -371,6 +436,7 @@ export default function CreateScreen() {
                   scrollEnabled={false}
                   selectionColor={COLORS.button}
                   maxLength={300}
+                  editable={!isPosting}
                 />
               </View>
 
@@ -386,6 +452,7 @@ export default function CreateScreen() {
                         <Pressable
                           onPress={() => removePollOption(option.id)}
                           hitSlop={10}
+                          disabled={isPosting}
                         >
                           <MaterialIcons
                             name="delete-outline"
@@ -404,6 +471,7 @@ export default function CreateScreen() {
                       onChangeText={(text) => updatePollOption(option.id, text)}
                       selectionColor={COLORS.button}
                       maxLength={100}
+                      editable={!isPosting}
                     />
 
                     {/* Option Image */}
@@ -417,6 +485,7 @@ export default function CreateScreen() {
                         <Pressable
                           onPress={() => removePollOptionImage(option.id)}
                           style={styles.removePollImageButton}
+                          disabled={isPosting}
                         >
                           <Ionicons
                             name="close-circle"
@@ -429,6 +498,7 @@ export default function CreateScreen() {
                       <Pressable
                         onPress={() => pickPollOptionImage(option.id)}
                         style={styles.addPollImageButton}
+                        disabled={isPosting}
                       >
                         <Ionicons
                           name="image-outline"
@@ -448,6 +518,7 @@ export default function CreateScreen() {
                   <Pressable
                     onPress={addPollOption}
                     style={styles.addOptionButton}
+                    disabled={isPosting}
                   >
                     <Ionicons
                       name="add-circle-outline"
@@ -471,6 +542,7 @@ export default function CreateScreen() {
                     <Pressable
                       key={duration.value}
                       onPress={() => setPollDuration(duration.value)}
+                      disabled={isPosting}
                       style={[
                         styles.durationButton,
                         pollDuration === duration.value &&
