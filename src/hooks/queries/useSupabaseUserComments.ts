@@ -6,10 +6,10 @@ export function useSupabaseUserComments(userId: string) {
   return useQuery({
     queryKey: ["user-comments", userId],
     queryFn: async () => {
-      console.log("🔍 Fetching comments for user:", userId);
+      //   console.log("🔍 Fetching comments for user:", userId);
 
       if (!userId) {
-        console.log("⚠️ No userId provided");
+        // console.log("⚠️ No userId provided");
         return [];
       }
 
@@ -24,7 +24,7 @@ export function useSupabaseUserComments(userId: string) {
         throw error;
       }
 
-      console.log("✅ Fetched user comments:", data?.length || 0);
+      //   console.log("✅ Fetched user comments:", data?.length || 0);
 
       // Transform to Comment type
       const comments: Comment[] = (data || []).map((c: any) => ({
@@ -40,7 +40,7 @@ export function useSupabaseUserComments(userId: string) {
           name: c.full_name || c.username || "Unknown",
           image: c.user_image || null,
         },
-        replies: [], // Don't show nested replies in profile view
+        replies: [], // No showing nested replies in profile screen
       }));
 
       return comments;

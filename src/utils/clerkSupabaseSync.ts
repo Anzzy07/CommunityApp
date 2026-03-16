@@ -2,7 +2,6 @@ import { supabase } from "@/src/lib/supabase";
 import type { UserResource } from "@clerk/types";
 
 // Syncs Clerk user data to Supabase users table
-
 export async function syncClerkUserToSupabase(clerkUser: UserResource) {
   try {
     const { id, emailAddresses, username, firstName, lastName, imageUrl } =
@@ -27,7 +26,7 @@ export async function syncClerkUserToSupabase(clerkUser: UserResource) {
       return { success: false, error };
     }
 
-    console.log("✅ User synced to Supabase:", userData.username);
+    console.log("🖼️ Welcome :", userData.username);
     return { success: true, user: userData };
   } catch (err) {
     console.error("Error in syncClerkUserToSupabase:", err);

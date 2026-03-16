@@ -6,8 +6,6 @@ export function useSupabaseUserCommunities(userId: string) {
   return useQuery({
     queryKey: ["user-communities", userId],
     queryFn: async () => {
-      console.log("🔍 Fetching communities for user:", userId);
-
       if (!userId) {
         return [];
       }
@@ -40,7 +38,7 @@ export function useSupabaseUserCommunities(userId: string) {
         throw groupsError;
       }
 
-      console.log("✅ Fetched user communities:", groups?.length || 0);
+      // console.log("Fetched user communities:", groups?.length || 0);
 
       const communities: Group[] = (groups || []).map((g) => ({
         id: g.id,

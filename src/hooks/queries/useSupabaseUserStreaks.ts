@@ -2,13 +2,13 @@ import { supabase } from "@/src/lib/supabase";
 import { UserStreak } from "@/src/types";
 import { useQuery } from "@tanstack/react-query";
 
-// Get all user streaks (for general use)
+// Get all user streaks
 export function useSupabaseUserStreaks(userId?: string) {
   return useQuery({
     queryKey: userId ? ["user-streak", userId] : ["user-streaks"],
     queryFn: async () => {
       if (userId) {
-        // If userId is provided, get that specific user's streak
+        // If userId is provided, get the users streak
         console.log("🔍 Fetching streak for user:", userId);
 
         const { data, error } = await supabase
@@ -19,14 +19,14 @@ export function useSupabaseUserStreaks(userId?: string) {
 
         if (error) {
           if (error.code === "PGRST116") {
-            console.log("⚠️ No streak found for user");
+            // console.log(" No streak found for user");
             return null;
           }
           console.error("❌ Error fetching streak:", error);
           throw error;
         }
 
-        console.log("✅ Fetched streak:", data);
+        // console.log(" Fetched streak:", data);
 
         const streak: UserStreak = {
           user_id: data.user_id,

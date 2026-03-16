@@ -33,7 +33,6 @@ export default function SupabaseImage({
 
     // Check if it's already a full URL (external image)
     if (path.startsWith("http://") || path.startsWith("https://")) {
-      console.log("📸 External image URL detected:", path);
       setImageUri(path);
       setLoading(false);
       return;

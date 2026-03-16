@@ -7,7 +7,7 @@ export function useSupabaseGroupMessages(groupId: string) {
   return useQuery({
     queryKey: ["group-messages", groupId],
     queryFn: async () => {
-      console.log("🔍 Fetching messages for group:", groupId);
+      // console.log("Fetching messages for group:", groupId);
 
       const { data, error } = await supabase
         .from("group_messages")
@@ -30,7 +30,7 @@ export function useSupabaseGroupMessages(groupId: string) {
         throw error;
       }
 
-      console.log("✅ Fetched messages count:", data?.length || 0);
+      // console.log("Fetched messages count:", data?.length || 0);
 
       // Transform the data
       const messages: GroupMessage[] = (data || []).map((msg: any) => {
@@ -71,8 +71,6 @@ export function useGroupMessagesSubscription(
 ) {
   useEffect(() => {
     if (!groupId) return;
-
-    console.log("📡 Setting up real-time subscription for group:", groupId);
 
     const channel = supabase
       .channel(`group-messages:${groupId}`)

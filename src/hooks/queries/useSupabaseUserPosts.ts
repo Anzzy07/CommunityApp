@@ -9,7 +9,6 @@ export function useSupabaseUserPosts(userId: string) {
       console.log("🔍 Fetching posts for user:", userId);
 
       if (!userId) {
-        console.log("⚠️ No userId provided");
         return [];
       }
 
@@ -24,7 +23,7 @@ export function useSupabaseUserPosts(userId: string) {
         throw error;
       }
 
-      console.log("✅ Fetched user posts:", data?.length || 0);
+      // console.log("Fetched user posts:", data?.length || 0);
 
       // Transform the data to match Post type
       const posts: Post[] = (data || []).map((post: any) => ({

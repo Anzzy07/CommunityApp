@@ -6,10 +6,10 @@ export function useSupabaseGroupMembers(userId: string) {
   return useQuery({
     queryKey: ["group-members", userId],
     queryFn: async () => {
-      console.log("🔍 Fetching group members for user:", userId);
+      // console.log("Fetching group members for user:", userId);
 
       if (!userId) {
-        console.log("⚠️ No userId provided");
+        // console.log("No userId provided");
         return [];
       }
 
@@ -23,7 +23,7 @@ export function useSupabaseGroupMembers(userId: string) {
         throw error;
       }
 
-      console.log("✅ Fetched group members:", data);
+      // console.log("Fetched group members:", data);
 
       const members: GroupMember[] = (data || []).map((m) => ({
         id: m.id,
@@ -32,7 +32,6 @@ export function useSupabaseGroupMembers(userId: string) {
         joined_at: m.joined_at,
       }));
 
-      console.log("✅ Transformed members:", members);
       return members;
     },
     enabled: !!userId,

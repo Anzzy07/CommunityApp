@@ -16,13 +16,6 @@ export function useSyncUserToSupabase() {
       username?: string | null;
       imageUrl?: string | null;
     }) => {
-      console.log("🔄 Syncing user to Supabase:", {
-        userId,
-        email,
-        fullName,
-        username,
-      });
-
       const { error } = await supabase.from("users").upsert(
         {
           id: userId,
@@ -46,7 +39,7 @@ export function useSyncUserToSupabase() {
         throw error;
       }
 
-      console.log("✅ User synced to Supabase successfully");
+      // console.log("User synced to Supabase successfully");
     },
   });
 }

@@ -5,8 +5,6 @@ export function useSupabaseUserStats(userId: string) {
   return useQuery({
     queryKey: ["user-stats", userId],
     queryFn: async () => {
-      console.log("📊 Fetching stats for user:", userId);
-
       if (!userId) {
         return { totalPosts: 0, totalUpvotes: 0, totalComments: 0 };
       }
@@ -44,11 +42,11 @@ export function useSupabaseUserStats(userId: string) {
         console.error("❌ Error fetching comments count:", commentsError);
       }
 
-      console.log("✅ User stats:", {
-        totalPosts: postsCount || 0,
-        totalUpvotes,
-        totalComments: commentsCount || 0,
-      });
+      // console.log(" User stats:", {
+      //   totalPosts: postsCount || 0,
+      //   totalUpvotes,
+      //   totalComments: commentsCount || 0,
+      // });
 
       return {
         totalPosts: postsCount || 0,

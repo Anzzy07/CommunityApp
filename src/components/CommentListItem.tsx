@@ -42,7 +42,7 @@ const CommentListItem = ({
 }: CommentListItemProps) => {
   const { user } = useUser();
 
-  // Source of truth from React Query cache — no local state copies needed
+  // Source of truth from React Query cache
   const { data: voteStatus } = useUserCommentVote(comment.id, user?.id);
   const { data: userHasAwarded } = useUserCommentAward(comment.id, user?.id);
 
@@ -51,7 +51,7 @@ const CommentListItem = ({
   const editMutation = useEditComment();
   const deleteMutation = useDeleteComment();
 
-  // Only UI state lives locally — not data state
+  // Only UI state lives locally
   const [showReplies, setShowReplies] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(comment.comment);
@@ -159,7 +159,7 @@ const CommentListItem = ({
                 commentId: comment.id,
                 postId: comment.post_id,
               });
-              // No alert needed — comment disappears immediately from the list
+              // No alert needed, comment disappears immediately from the list
             } catch (error: any) {
               console.error("Delete error:", JSON.stringify(error));
               Alert.alert(
