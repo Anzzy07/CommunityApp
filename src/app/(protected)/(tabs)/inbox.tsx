@@ -1,13 +1,18 @@
-import { notificationsAtom } from "@/src/atoms/NotificationAtom";
 import { COLORS } from "@/src/colors";
 import NotificationListItem from "@/src/components/NotificationListItem";
+import {
+  useMarkAllNotificationsRead,
+  useMarkNotificationRead,
+} from "@/src/hooks/mutations/useNotificationMutations";
+import { useSupabaseNotifications } from "@/src/hooks/queries/useSupabaseNotifications";
 import { Notification } from "@/src/types";
 import { clearBadge, setBadgeCount } from "@/src/utils/notificationService";
+import { useUser } from "@clerk/clerk-expo";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
-import { useAtom } from "jotai";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   Platform,
   Pressable,
@@ -19,10 +24,17 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 type FilterType = "all" | "unread";
 
-// Main inbox screen displaying all notifications with filtering and actions
 export default function InboxScreen() {
-  const [notifications, setNotifications] = useAtom(notificationsAtom);
+  const { user } = useUser();
   const [filter, setFilter] = useState<FilterType>("all");
+
+  const {
+    data: notifications = [],
+    isLoading,
+    refetch,
+  } = useSupabaseNotifications(user?.id || "");
+  const markReadMutation = useMarkNotificationRead();
+  const markAllReadMutation = useMarkAllNotificationsRead();
 
   // Clears badge when screen is focused
   useFocusEffect(
@@ -32,7 +44,7 @@ export default function InboxScreen() {
   );
 
   // Updates badge count when notifications change
-  React.useEffect(() => {
+  useEffect(() => {
     const unreadCount = notifications.filter((n) => !n.is_read).length;
     if (Platform.OS === "ios") {
       setBadgeCount(unreadCount);
@@ -92,11 +104,11 @@ export default function InboxScreen() {
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
   // Marks notification as read and navigates to relevant screen
-  const handlePress = (id: string, type: string, ref: string) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)),
-    );
+  const handlePress = async (id: string, type: string, ref: string) => {
+    // Mark as read in Supabase
+    await markReadMutation.mutateAsync(id);
 
+    // Navigate based on type
     if (type === "comment" || type === "post" || type === "poll") {
       router.push(`/post/${ref}`);
     }
@@ -109,13 +121,14 @@ export default function InboxScreen() {
   };
 
   // Removes notification from the list
-  const handleDelete = (id: string) => {
-    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  const handleDelete = async (id: string) => {
+    // Already handled in NotificationListItem via useDeleteNotification
   };
 
   // Marks all notifications as read
-  const handleMarkAllRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+  const handleMarkAllRead = async () => {
+    if (!user?.id) return;
+    await markAllReadMutation.mutateAsync(user.id);
     clearBadge();
   };
 
@@ -220,6 +233,7 @@ export default function InboxScreen() {
           <Pressable
             onPress={handleMarkAllRead}
             style={styles.markAsReadButton}
+            disabled={markAllReadMutation.isPending}
           >
             <MaterialCommunityIcons
               name="check-all"
@@ -234,25 +248,36 @@ export default function InboxScreen() {
   );
 
   // Renders empty state when no notifications
-  const renderEmpty = () => (
-    <View style={styles.emptyContainer}>
-      <View style={styles.emptyIconContainer}>
-        <MaterialCommunityIcons
-          name="bell-outline"
-          size={64}
-          color={COLORS.textSecondary}
-        />
+  const renderEmpty = () => {
+    if (isLoading) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Loading notifications...</Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.emptyContainer}>
+        <View style={styles.emptyIconContainer}>
+          <MaterialCommunityIcons
+            name="bell-outline"
+            size={64}
+            color={COLORS.textSecondary}
+          />
+        </View>
+        <Text style={styles.emptyTitle}>
+          {filter === "unread" ? "All caught up!" : "No notifications yet"}
+        </Text>
+        <Text style={styles.emptySubtitle}>
+          {filter === "unread"
+            ? "You've read all your notifications"
+            : "We'll notify you when something happens"}
+        </Text>
       </View>
-      <Text style={styles.emptyTitle}>
-        {filter === "unread" ? "All caught up!" : "No notifications yet"}
-      </Text>
-      <Text style={styles.emptySubtitle}>
-        {filter === "unread"
-          ? "You've read all your notifications"
-          : "We'll notify you when something happens"}
-      </Text>
-    </View>
-  );
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={["bottom"]}>
@@ -268,6 +293,8 @@ export default function InboxScreen() {
         ListEmptyComponent={renderEmpty}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
+        onRefresh={refetch}
+        refreshing={isLoading}
       />
     </SafeAreaView>
   );
@@ -368,6 +395,17 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     textTransform: "uppercase",
     letterSpacing: 0.5,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 80,
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 15,
+    color: COLORS.textSecondary,
   },
   emptyContainer: {
     flex: 1,

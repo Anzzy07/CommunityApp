@@ -1,9 +1,10 @@
 import { COLORS } from "@/src/colors";
+import { useDeleteNotification } from "@/src/hooks/mutations/useNotificationMutations";
 import { Notification, NotificationType } from "@/src/types";
 import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { formatDistanceToNowStrict } from "date-fns";
 import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import Swipeable from "react-native-gesture-handler/ReanimatedSwipeable";
 import type { SharedValue } from "react-native-reanimated";
 import Animated, {
@@ -14,7 +15,7 @@ import Animated, {
 type Props = {
   notification: Notification;
   onPress: () => void;
-  onDelete: () => void;
+  onDelete?: () => void;
 };
 
 // Returns icon configuration based on notification type
@@ -71,8 +72,18 @@ export default function NotificationListItem({
   onPress,
   onDelete,
 }: Props) {
+  const deleteMutation = useDeleteNotification();
   const iconConfig = getNotificationIcon(notification.type);
   const { IconComponent, name, backgroundColor, iconColor } = iconConfig;
+
+  const handleDelete = async () => {
+    try {
+      await deleteMutation.mutateAsync(notification.id);
+      if (onDelete) onDelete();
+    } catch (error) {
+      Alert.alert("Error", "Failed to delete notification");
+    }
+  };
 
   // Renders the delete action when swiping left
   const renderRightActions = (
@@ -86,7 +97,7 @@ export default function NotificationListItem({
 
     return (
       <Animated.View style={[styles.deleteContainer, animatedStyle]}>
-        <Pressable onPress={onDelete} style={styles.deleteButton}>
+        <Pressable onPress={handleDelete} style={styles.deleteButton}>
           <MaterialCommunityIcons
             name="trash-can-outline"
             size={24}
