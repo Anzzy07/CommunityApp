@@ -9,8 +9,10 @@ export type User = {
 export type Group = {
   id: string;
   name: string;
-  image: string;
+  image: string | null;
   leader_id?: string;
+  description?: string | null;
+  member_count?: number;
 };
 
 // POST
@@ -54,6 +56,7 @@ export type GroupMessage = {
   group_id: string;
   user: User;
   message: string;
+  image_url?: string | null;
   created_at: string | null;
   reply_to?: {
     id: string;

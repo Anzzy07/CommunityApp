@@ -1,16 +1,22 @@
-import posts from "@/assets/data/posts.json";
-import userStreaks from "@/assets/data/userStreaks.json";
 import { COLORS } from "@/src/colors";
+
 import PostListItem from "@/src/components/PostListItem";
+import CommentListItemSimple from "@/src/components/profile/CommentListItemSimple";
 import CommunitiesGrid from "@/src/components/profile/CommunityGrid";
 import ProfileHeader from "@/src/components/profile/ProfileHeader";
 import ProfileTabs, { TabType } from "@/src/components/profile/ProfileTabs";
-import { Post } from "@/src/types";
+import { useSupabaseUserComments } from "@/src/hooks/queries/useSupabaseUserComments";
+import { useSupabaseUserCommunities } from "@/src/hooks/queries/useSupabaseUserCommunities";
+import { useSupabaseUserPosts } from "@/src/hooks/queries/useSupabaseUserPosts";
+import { useSupabaseUserStats } from "@/src/hooks/queries/useSupabaseUserStats";
+import { useSupabaseUserStreaks } from "@/src/hooks/queries/useSupabaseUserStreaks";
+import { Comment, Post } from "@/src/types";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import { AntDesign, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   Pressable,
@@ -21,47 +27,35 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function ProfileScreen() {
-  // Get userId from URL params - if viewing another user's profile
   const { userId } = useLocalSearchParams<{ userId?: string }>();
-
-  // Get current logged-in user from Clerk
   const { user } = useUser();
-
-  // Get sign out function from Clerk
   const { signOut } = useAuth();
-
-  // Navigation router
   const router = useRouter();
-
-  // Safe area insets for notch/status bar handling
   const insets = useSafeAreaInsets();
 
-  // Track which tab is currently active (posts/comments/communities)
   const [activeTab, setActiveTab] = useState<TabType>("posts");
 
-  // Determine if viewing own profile or another user's
-  // If no userId param, it's own profile
   const isOwnProfile = !userId || userId === user?.id;
+  const profileUserId = userId || user?.id || "";
 
-  // Get the profile user ID (own or other user)
-  const profileUserId = userId || user?.id;
+  // Fetch data from Supabase
+  const { data: userPosts = [], isLoading: postsLoading } =
+    useSupabaseUserPosts(profileUserId);
+  const { data: userComments = [], isLoading: commentsLoading } =
+    useSupabaseUserComments(profileUserId);
+  const { data: userStats, isLoading: statsLoading } =
+    useSupabaseUserStats(profileUserId);
+  const { data: userStreak, isLoading: streakLoading } =
+    useSupabaseUserStreaks(profileUserId);
+  const { data: joinedCommunities = [], isLoading: communitiesLoading } =
+    useSupabaseUserCommunities(profileUserId);
 
-  // Filter posts to show only posts by this user
-  const userPosts = posts.filter((post) => post.user.id === profileUserId);
-
-  // Find this user's streak data
-  const userStreak = userStreaks.find((s) => s.user_id === profileUserId);
-
-  // Get unique communities this user has posted in
-  const joinedCommunities = [
-    ...new Set(userPosts.map((post) => post.group)),
-  ].slice(0, 6); // Limit to 6 communities
-
-  // Calculate total posts count
-  const totalPosts = userPosts.length;
-
-  // Calculate total upvotes across all user's posts
-  const totalUpvotes = userPosts.reduce((sum, post) => sum + post.upvotes, 0);
+  const isLoading =
+    postsLoading ||
+    commentsLoading ||
+    statsLoading ||
+    streakLoading ||
+    communitiesLoading;
 
   const handleSignOut = () => {
     Alert.alert("Sign Out", "Are you sure you want to sign out?", [
@@ -70,25 +64,25 @@ export default function ProfileScreen() {
         text: "Sign Out",
         style: "destructive",
         onPress: async () => {
-          await signOut(); // Sign out from Clerk
-          router.replace("/signIn"); // Navigate to sign in screen
+          await signOut();
+          router.replace("/signIn");
         },
       },
     ]);
   };
 
   const handleEditProfile = () => {
-    router.push("/editProfile"); // Navigate to Edit Profile screen
+    router.push("/editProfile");
   };
 
-  const getTabData = (): Post[] => {
+  const getTabData = (): (Post | Comment)[] => {
     switch (activeTab) {
       case "posts":
-        return userPosts; // Show user's posts
+        return userPosts;
       case "comments":
-        return []; // Implementing comments data
+        return userComments;
       case "communities":
-        return []; // Communities use custom grid component
+        return [];
       default:
         return [];
     }
@@ -96,41 +90,52 @@ export default function ProfileScreen() {
 
   const renderListHeader = () => (
     <>
-      {/* Profile information section */}
       <ProfileHeader
         user={user}
-        userStreak={userStreak}
-        totalPosts={totalPosts}
-        totalUpvotes={totalUpvotes}
+        userStreak={
+          userStreak &&
+          typeof userStreak === "object" &&
+          "user_id" in userStreak
+            ? userStreak
+            : undefined
+        }
+        totalPosts={userStats?.totalPosts || 0}
+        totalUpvotes={userStats?.totalUpvotes || 0}
         communitiesCount={joinedCommunities.length}
         isOwnProfile={isOwnProfile}
         onEditProfile={handleEditProfile}
       />
-      {/* Tab navigation (Posts/Comments/Communities) */}
       <ProfileTabs activeTab={activeTab} onTabChange={setActiveTab} />
     </>
   );
 
   const renderListFooter = () => {
     if (activeTab === "communities") {
-      return <CommunitiesGrid communities={joinedCommunities} />;
+      return <CommunitiesGrid communities={joinedCommunities.slice(0, 6)} />;
     }
     return null;
   };
 
   const renderEmptyComponent = () => {
-    // Communities tab has its own empty state in the grid
     if (activeTab === "communities") {
       return null;
     }
 
-    // Set icon and text based on tab
+    if (isLoading) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Loading...</Text>
+        </View>
+      );
+    }
+
     let icon: "post-outline" | "comment-outline" = "post-outline";
     let text = "No posts yet";
 
     if (activeTab === "comments") {
       icon = "comment-outline";
-      text = "Comments will appear here";
+      text = "No comments yet";
     }
 
     return (
@@ -145,43 +150,44 @@ export default function ProfileScreen() {
     );
   };
 
-  const renderPostItem = ({ item }: { item: Post }) => (
-    <PostListItem post={item} showJoinButton={false} />
-  );
+  const renderItem = ({ item }: { item: Post | Comment }) => {
+    // Check if it's a Post or Comment
+    if ("title" in item) {
+      // if it's a Post then
+      return <PostListItem post={item} showJoinButton={false} />;
+    } else {
+      // if it's a Comment then
+      return <CommentListItemSimple comment={item} />;
+    }
+  };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Custom Header with back button and sign out */}
       <View style={styles.header}>
-        {/* Back button */}
         <Pressable onPress={() => router.back()} hitSlop={10}>
           <AntDesign name="left" size={24} color="white" />
         </Pressable>
 
-        {/* Title */}
         <Text style={styles.headerTitle}>Profile</Text>
 
-        {/* Sign out button only for users own profile */}
         {isOwnProfile && (
           <Pressable onPress={handleSignOut} hitSlop={10}>
             <Feather name="log-out" size={22} color="white" />
           </Pressable>
         )}
 
-        {/* Spacer for alignment when viewing other profiles */}
         {!isOwnProfile && <View style={{ width: 22 }} />}
       </View>
 
-      {/* Uses FlatList for scrolling */}
       <FlatList
-        data={getTabData()} // Posts or empty array based on tab
-        keyExtractor={(item) => item.id} // Unique key for each item
-        renderItem={renderPostItem} // How to render each post
-        ListHeaderComponent={renderListHeader} // Profile info + tabs at top
-        ListFooterComponent={renderListFooter} // Communities grid at bottom (if active)
-        ListEmptyComponent={renderEmptyComponent} // Empty state when no data
+        data={getTabData()}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        ListHeaderComponent={renderListHeader}
+        ListFooterComponent={renderListFooter}
+        ListEmptyComponent={renderEmptyComponent}
         contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false} // Hide scroll indicator
+        showsVerticalScrollIndicator={false}
       />
     </View>
   );
@@ -207,6 +213,15 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     flexGrow: 1,
+  },
+  loadingContainer: {
+    paddingVertical: 60,
+    alignItems: "center",
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 15,
+    color: COLORS.textSecondary,
   },
   emptyState: {
     alignItems: "center",

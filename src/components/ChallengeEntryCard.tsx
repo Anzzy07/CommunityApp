@@ -6,6 +6,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { formatDistanceToNowStrict } from "date-fns";
 import React from "react";
 import { Alert, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import SupabaseImage from "./SupabaseImage";
 
 type ChallengeEntry = {
   id: string;
@@ -117,7 +118,7 @@ export default function ChallengeEntryCard({ entry, onDelete }: Props) {
 
       {/* Image */}
       {entry.image_url && (
-        <Image source={{ uri: entry.image_url }} style={styles.image} />
+        <SupabaseImage path={entry.image_url} style={styles.image} />
       )}
 
       {/*  Votes */}

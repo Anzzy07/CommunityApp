@@ -1,4 +1,5 @@
 import { COLORS } from "@/src/colors";
+import SupabaseImage from "@/src/components/SupabaseImage";
 import { GroupMessage } from "@/src/types";
 import { formatDistanceToNowStrict } from "date-fns";
 import React from "react";
@@ -9,8 +10,8 @@ type Props = {
   isMe: boolean;
   isMember: boolean;
   onReply: (msg: GroupMessage) => void;
-  showAvatar?: boolean; // Show avatar only for the last message in a group
-  showUsername?: boolean; // Show username only for the first message in a group
+  showAvatar?: boolean;
+  showUsername?: boolean;
 };
 
 export default function ChatMessageItem({
@@ -78,6 +79,12 @@ export default function ChatMessageItem({
         <Text style={[styles.messageText, isMe && styles.myMessageText]}>
           {item.message}
         </Text>
+
+        {/* MESSAGE IMAGE  */}
+
+        {item.image_url && (
+          <SupabaseImage path={item.image_url} style={styles.messageImage} />
+        )}
 
         {/* TIMESTAMP */}
         <Text style={[styles.time, isMe && styles.myTime]}>
@@ -163,6 +170,13 @@ const styles = StyleSheet.create({
   },
   myMessageText: {
     color: "white",
+  },
+
+  messageImage: {
+    width: "100%",
+    height: 200,
+    borderRadius: 8,
+    marginTop: 8,
   },
   time: {
     fontSize: 11,

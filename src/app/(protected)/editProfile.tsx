@@ -1,4 +1,5 @@
 import { COLORS } from "@/src/colors";
+import { useSyncUserToSupabase } from "@/src/hooks/mutations/useUserMutations";
 import { imageUriToClerkFile } from "@/src/utils/imageUtils";
 import { useUser } from "@clerk/clerk-expo";
 import { AntDesign, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -23,6 +24,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 export default function EditProfileScreen() {
   const { user } = useUser();
   const router = useRouter();
+  const syncUserMutation = useSyncUserToSupabase();
 
   const [fullName, setFullName] = useState(user?.fullName || "");
   const [username, setUsername] = useState(user?.username || "");
@@ -35,6 +37,18 @@ export default function EditProfileScreen() {
     try {
       const blob = await imageUriToClerkFile(imageUri);
       await user?.setProfileImage({ file: blob });
+
+      // Sync to Supabase after upload
+      if (user?.id && user?.emailAddresses[0]?.emailAddress) {
+        await syncUserMutation.mutateAsync({
+          userId: user.id,
+          email: user.emailAddresses[0].emailAddress,
+          fullName: user.fullName,
+          username: user.username,
+          imageUrl: user.imageUrl,
+        });
+      }
+
       setProfileImage(imageUri);
       Alert.alert("Success", "Profile picture updated!");
     } catch (error) {
@@ -57,7 +71,7 @@ export default function EditProfileScreen() {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
+      mediaTypes: "images",
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
@@ -112,11 +126,23 @@ export default function EditProfileScreen() {
     setIsSaving(true);
 
     try {
+      // Update Clerk
       await user?.update({
         firstName: fullName.split(" ")[0],
         lastName: fullName.split(" ").slice(1).join(" ") || undefined,
         username: username,
       });
+
+      // Sync to Supabase
+      if (user?.id && user?.emailAddresses[0]?.emailAddress) {
+        await syncUserMutation.mutateAsync({
+          userId: user.id,
+          email: user.emailAddresses[0].emailAddress,
+          fullName: fullName,
+          username: username,
+          imageUrl: user.imageUrl,
+        });
+      }
 
       Alert.alert("Success", "Profile updated successfully!", [
         {
@@ -271,6 +297,7 @@ export default function EditProfileScreen() {
   );
 }
 
+// ... keep all the existing styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,

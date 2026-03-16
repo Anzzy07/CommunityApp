@@ -31,6 +31,15 @@ export default function SupabaseImage({
       return;
     }
 
+    // Check if it's already a full URL (external image)
+    if (path.startsWith("http://") || path.startsWith("https://")) {
+      console.log("📸 External image URL detected:", path);
+      setImageUri(path);
+      setLoading(false);
+      return;
+    }
+
+    // It's a Supabase Storage path - download it
     const loadImage = async () => {
       try {
         setLoading(true);
@@ -38,7 +47,7 @@ export default function SupabaseImage({
         const uri = await downloadImage(path);
         setImageUri(uri);
       } catch (err) {
-        console.error("Failed to load image:", err);
+        console.error("Failed to load image from storage:", err);
         setError(true);
       } finally {
         setLoading(false);
@@ -50,7 +59,16 @@ export default function SupabaseImage({
 
   if (loading) {
     return (
-      <View style={[style, { justifyContent: "center", alignItems: "center" }]}>
+      <View
+        style={[
+          style,
+          {
+            justifyContent: "center",
+            alignItems: "center",
+            backgroundColor: "#f0f0f0",
+          },
+        ]}
+      >
         <ActivityIndicator size="small" color="#999" />
       </View>
     );
@@ -60,5 +78,5 @@ export default function SupabaseImage({
     return <Image source={{ uri: fallbackUri }} style={style} />;
   }
 
-  return <Image source={{ uri: imageUri }} style={style} />;
+  return <Image source={{ uri: imageUri }} style={style} resizeMode="cover" />;
 }

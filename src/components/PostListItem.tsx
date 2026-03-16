@@ -9,7 +9,7 @@ import {
   useUserPostAward,
   useUserPostVote,
 } from "@/src/hooks/mutations/useUserVotes";
-import { useSupabaseUserStreaks } from "@/src/hooks/queries/useSupabaseUserStreaks";
+import { useSupabaseUserStreak } from "@/src/hooks/queries/useSupabaseUserStreaks";
 import { Post } from "@/src/types";
 import { useUser } from "@clerk/clerk-expo";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -17,6 +17,7 @@ import { formatDistanceToNowStrict } from "date-fns";
 import { Link } from "expo-router";
 import React, { memo } from "react";
 import { Alert, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import SupabaseImage from "./SupabaseImage";
 
 type PostListItemProps = {
   post: Post;
@@ -33,8 +34,8 @@ function PostListItem({
 }: PostListItemProps) {
   const { user } = useUser();
 
-  // Fetch user streaks from Supabase
-  const { data: userStreaks = [] } = useSupabaseUserStreaks();
+  // Fetch streak for this post's author
+  const { data: streak } = useSupabaseUserStreak(post.user.id);
 
   // cache
   const { data: voteStatus } = useUserPostVote(post.id, user?.id);
@@ -49,9 +50,6 @@ function PostListItem({
   const upvotes = post.upvotes ?? 0;
   const awarded = hasAwarded ?? false;
   const currentVote = voteStatus ?? null;
-
-  // Find streak for this post's author
-  const streak = userStreaks.find((s) => s.user_id === post.user.id);
 
   const handleUpvote = async () => {
     if (!user?.id) {
@@ -140,7 +138,10 @@ function PostListItem({
   const PostContent = (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Image source={{ uri: post.group.image }} style={styles.groupImage} />
+        <Image
+          source={{ uri: post.group.image || "https://via.placeholder.com/20" }}
+          style={styles.groupImage}
+        />
 
         <View style={styles.headerInfo}>
           <View style={styles.headerRow}>
@@ -175,7 +176,7 @@ function PostListItem({
       <Text style={styles.title}>{post.title}</Text>
 
       {post.image && (
-        <Image source={{ uri: post.image }} style={styles.postImage} />
+        <SupabaseImage path={post.image} style={styles.postImage} />
       )}
 
       {post.description && (
