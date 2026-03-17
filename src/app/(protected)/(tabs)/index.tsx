@@ -1,10 +1,10 @@
-import { groupMembersAtom } from "@/src/atoms/GroupMembersAtom";
 import { COLORS } from "@/src/colors";
+import PollListItem from "@/src/components/PollListItem";
 import PostListItem from "@/src/components/PostListItem";
+import { useSupabaseGroupMembers } from "@/src/hooks/queries/useSupabaseGroupMembers";
 import { useSupabasePosts } from "@/src/hooks/queries/useSupabasePosts";
 import { useUser } from "@clerk/clerk-expo";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useAtomValue } from "jotai";
 import React from "react";
 import {
   ActivityIndicator,
@@ -18,7 +18,6 @@ import {
 // Main home feed screen displaying all posts with pull-to-refresh using React Query
 export default function HomeScreen() {
   const { user } = useUser();
-  const groupMembers = useAtomValue(groupMembersAtom);
 
   // Fetch posts from Supabase with React Query
   const {
@@ -29,18 +28,24 @@ export default function HomeScreen() {
     isRefetching,
   } = useSupabasePosts();
 
+  // Fetch group memberships from Supabase
+  const { data: groupMembers = [] } = useSupabaseGroupMembers(user?.id || "");
+
   // Checks if user is a member of the given community
   const isJoined = (groupId: string) => {
     if (!user?.id) return false;
-    return groupMembers.some(
-      (m) => m.group_id === groupId && m.user_id === user.id,
-    );
+    return groupMembers.some((m) => m.group_id === groupId);
   };
 
   // Renders individual post item with synced join status
-  const renderPost = ({ item }: { item: (typeof posts)[0] }) => (
-    <PostListItem post={item} isJoined={isJoined(item.group.id)} />
-  );
+  const renderPost = ({ item }: { item: (typeof posts)[0] }) => {
+    // Use PollListItem if post has a poll
+    if (item.poll) {
+      return <PollListItem post={item} isJoined={isJoined(item.group.id)} />;
+    }
+
+    return <PostListItem post={item} isJoined={isJoined(item.group.id)} />;
+  };
 
   // Renders empty state when there are no posts
   const renderEmpty = () => (

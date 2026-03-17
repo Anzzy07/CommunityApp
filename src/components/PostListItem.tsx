@@ -466,10 +466,13 @@ const styles = StyleSheet.create({
 });
 
 export default memo(PostListItem, (prevProps, nextProps) => {
+  // Only re-render if these specific values change
   return (
     prevProps.post.id === nextProps.post.id &&
     prevProps.post.upvotes === nextProps.post.upvotes &&
     prevProps.post.nr_of_comments === nextProps.post.nr_of_comments &&
-    prevProps.isJoined === nextProps.isJoined
+    prevProps.post.created_at === nextProps.post.created_at &&
+    prevProps.isJoined === nextProps.isJoined &&
+    prevProps.isDetailedPost === nextProps.isDetailedPost
   );
 });

@@ -1,14 +1,13 @@
-import { groupMembersAtom } from "@/src/atoms/GroupMembersAtom";
 import { COLORS } from "@/src/colors";
 import CommentListItem from "@/src/components/CommentListItem";
+import PollListItem from "@/src/components/PollListItem";
 import PostListItem from "@/src/components/PostListItem";
 import { useCreateComment } from "@/src/hooks/mutations/useCommentMutations";
+import { useSupabaseGroupMembers } from "@/src/hooks/queries/useSupabaseGroupMembers";
 import { useSupabasePostDetails } from "@/src/hooks/queries/useSupabasePostDetails";
-
 import { useUser } from "@clerk/clerk-expo";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useLocalSearchParams } from "expo-router";
-import { useAtomValue } from "jotai";
 import React, { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -29,7 +28,6 @@ export default function DetailedPost() {
   const { id } = useLocalSearchParams();
   const insets = useSafeAreaInsets();
   const { user } = useUser();
-  const groupMembers = useAtomValue(groupMembersAtom);
 
   const [comment, setComment] = useState("");
   const [replyingTo, setReplyingTo] = useState<{
@@ -42,6 +40,9 @@ export default function DetailedPost() {
 
   // Fetch post and comments from Supabase
   const { data, isLoading, error } = useSupabasePostDetails(id as string);
+
+  // Fetch group memberships from Supabase
+  const { data: groupMembers = [] } = useSupabaseGroupMembers(user?.id || "");
 
   // Create comment mutation
   const createCommentMutation = useCreateComment();
@@ -90,9 +91,7 @@ export default function DetailedPost() {
 
   // Checks if user is a member of the post community
   const isJoined = data?.post
-    ? groupMembers.some(
-        (m) => m.group_id === data.post.group.id && m.user_id === user?.id,
-      )
+    ? groupMembers.some((m) => m.group_id === data.post.group.id)
     : false;
 
   // Shows loading spinner while fetching
@@ -156,7 +155,12 @@ export default function DetailedPost() {
     >
       <FlatList
         ListHeaderComponent={
-          <PostListItem post={post} isDetailedPost isJoined={isJoined} />
+          // Use PollListItem if post has a poll, otherwise PostListItem
+          post.poll ? (
+            <PollListItem post={post} isDetailedPost isJoined={isJoined} />
+          ) : (
+            <PostListItem post={post} isDetailedPost isJoined={isJoined} />
+          )
         }
         data={comments}
         keyExtractor={(item) => item.id}

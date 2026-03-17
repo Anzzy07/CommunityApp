@@ -79,6 +79,7 @@ export type PollOption = {
   poll_id: string;
   text: string;
   votes_count: number | null;
+  image_url?: string | null;
 };
 
 export type PollVote = {

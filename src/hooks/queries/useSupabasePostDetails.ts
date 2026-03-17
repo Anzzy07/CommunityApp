@@ -80,7 +80,8 @@ export function useSupabasePostDetails(postId: string) {
             id,
             poll_id,
             text,
-            votes_count
+            votes_count,
+            image_url
           )
         `,
         )
@@ -124,6 +125,7 @@ export function useSupabasePostDetails(postId: string) {
               poll_id: opt.poll_id,
               text: opt.text,
               votes_count: opt.votes_count,
+              image_url: opt.image_url,
             })),
           }
         : null;

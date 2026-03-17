@@ -412,6 +412,52 @@ export function useCreatePoll() {
   });
 }
 
+// Delete a poll (and its associated post)
+export function useDeletePoll() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      postId,
+      userId,
+    }: {
+      postId: string;
+      userId: string;
+    }) => {
+      console.log("🗑️ Deleting poll:", postId);
+
+      // Verify ownership
+      const { data: post, error: checkError } = await supabase
+        .from("posts")
+        .select("user_id")
+        .eq("id", postId)
+        .single();
+
+      if (checkError || !post || post.user_id !== userId) {
+        throw new Error("You don't have permission to delete this poll");
+      }
+
+      // Delete the post (this will cascade delete poll, options, and votes)
+      const { error } = await supabase
+        .from("posts")
+        .delete()
+        .eq("id", postId)
+        .eq("user_id", userId);
+
+      if (error) {
+        console.error("❌ Error deleting poll:", error);
+        throw error;
+      }
+
+      console.log("✅ Poll deleted");
+      return { success: true };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["posts"] });
+    },
+  });
+}
+
 // Share post with native share or copy link
 export function usePostShare() {
   return useMutation({
