@@ -1,4 +1,5 @@
 import { supabase } from "@/src/lib/supabase";
+import { uploadImage } from "@/src/utils/supabaseImages";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 // Submit a challenge entry
@@ -17,18 +18,38 @@ export function useSubmitChallengeEntry() {
       content: string;
       imageUrl?: string;
     }) => {
+      console.log("📤 Submitting challenge entry:", {
+        challengeId,
+        userId,
+        imageUrl,
+      });
+
+      // Upload image to Supabase Storage if provided
+      let storagePath: string | null = null;
+      if (imageUrl) {
+        try {
+          console.log("📤 Uploading image to storage...");
+          storagePath = await uploadImage(imageUrl);
+          console.log("✅ Image uploaded to:", storagePath);
+        } catch (error) {
+          console.error("❌ Error uploading image:", error);
+          throw new Error("Failed to upload image");
+        }
+      }
+
       const { data, error } = await supabase
         .from("challenge_entries")
         .insert({
           challenge_id: challengeId,
           user_id: userId,
           content,
-          image_url: imageUrl || null,
+          image_url: storagePath,
         })
         .select()
         .single();
 
       if (error) throw error;
+      console.log("✅ Challenge entry submitted");
       return data;
     },
     onSuccess: (_, variables) => {
@@ -67,17 +88,33 @@ export function useUpdateChallengeEntry() {
       content: string;
       imageUrl?: string;
     }) => {
+      console.log("📤 Updating challenge entry:", { entryId, imageUrl });
+
+      // Upload image to Supabase Storage if provided
+      let storagePath: string | null = null;
+      if (imageUrl) {
+        try {
+          console.log("📤 Uploading image to storage...");
+          storagePath = await uploadImage(imageUrl);
+          console.log("✅ Image uploaded to:", storagePath);
+        } catch (error) {
+          console.error("❌ Error uploading image:", error);
+          throw new Error("Failed to upload image");
+        }
+      }
+
       const { data, error } = await supabase
         .from("challenge_entries")
         .update({
           content,
-          image_url: imageUrl || null,
+          image_url: storagePath,
         })
         .eq("id", entryId)
         .select()
         .single();
 
       if (error) throw error;
+      console.log("✅ Challenge entry updated");
       return data;
     },
     onSuccess: (_, variables) => {
@@ -117,8 +154,6 @@ export function useDeleteChallengeEntry() {
         .eq("user_id", userId)
         .single();
 
-      // console.log(" Entry check:", existingEntry, "Error:", checkError);
-
       if (checkError || !existingEntry) {
         console.error("Entry not found or not owned by user");
         throw new Error(
@@ -133,27 +168,19 @@ export function useDeleteChallengeEntry() {
         .eq("id", entryId)
         .eq("user_id", userId);
 
-      // console.log(" Deleted result - Error:", error, "Count:", count);
-
       if (error) {
         console.error("DELETE error:", error);
         throw error;
       }
 
       if (count === 0) {
-        console.error(" No rows deleted");
+        console.error("No rows deleted");
         throw new Error("Failed to delete entry");
       }
 
-      // console.log(" DELETED successful", count, "row(s)");
       return { success: true, deletedCount: count };
     },
     onSuccess: async (result, variables) => {
-      // console.log(
-      //   "Refetch starting after delete, deleted count:",
-      //   result.deletedCount,
-      // );
-
       // Remove from cache immediately
       queryClient.setQueryData(
         ["challenge-entries", variables.challengeId],
@@ -176,8 +203,6 @@ export function useDeleteChallengeEntry() {
         queryKey: ["challenge-entries", variables.challengeId],
         type: "active",
       });
-
-      // console.log("Refetch complete after delete");
     },
   });
 }
@@ -196,21 +221,12 @@ export function useVoteChallengeEntry() {
       userId: string;
       voteType: "up" | "down";
     }) => {
-      // console.log("Vote mutation starting:", { entryId, userId, voteType });
-
       const { data: existingVote, error: fetchError } = await supabase
         .from("challenge_entry_votes")
         .select("*")
         .eq("entry_id", entryId)
         .eq("user_id", userId)
         .single();
-
-      // console.log(
-      //   "Existing vote check:",
-      //   existingVote,
-      //   "Error:",
-      //   fetchError,
-      // );
 
       if (existingVote) {
         if (existingVote.vote_type === voteType) {
@@ -236,11 +252,9 @@ export function useVoteChallengeEntry() {
             console.error("Update error:", error);
             throw error;
           }
-          // console.log("Vote updated to:", voteType);
           return { action: "updated", voteType, entryId };
         }
       } else {
-        // console.log("Creating new vote");
         const { error } = await supabase.from("challenge_entry_votes").insert({
           entry_id: entryId,
           user_id: userId,
@@ -251,7 +265,6 @@ export function useVoteChallengeEntry() {
           console.error("Insert error:", error);
           throw error;
         }
-        // console.log("Vote created:", voteType);
         return { action: "created", voteType, entryId };
       }
     },
@@ -289,8 +302,6 @@ export function useVoteChallengeEntry() {
         exact: true,
         type: "active",
       });
-
-      // console.log("Entry list refetched - vote count updated");
     },
   });
 }

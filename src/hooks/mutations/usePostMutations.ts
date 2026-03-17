@@ -161,7 +161,20 @@ export function useCreatePost() {
       description?: string;
       imageUri?: string;
     }) => {
-      console.log("📝 Creating post:", { groupId, userId, title });
+      console.log("📝 Creating post:", { groupId, userId, title, imageUri });
+
+      // Upload image to Supabase Storage if provided
+      let storagePath: string | null = null;
+      if (imageUri) {
+        try {
+          console.log("📤 Uploading image to storage...");
+          storagePath = await uploadImage(imageUri);
+          console.log("✅ Image uploaded to:", storagePath);
+        } catch (error) {
+          console.error("❌ Error uploading image:", error);
+          throw new Error("Failed to upload image");
+        }
+      }
 
       const { data, error } = await supabase
         .from("posts")
@@ -170,7 +183,7 @@ export function useCreatePost() {
           user_id: userId,
           title,
           description: description || null,
-          image_url: imageUri || null,
+          image_url: storagePath, // Use storage path instead of local URI
         })
         .select()
         .single();
