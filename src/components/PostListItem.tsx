@@ -1,6 +1,7 @@
 import { COLORS } from "@/src/colors";
 import { useJoinGroup } from "@/src/hooks/mutations/useGroupMutations";
 import {
+  useDeletePost,
   usePostAward,
   usePostShare,
   usePostVote,
@@ -12,9 +13,9 @@ import {
 import { useSupabaseUserStreak } from "@/src/hooks/queries/useSupabaseUserStreaks";
 import { Post } from "@/src/types";
 import { useUser } from "@clerk/clerk-expo";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { formatDistanceToNowStrict } from "date-fns";
-import { Link } from "expo-router";
+import { Link, useRouter } from "expo-router";
 import React, { memo } from "react";
 import { Alert, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import SupabaseImage from "./SupabaseImage";
@@ -33,6 +34,7 @@ function PostListItem({
   isJoined = false,
 }: PostListItemProps) {
   const { user } = useUser();
+  const router = useRouter();
 
   // Fetch streak for this post's author
   const { data: streak } = useSupabaseUserStreak(post.user.id);
@@ -45,11 +47,13 @@ function PostListItem({
   const awardMutation = usePostAward();
   const shareMutation = usePostShare();
   const joinMutation = useJoinGroup();
+  const deletePostMutation = useDeletePost();
 
   // Read upvotes directly from the post prop
   const upvotes = post.upvotes ?? 0;
   const awarded = hasAwarded ?? false;
   const currentVote = voteStatus ?? null;
+  const isOwner = post.user.id === user?.id;
 
   const handleUpvote = async () => {
     if (!user?.id) {
@@ -135,6 +139,46 @@ function PostListItem({
     ]);
   };
 
+  const handleOptions = () => {
+    if (!isOwner) return;
+
+    Alert.alert("Post Options", "", [
+      {
+        text: "Delete Post",
+        style: "destructive",
+        onPress: () => {
+          Alert.alert(
+            "Delete Post",
+            "Are you sure you want to delete this post?",
+            [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Delete",
+                style: "destructive",
+                onPress: async () => {
+                  try {
+                    await deletePostMutation.mutateAsync({
+                      postId: post.id,
+                      userId: user!.id,
+                    });
+                    Alert.alert("Success", "Post deleted successfully");
+                    // If on detail page, go back
+                    if (isDetailedPost) {
+                      router.back();
+                    }
+                  } catch (error) {
+                    Alert.alert("Error", "Failed to delete post");
+                  }
+                },
+              },
+            ],
+          );
+        },
+      },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
+
   const PostContent = (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -166,11 +210,20 @@ function PostListItem({
           )}
         </View>
 
-        {showJoinButton && !isJoined && (
+        {/* Show options menu if owner, otherwise show join button */}
+        {isOwner ? (
+          <Pressable onPress={handleOptions} hitSlop={10}>
+            <Feather
+              name="more-vertical"
+              size={20}
+              color={COLORS.textSecondary}
+            />
+          </Pressable>
+        ) : showJoinButton && !isJoined ? (
           <Pressable onPress={handleJoinCommunity} style={styles.joinButton}>
             <Text style={styles.joinButtonText}>Join</Text>
           </Pressable>
-        )}
+        ) : null}
       </View>
 
       <Text style={styles.title}>{post.title}</Text>

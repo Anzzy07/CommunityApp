@@ -202,6 +202,122 @@ export function useCreatePost() {
   });
 }
 
+// Delete a post
+export function useDeletePost() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      postId,
+      userId,
+    }: {
+      postId: string;
+      userId: string;
+    }) => {
+      console.log("🗑️ Deleting post:", postId);
+
+      // Verify ownership
+      const { data: post, error: checkError } = await supabase
+        .from("posts")
+        .select("user_id")
+        .eq("id", postId)
+        .single();
+
+      if (checkError || !post || post.user_id !== userId) {
+        throw new Error("You don't have permission to delete this post");
+      }
+
+      // Delete the post
+      const { error } = await supabase
+        .from("posts")
+        .delete()
+        .eq("id", postId)
+        .eq("user_id", userId);
+
+      if (error) {
+        console.error("❌ Error deleting post:", error);
+        throw error;
+      }
+
+      console.log("✅ Post deleted");
+      return { success: true };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["posts"] });
+    },
+  });
+}
+
+// Update a post
+// export function useUpdatePost() {
+//   const queryClient = useQueryClient();
+
+//   return useMutation({
+//     mutationFn: async ({
+//       postId,
+//       userId,
+//       title,
+//       description,
+//       imageUri,
+//     }: {
+//       postId: string;
+//       userId: string;
+//       title: string;
+//       description?: string;
+//       imageUri?: string;
+//     }) => {
+//       console.log("📝 Updating post:", postId);
+
+//       // Verify ownership
+//       const { data: post, error: checkError } = await supabase
+//         .from("posts")
+//         .select("user_id")
+//         .eq("id", postId)
+//         .single();
+
+//       if (checkError || !post || post.user_id !== userId) {
+//         throw new Error("You don't have permission to edit this post");
+//       }
+
+//       // Upload image if provided
+//       let storagePath: string | null = null;
+//       if (imageUri) {
+//         try {
+//           console.log("📤 Uploading image to storage...");
+//           storagePath = await uploadImage(imageUri);
+//           console.log("✅ Image uploaded to:", storagePath);
+//         } catch (error) {
+//           console.error("❌ Error uploading image:", error);
+//           throw new Error("Failed to upload image");
+//         }
+//       }
+
+//       const { data, error } = await supabase
+//         .from("posts")
+//         .update({
+//           title,
+//           description: description || null,
+//           image_url: storagePath,
+//         })
+//         .eq("id", postId)
+//         .eq("user_id", userId)
+//         .select()
+//         .single();
+
+//       if (error) {
+//         console.error("❌ Error updating post:", error);
+//         throw error;
+//       }
+
+//       console.log("✅ Post updated");
+//       return data;
+//     },
+//     onSuccess: () => {
+//       queryClient.invalidateQueries({ queryKey: ["posts"] });
+//     },
+//   });
+// }
+
 export function useCreatePoll() {
   const queryClient = useQueryClient();
 
