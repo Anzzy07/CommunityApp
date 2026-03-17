@@ -27,7 +27,7 @@ export default function ChatMessageItem({
       onLongPress={() => isMember && onReply(item)}
       style={[styles.messageRow, isMe && styles.myMessageRow]}
     >
-      {/* USER AVATAR (only for others and when showAvatar is true) */}
+      {/* USER AVATAR - Show for others on left */}
       {!isMe && (
         <View style={styles.avatarContainer}>
           {showAvatar ? (
@@ -76,12 +76,13 @@ export default function ChatMessageItem({
         )}
 
         {/* MESSAGE TEXT */}
-        <Text style={[styles.messageText, isMe && styles.myMessageText]}>
-          {item.message}
-        </Text>
+        {item.message && (
+          <Text style={[styles.messageText, isMe && styles.myMessageText]}>
+            {item.message}
+          </Text>
+        )}
 
-        {/* MESSAGE IMAGE  */}
-
+        {/* MESSAGE IMAGE */}
         {item.image_url && (
           <SupabaseImage path={item.image_url} style={styles.messageImage} />
         )}
@@ -93,6 +94,25 @@ export default function ChatMessageItem({
           })}
         </Text>
       </View>
+
+      {/* AVATAR FOR MY MESSAGES (on the right side) */}
+      {isMe && (
+        <View style={styles.avatarContainer}>
+          {showAvatar ? (
+            item.user.image ? (
+              <Image source={{ uri: item.user.image }} style={styles.avatar} />
+            ) : (
+              <View style={[styles.avatar, styles.defaultAvatar]}>
+                <Text style={styles.avatarText}>
+                  {item.user.name.charAt(0).toUpperCase()}
+                </Text>
+              </View>
+            )
+          ) : (
+            <View style={styles.avatarPlaceholder} />
+          )}
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -109,7 +129,7 @@ const styles = StyleSheet.create({
   },
   avatarContainer: {
     width: 32,
-    marginRight: 8,
+    marginHorizontal: 8,
     alignItems: "center",
   },
   avatar: {
@@ -171,7 +191,6 @@ const styles = StyleSheet.create({
   myMessageText: {
     color: "white",
   },
-
   messageImage: {
     width: "100%",
     height: 200,

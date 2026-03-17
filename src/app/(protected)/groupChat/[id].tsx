@@ -103,15 +103,13 @@ export default function GroupChatScreen() {
 
     const isMe = currentMessage.user.id === user?.id;
 
-    if (isMe) {
-      return { showAvatar: false, showUsername: false };
-    }
-
-    const showUsername =
-      !prevMessage || prevMessage.user.id !== currentMessage.user.id;
-
+    // Always show avatar for the last message in a group
     const showAvatar =
       !nextMessage || nextMessage.user.id !== currentMessage.user.id;
+
+    // Show username for the first message in a group (only for others)
+    const showUsername =
+      !isMe && (!prevMessage || prevMessage.user.id !== currentMessage.user.id);
 
     return { showAvatar, showUsername };
   };

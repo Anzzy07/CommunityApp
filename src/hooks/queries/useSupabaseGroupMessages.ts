@@ -7,14 +7,14 @@ export function useSupabaseGroupMessages(groupId: string) {
   return useQuery({
     queryKey: ["group-messages", groupId],
     queryFn: async () => {
-      // console.log("Fetching messages for group:", groupId);
+      console.log("🔍 Fetching messages for group:", groupId);
 
       const { data, error } = await supabase
         .from("group_messages")
         .select(
           `
           *,
-          user:users!user_id (
+          user:users!group_messages_user_id_fkey (
             id,
             username,
             full_name,
@@ -30,11 +30,50 @@ export function useSupabaseGroupMessages(groupId: string) {
         throw error;
       }
 
-      // console.log("Fetched messages count:", data?.length || 0);
+      console.log("✅ Fetched messages:", data?.length || 0);
+
+      // Get all unique reply_to_ids to fetch reply data
+      const replyToIds = [
+        ...new Set(
+          data?.filter((m) => m.reply_to_id).map((m) => m.reply_to_id),
+        ),
+      ].filter(Boolean) as string[];
+
+      // Fetch reply messages if there are any
+      let replyMessages: any[] = [];
+      if (replyToIds.length > 0) {
+        const { data: replyData } = await supabase
+          .from("group_messages")
+          .select(
+            `
+            id,
+            message,
+            user:users!group_messages_user_id_fkey (
+              full_name,
+              username
+            )
+          `,
+          )
+          .in("id", replyToIds);
+
+        replyMessages = replyData || [];
+      }
+
+      // Create a map of replies for quick lookup
+      const replyMap = new Map(
+        replyMessages.map((r) => [
+          r.id,
+          {
+            id: r.id,
+            message: r.message,
+            user_name: r.user?.full_name || r.user?.username || "Unknown",
+          },
+        ]),
+      );
 
       // Transform the data
       const messages: GroupMessage[] = (data || []).map((msg: any) => {
-        const userData = Array.isArray(msg.user) ? msg.user[0] : msg.user;
+        const userData = msg.user;
 
         return {
           id: msg.id,
@@ -45,13 +84,10 @@ export function useSupabaseGroupMessages(groupId: string) {
             image: userData?.image_url || null,
           },
           message: msg.message || "",
+          image_url: msg.image_url || null,
           created_at: msg.created_at,
           reply_to: msg.reply_to_id
-            ? {
-                id: msg.reply_to_id,
-                message: msg.reply_to?.message || "",
-                user_name: msg.reply_to?.user_name || "",
-              }
+            ? replyMap.get(msg.reply_to_id) || null
             : null,
         };
       });
@@ -71,6 +107,8 @@ export function useGroupMessagesSubscription(
 ) {
   useEffect(() => {
     if (!groupId) return;
+
+    console.log("📡 Subscribing to group messages:", groupId);
 
     const channel = supabase
       .channel(`group-messages:${groupId}`)

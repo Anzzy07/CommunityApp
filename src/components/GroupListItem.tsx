@@ -8,7 +8,7 @@ type Props = {
   group: Group;
   lastMessage?: {
     text: string;
-    timestamp: string;
+    timestamp: string | null;
     sender: string;
   };
   unreadCount?: number;
@@ -24,7 +24,10 @@ export default function GroupListItem({
   return (
     <Pressable onPress={onPress} style={styles.container}>
       {/* Group Image */}
-      <Image source={{ uri: group.image }} style={styles.groupImage} />
+      <Image
+        source={{ uri: group.image || "https://via.placeholder.com/50" }}
+        style={styles.groupImage}
+      />
 
       {/* Group Info */}
       <View style={styles.content}>
@@ -32,14 +35,11 @@ export default function GroupListItem({
           <Text style={styles.groupName} numberOfLines={1}>
             {group.name}
           </Text>
-          {lastMessage && (
+          {lastMessage && lastMessage.timestamp && (
             <Text style={styles.timestamp}>
-              {formatDistanceToNowStrict(
-                new Date(lastMessage.timestamp ?? Date.now()),
-                {
-                  addSuffix: false,
-                },
-              )}
+              {formatDistanceToNowStrict(new Date(lastMessage.timestamp), {
+                addSuffix: false,
+              })}
             </Text>
           )}
         </View>

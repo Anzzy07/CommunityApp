@@ -1,4 +1,5 @@
 import { supabase } from "@/src/lib/supabase";
+import { uploadImage } from "@/src/utils/supabaseImages";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 export function useSendMessage() {
@@ -18,7 +19,25 @@ export function useSendMessage() {
       imageUrl?: string;
       replyToId?: string;
     }) => {
-      console.log("📤 Sending message:", { groupId, userId, message });
+      console.log("📤 Sending message:", {
+        groupId,
+        userId,
+        message,
+        imageUrl,
+      });
+
+      // Upload image to Supabase Storage if provided
+      let storagePath: string | null = null;
+      if (imageUrl) {
+        try {
+          console.log("📤 Uploading image to storage...");
+          storagePath = await uploadImage(imageUrl);
+          console.log("✅ Image uploaded to:", storagePath);
+        } catch (error) {
+          console.error("❌ Error uploading image:", error);
+          throw new Error("Failed to upload image");
+        }
+      }
 
       const { data, error } = await supabase
         .from("group_messages")
@@ -26,7 +45,7 @@ export function useSendMessage() {
           group_id: groupId,
           user_id: userId,
           message,
-          image_url: imageUrl || null,
+          image_url: storagePath,
           reply_to_id: replyToId || null,
         })
         .select()
@@ -44,6 +63,10 @@ export function useSendMessage() {
       // Invalidate to trigger refetch (real-time will also update)
       queryClient.invalidateQueries({
         queryKey: ["group-messages", variables.groupId],
+      });
+      // Also invalidate last messages
+      queryClient.invalidateQueries({
+        queryKey: ["group-last-messages"],
       });
     },
   });

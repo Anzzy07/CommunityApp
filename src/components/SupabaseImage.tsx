@@ -31,14 +31,22 @@ export default function SupabaseImage({
       return;
     }
 
-    // Check if it's already a full URL (external image)
+    // Check if it's already a full URL
     if (path.startsWith("http://") || path.startsWith("https://")) {
       setImageUri(path);
       setLoading(false);
       return;
     }
 
-    // It's a Supabase Storage path - download it
+    // Check if it's a local file path
+    if (path.startsWith("file://")) {
+      console.warn("⚠️ Invalid local file path in database:", path);
+      setError(true);
+      setLoading(false);
+      return;
+    }
+
+    // Supabase Storage path
     const loadImage = async () => {
       try {
         setLoading(true);

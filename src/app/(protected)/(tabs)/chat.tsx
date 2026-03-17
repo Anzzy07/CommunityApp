@@ -1,5 +1,6 @@
 import { COLORS } from "@/src/colors";
 import GroupListItem from "@/src/components/GroupListItem";
+import { useSupabaseGroupLastMessages } from "@/src/hooks/queries/useSupabaseGroupLastMessages";
 import { useSupabaseGroupMembers } from "@/src/hooks/queries/useSupabaseGroupMembers";
 import { useSupabaseGroups } from "@/src/hooks/queries/useSupabaseGroups";
 import { Group } from "@/src/types";
@@ -25,21 +26,49 @@ export default function ChatGroupsList() {
   const { data: groupMembers = [], isLoading: membersLoading } =
     useSupabaseGroupMembers(user?.id || "");
 
-  const isLoading = groupsLoading || membersLoading;
-
   // Get groups user is a member of
   const userGroups = useMemo(() => {
     const memberGroupIds = groupMembers.map((m) => m.group_id);
     return groups.filter((g) => memberGroupIds.includes(g.id));
   }, [groups, groupMembers]);
 
-  // TODO: Get last message and unread count from Supabase
+  // Fetch last messages for user's groups
+  const groupIds = useMemo(() => userGroups.map((g) => g.id), [userGroups]);
+  const { data: lastMessages = [], isLoading: messagesLoading } =
+    useSupabaseGroupLastMessages(groupIds);
+
+  const isLoading = groupsLoading || membersLoading || messagesLoading;
+
+  // Sort groups by most recent message
+  const sortedGroups = useMemo(() => {
+    return [...userGroups].sort((a, b) => {
+      const aMessage = lastMessages.find((m) => m?.groupId === a.id);
+      const bMessage = lastMessages.find((m) => m?.groupId === b.id);
+
+      if (!aMessage && !bMessage) return 0;
+      if (!aMessage) return 1;
+      if (!bMessage) return -1;
+
+      const aTime = new Date(aMessage.timestamp || 0).getTime();
+      const bTime = new Date(bMessage.timestamp || 0).getTime();
+
+      return bTime - aTime; // Most recent first
+    });
+  }, [userGroups, lastMessages]);
+
+  // Get last message for a specific group
   const getGroupData = (groupId: string) => {
-    // For now, return placeholder data
-    // We'll implement this properly with real-time queries later
+    const lastMessage = lastMessages.find((m) => m?.groupId === groupId);
+
     return {
-      lastMessage: undefined,
-      unreadCount: 0,
+      lastMessage: lastMessage
+        ? {
+            text: lastMessage.message,
+            timestamp: lastMessage.timestamp,
+            sender: lastMessage.sender,
+          }
+        : undefined,
+      unreadCount: 0, // TODO: Implement unread count later
     };
   };
 
@@ -76,7 +105,7 @@ export default function ChatGroupsList() {
   return (
     <SafeAreaView style={styles.container} edges={["bottom"]}>
       <FlatList
-        data={userGroups}
+        data={sortedGroups}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => {
           const { lastMessage, unreadCount } = getGroupData(item.id);
@@ -90,7 +119,7 @@ export default function ChatGroupsList() {
           );
         }}
         ListEmptyComponent={renderEmpty}
-        contentContainerStyle={userGroups.length === 0 && { flex: 1 }}
+        contentContainerStyle={sortedGroups.length === 0 && { flex: 1 }}
       />
     </SafeAreaView>
   );
