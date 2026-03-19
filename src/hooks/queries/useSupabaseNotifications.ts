@@ -6,11 +6,7 @@ export function useSupabaseNotifications(userId: string) {
   return useQuery({
     queryKey: ["notifications", userId],
     queryFn: async () => {
-      console.log("🔍 Fetching notifications for user:", userId);
-
-      if (!userId) {
-        return [];
-      }
+      if (!userId) return [];
 
       const { data, error } = await supabase
         .from("notifications")
@@ -18,26 +14,44 @@ export function useSupabaseNotifications(userId: string) {
         .eq("user_id", userId)
         .order("created_at", { ascending: false });
 
-      if (error) {
-        console.error("❌ Error fetching notifications:", error);
-        throw error;
-      }
-
-      console.log("✅ Fetched notifications:", data?.length || 0);
+      if (error) throw error;
 
       const notifications: Notification[] = (data || []).map((n) => ({
         id: n.id,
         user_id: n.user_id,
-        type: n.type as Notification["type"],
+        type: n.type as any,
         reference_id: n.reference_id,
         message: n.message,
         is_read: n.is_read ?? false,
-        created_at: n.created_at ?? new Date().toISOString(),
+        created_at: n.created_at!,
       }));
 
       return notifications;
     },
     enabled: !!userId,
-    staleTime: 1000 * 30, // 30 seconds - refresh more frequently for notifications
+    staleTime: 1000 * 30, // 30 seconds
+  });
+}
+
+// Get unread count
+export function useSupabaseUnreadNotificationsCount(userId: string) {
+  return useQuery({
+    queryKey: ["notifications-unread-count", userId],
+    queryFn: async () => {
+      if (!userId) return 0;
+
+      const { count, error } = await supabase
+        .from("notifications")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("is_read", false);
+
+      if (error) throw error;
+
+      return count || 0;
+    },
+    enabled: !!userId,
+    staleTime: 1000 * 10, // 10 seconds - refresh more often
+    refetchInterval: 1000 * 30, // Auto-refetch every 30 seconds
   });
 }

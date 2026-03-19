@@ -1,5 +1,5 @@
-import { unreadNotificationsCountAtom } from "@/src/atoms/NotificationAtom";
 import { COLORS } from "@/src/colors";
+import { useSupabaseUnreadNotificationsCount } from "@/src/hooks/queries/useSupabaseNotifications";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import {
   AntDesign,
@@ -8,16 +8,17 @@ import {
   MaterialCommunityIcons,
 } from "@expo/vector-icons";
 import { router, Tabs } from "expo-router";
-import { useAtomValue } from "jotai";
 import { Image, Platform, Text, TouchableOpacity, View } from "react-native";
 
 export default function TabLayout() {
   const { signOut } = useAuth();
   const { user } = useUser();
 
-  const unreadCount = useAtomValue(unreadNotificationsCountAtom);
+  const { data: unreadCount = 0 } = useSupabaseUnreadNotificationsCount(
+    user?.id || "",
+  );
 
-  const profileImageUrl = user?.imageUrl || "https://via.placeholder.com/32"; // Fallback image
+  const profileImageUrl = user?.imageUrl || "https://via.placeholder.com/32";
 
   return (
     <Tabs
@@ -42,7 +43,7 @@ export default function TabLayout() {
 
         headerLeft: () => (
           <TouchableOpacity
-            onPress={() => router.push("/profile")} // Navigate to profile screen
+            onPress={() => router.push("/profile")}
             style={{ marginLeft: 15 }}
           >
             <Image
@@ -158,7 +159,7 @@ export default function TabLayout() {
                       fontWeight: "bold",
                     }}
                   >
-                    {unreadCount}
+                    {unreadCount > 99 ? "99+" : unreadCount}
                   </Text>
                 </View>
               )}
