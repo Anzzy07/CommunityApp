@@ -160,7 +160,12 @@ export default function GroupSelector() {
                   pressed && styles.groupItemPressed,
                 ]}
               >
-                <Image source={{ uri: item.image }} style={styles.groupImage} />
+                <Image
+                  source={{
+                    uri: item.image || "https://via.placeholder.com/48",
+                  }}
+                  style={styles.groupImage}
+                />
 
                 <View style={styles.groupInfo}>
                   <Text style={styles.groupName} numberOfLines={1}>

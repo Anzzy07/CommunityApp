@@ -307,7 +307,9 @@ export default function CreateScreen() {
               {group ? (
                 <>
                   <Image
-                    source={{ uri: group.image }}
+                    source={{
+                      uri: group.image || "https://via.placeholder.com/20",
+                    }}
                     style={styles.communityImage}
                   />
                   <Text style={styles.communityText}>{group.name}</Text>

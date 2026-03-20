@@ -15,7 +15,7 @@ export function useUserPollVote(pollId: string, userId: string | undefined) {
         .single();
 
       if (error && error.code !== "PGRST116") {
-        // Ignore "no rows" error
+        // "no rows" error ignore it
         throw error;
       }
 
