@@ -888,7 +888,16 @@ export type Database = {
       }
     }
     Functions: {
-      [_ in never]: never
+      create_notification: {
+        Args: {
+          p_message: string
+          p_reference_id: string
+          p_type: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
+      update_user_streak: { Args: { p_user_id: string }; Returns: undefined }
     }
     Enums: {
       [_ in never]: never

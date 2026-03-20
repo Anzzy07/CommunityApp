@@ -38,6 +38,8 @@ function PostListItem({
 
   // Fetch streak for this post's author
   const { data: streak } = useSupabaseUserStreak(post.user.id);
+  console.log("🔥 Streak for", post.user.name, ":", streak);
+  console.log("My User ID:", user?.id);
 
   // cache
   const { data: voteStatus } = useUserPostVote(post.id, user?.id);
@@ -191,7 +193,7 @@ function PostListItem({
           <View style={styles.headerRow}>
             <Text style={styles.groupName}>{post.group.name}</Text>
 
-            {streak && (streak.current_streak ?? 0) > 0 && (
+            {streak && streak.current_streak && streak.current_streak > 0 && (
               <View style={styles.streakBadge}>
                 <MaterialCommunityIcons name="fire" size={14} color="#FF6A00" />
                 <Text style={styles.streakText}>{streak.current_streak}</Text>
