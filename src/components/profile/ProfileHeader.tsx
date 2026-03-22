@@ -47,7 +47,7 @@ export default function ProfileHeader({
       </View>
 
       {/* Streak Display */}
-      {userStreak && userStreak.current_streak > 0 && (
+      {userStreak && (userStreak.current_streak ?? 0) > 0 && (
         <View style={styles.streakContainer}>
           <View style={styles.streakBadge}>
             <MaterialCommunityIcons name="fire" size={28} color="#FF6A00" />

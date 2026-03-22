@@ -135,7 +135,10 @@ export default function CommunitiesScreen() {
       <Link href={`/community/${item.id}`} asChild>
         <Pressable style={styles.card}>
           {/* Community Image */}
-          <Image source={{ uri: item.image }} style={styles.image} />
+          <Image
+            source={{ uri: item.image || "https://via.placeholder.com/400" }}
+            style={styles.image}
+          />
 
           {/* Community Info */}
           <View style={styles.content}>

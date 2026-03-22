@@ -148,13 +148,15 @@ export default function CommunityDetailsScreen() {
       {/* Hero Section */}
       <View style={styles.heroSection}>
         <Image
-          source={{ uri: group.image }}
-          style={styles.heroCover}
-          blurRadius={20}
+          source={{ uri: group.image || "https://via.placeholder.com/80" }}
+          style={styles.heroImage}
         />
         <View style={styles.heroOverlay} />
         <View style={styles.heroContent}>
-          <Image source={{ uri: group.image }} style={styles.heroImage} />
+          <Image
+            source={{ uri: group.image || "https://via.placeholder.com/400" }}
+            style={styles.heroImage}
+          />
           <View style={styles.heroInfo}>
             <View style={styles.nameRow}>
               <Text style={styles.heroName}>{group.name}</Text>
