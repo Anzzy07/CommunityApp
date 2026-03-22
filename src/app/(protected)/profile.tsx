@@ -1,5 +1,4 @@
 import { COLORS } from "@/src/colors";
-
 import PostListItem from "@/src/components/PostListItem";
 import CommentListItemSimple from "@/src/components/profile/CommentListItemSimple";
 import CommunitiesGrid from "@/src/components/profile/CommunityGrid";

@@ -30,7 +30,9 @@ export default function CommunitiesGrid({ communities }: CommunitiesGridProps) {
           onPress={() => router.push(`/community/${community.id}`)}
         >
           <Image
-            source={{ uri: community.image }}
+            source={{
+              uri: community.image || "https://via.placeholder.com/80",
+            }}
             style={styles.communityImage}
           />
           <Text style={styles.communityName} numberOfLines={2}>

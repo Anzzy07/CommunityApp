@@ -149,7 +149,7 @@ export default function CommunityDetailsScreen() {
       <View style={styles.heroSection}>
         <Image
           source={{ uri: group.image || "https://via.placeholder.com/80" }}
-          style={styles.heroImage}
+          style={styles.heroCover}
         />
         <View style={styles.heroOverlay} />
         <View style={styles.heroContent}>
