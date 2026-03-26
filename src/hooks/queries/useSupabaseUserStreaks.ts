@@ -9,7 +9,7 @@ export function useSupabaseUserStreaks(userId?: string) {
     queryFn: async () => {
       if (userId) {
         // If userId is provided, get the users streak
-        console.log("🔍 Fetching streak for user:", userId);
+        // console.log("🔍 Fetching streak for user:", userId);
 
         const { data, error } = await supabase
           .from("user_streaks")
@@ -49,7 +49,7 @@ export function useSupabaseUserStreaks(userId?: string) {
   });
 }
 
-// Get streak for a specific user (backward compatibility)
+// Get streak for a specific user
 export function useSupabaseUserStreak(userId?: string) {
   return useQuery({
     queryKey: ["user-streak", userId],

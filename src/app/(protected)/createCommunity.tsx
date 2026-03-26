@@ -50,8 +50,6 @@ export default function CreateCommunityScreen() {
 
     if (!result.canceled && result.assets[0]) {
       setIsUploading(true);
-      // TODO: Upload to Supabase Storage and get URL
-      // For now, just use the local URI
       setCommunityImage(result.assets[0].uri);
       setIsUploading(false);
     }
@@ -77,7 +75,6 @@ export default function CreateCommunityScreen() {
 
     if (!result.canceled && result.assets[0]) {
       setIsUploading(true);
-      // TODO: Upload to Supabase Storage and get URL
       setCommunityImage(result.assets[0].uri);
       setIsUploading(false);
     }
@@ -108,7 +105,7 @@ export default function CreateCommunityScreen() {
       const newGroup = await createGroupMutation.mutateAsync({
         name: name.trim(),
         description: description.trim() || undefined,
-        imageUrl: communityImage || "https://via.placeholder.com/80",
+        imageUri: communityImage || "https://via.placeholder.com/80",
         userId: user.id,
       });
 

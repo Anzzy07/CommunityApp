@@ -7,7 +7,7 @@ export function useSupabaseGroupMessages(groupId: string) {
   return useQuery({
     queryKey: ["group-messages", groupId],
     queryFn: async () => {
-      console.log("🔍 Fetching messages for group:", groupId);
+      // console.log("🔍 Fetching messages for group:", groupId);
 
       const { data, error } = await supabase
         .from("group_messages")
@@ -30,7 +30,7 @@ export function useSupabaseGroupMessages(groupId: string) {
         throw error;
       }
 
-      console.log("✅ Fetched messages:", data?.length || 0);
+      // console.log("✅ Fetched messages:", data?.length || 0);
 
       // Get all unique reply_to_ids to fetch reply data
       const replyToIds = [
@@ -108,8 +108,6 @@ export function useGroupMessagesSubscription(
   useEffect(() => {
     if (!groupId) return;
 
-    console.log("📡 Subscribing to group messages:", groupId);
-
     const channel = supabase
       .channel(`group-messages:${groupId}`)
       .on(
@@ -121,14 +119,13 @@ export function useGroupMessagesSubscription(
           filter: `group_id=eq.${groupId}`,
         },
         (payload) => {
-          console.log("📨 New message received:", payload);
+          // console.log("📨 New message received:", payload);
           onNewMessage();
         },
       )
       .subscribe();
 
     return () => {
-      console.log("📡 Unsubscribing from group messages");
       supabase.removeChannel(channel);
     };
   }, [groupId, onNewMessage]);

@@ -7,7 +7,7 @@ export function useSupabaseGroupLastMessages(groupIds: string[]) {
     queryFn: async () => {
       if (groupIds.length === 0) return [];
 
-      console.log("🔍 Fetching last messages for groups:", groupIds);
+      // console.log("🔍 Fetching last messages for groups:", groupIds);
 
       // Get last message for each group
       const messagesPromises = groupIds.map(async (groupId) => {
@@ -52,7 +52,7 @@ export function useSupabaseGroupLastMessages(groupIds: string[]) {
       const messages = await Promise.all(messagesPromises);
       const validMessages = messages.filter(Boolean);
 
-      console.log("✅ Fetched last messages:", validMessages.length);
+      // console.log("✅ Fetched last messages:", validMessages.length);
 
       return validMessages;
     },

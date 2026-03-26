@@ -1,4 +1,5 @@
 import { supabase } from "@/src/lib/supabase";
+import { uploadImage } from "@/src/utils/supabaseImages";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 // Join a group
@@ -22,7 +23,6 @@ export function useJoinGroup() {
       return { success: true };
     },
     onSuccess: async (_, variables) => {
-      // Refetch immediately instead of just invalidating
       await queryClient.refetchQueries({
         queryKey: ["group-members", variables.userId],
       });
@@ -53,7 +53,6 @@ export function useLeaveGroup() {
       return { success: true };
     },
     onSuccess: async (_, variables) => {
-      // Refetch immediately instead of just invalidating
       await queryClient.refetchQueries({
         queryKey: ["group-members", variables.userId],
       });
@@ -70,27 +69,51 @@ export function useCreateGroup() {
     mutationFn: async ({
       name,
       description,
-      imageUrl,
+      imageUri,
       userId,
     }: {
       name: string;
       description?: string;
-      imageUrl: string;
+      imageUri?: string;
       userId: string;
     }) => {
+      console.log("🏘️ Creating group:", { name, userId });
+
+      // Upload image using the same utility as posts/challenge entries
+      let uploadedImagePath: string | null = null;
+      if (imageUri) {
+        try {
+          uploadedImagePath = await uploadImage(imageUri);
+          console.log("✅ Group image uploaded:", uploadedImagePath);
+        } catch (error) {
+          console.error("❌ Error uploading group image:", error);
+          // Continue without image rather than failing group creation
+          uploadedImagePath = null;
+        }
+      }
+
+      // Get public URL from storage path (uploadImage returns a path, not a full URL)
+      const imageUrl = uploadedImagePath
+        ? supabase.storage.from("images").getPublicUrl(uploadedImagePath).data
+            .publicUrl
+        : null;
+
       // Create the group
       const { data: newGroup, error: groupError } = await supabase
         .from("groups")
         .insert({
           name,
-          description,
+          description: description || null,
           image_url: imageUrl,
           leader_id: userId,
         })
         .select()
         .single();
 
-      if (groupError) throw groupError;
+      if (groupError) {
+        console.error("❌ Error creating group:", groupError);
+        throw groupError;
+      }
 
       // Auto-join the creator as a member
       const { error: memberError } = await supabase
@@ -100,8 +123,12 @@ export function useCreateGroup() {
           user_id: userId,
         });
 
-      if (memberError) throw memberError;
+      if (memberError) {
+        console.error("❌ Error adding member:", memberError);
+        throw memberError;
+      }
 
+      console.log("✅ Group created:", newGroup.id);
       return newGroup;
     },
     onSuccess: async (_, variables) => {

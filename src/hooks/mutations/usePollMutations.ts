@@ -14,7 +14,7 @@ export function usePollVote() {
       optionId: string;
       userId: string;
     }) => {
-      console.log("📊 Voting on poll:", { pollId, optionId, userId });
+      // console.log("📊 Voting on poll:", { pollId, optionId, userId });
 
       // Check if user already voted
       const { data: existingVote } = await supabase
@@ -32,9 +32,11 @@ export function usePollVote() {
           .eq("poll_id", pollId)
           .eq("user_id", userId);
 
-        if (error) throw error;
-        console.log("✅ Vote updated");
-        return { action: "updated" };
+        if (error) {
+          console.error("❌ Error updating vote:", error);
+          throw error;
+        }
+        // console.log("✅ Vote updated");
       } else {
         // Create new vote
         const { error } = await supabase.from("poll_votes").insert({
@@ -43,14 +45,28 @@ export function usePollVote() {
           user_id: userId,
         });
 
-        if (error) throw error;
-        console.log("✅ Vote created");
-        return { action: "created" };
+        if (error) {
+          console.error("❌ Error creating vote:", error);
+          throw error;
+        }
+        // console.log("✅ Vote created");
       }
+
+      // Force wait for trigger to update vote counts
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      return { success: true };
     },
     onSuccess: async (_, variables) => {
-      // Refetch posts to get updated vote counts
+      // Invalidate all posts queries
       await queryClient.invalidateQueries({ queryKey: ["posts"] });
+
+      // Invalidate specific post
+      await queryClient.invalidateQueries({
+        queryKey: ["post", variables.pollId],
+      });
+
+      // Invalidate user's vote
       await queryClient.invalidateQueries({
         queryKey: ["user-poll-vote", variables.pollId, variables.userId],
       });

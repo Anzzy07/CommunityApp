@@ -7,7 +7,10 @@ import {
   useLeaveGroup,
 } from "@/src/hooks/mutations/useGroupMutations";
 import { useSupabaseChallenges } from "@/src/hooks/queries/useSupabaseChallenges";
-import { useSupabaseGroupMembers } from "@/src/hooks/queries/useSupabaseGroupMembers";
+import {
+  useSupabaseGroupMemberCount,
+  useSupabaseGroupMembers,
+} from "@/src/hooks/queries/useSupabaseGroupMembers";
 import { useSupabaseGroups } from "@/src/hooks/queries/useSupabaseGroups";
 import { useSupabasePosts } from "@/src/hooks/queries/useSupabasePosts";
 import { useUser } from "@clerk/clerk-expo";
@@ -39,6 +42,9 @@ export default function CommunityDetailsScreen() {
   const { data: posts = [], isLoading: postsLoading } = useSupabasePosts();
   const { data: challenges = [] } = useSupabaseChallenges(id);
 
+  // Get member count for this group
+  const { data: memberCount = 0 } = useSupabaseGroupMemberCount(id);
+
   // Mutations
   const joinMutation = useJoinGroup();
   const leaveMutation = useLeaveGroup();
@@ -56,12 +62,6 @@ export default function CommunityDetailsScreen() {
   const groupPosts = useMemo(
     () => posts.filter((p) => p.group?.id === id),
     [posts, id],
-  );
-
-  // Get member count for this group
-  const memberCount = useMemo(
-    () => groupMembers.filter((m) => m.group_id === id).length,
-    [groupMembers, id],
   );
 
   // Handle join

@@ -161,15 +161,12 @@ export function useCreatePost() {
       description?: string;
       imageUri?: string;
     }) => {
-      console.log("📝 Creating post:", { groupId, userId, title, imageUri });
-
       // Upload image to Supabase Storage if provided
       let storagePath: string | null = null;
       if (imageUri) {
         try {
-          console.log("📤 Uploading image to storage...");
           storagePath = await uploadImage(imageUri);
-          console.log("✅ Image uploaded to:", storagePath);
+          // console.log("✅ Image uploaded to:", storagePath);
         } catch (error) {
           console.error("❌ Error uploading image:", error);
           throw new Error("Failed to upload image");
@@ -183,7 +180,7 @@ export function useCreatePost() {
           user_id: userId,
           title,
           description: description || null,
-          image_url: storagePath, // Use storage path instead of local URI
+          image_url: storagePath, // storage path
         })
         .select()
         .single();
@@ -193,7 +190,7 @@ export function useCreatePost() {
         throw error;
       }
 
-      console.log("✅ Post created:", data);
+      // console.log("✅ Post created:", data);
       return data;
     },
     onSuccess: () => {
@@ -239,7 +236,7 @@ export function useDeletePost() {
         throw error;
       }
 
-      console.log("✅ Post deleted");
+      // console.log("✅ Post deleted");
       return { success: true };
     },
     onSuccess: () => {
@@ -335,8 +332,6 @@ export function useCreatePoll() {
       options: { text: string; imageUri?: string }[]; // Changed to imageUri
       durationHours: number;
     }) => {
-      console.log("📊 Creating poll:", { groupId, userId, question });
-
       // Create the post first
       const { data: post, error: postError } = await supabase
         .from("posts")
@@ -403,7 +398,7 @@ export function useCreatePoll() {
         throw optionsError;
       }
 
-      console.log("✅ Poll created with options");
+      // console.log("✅ Poll created with options");
       return { post, poll };
     },
     onSuccess: () => {
@@ -424,7 +419,7 @@ export function useDeletePoll() {
       postId: string;
       userId: string;
     }) => {
-      console.log("🗑️ Deleting poll:", postId);
+      // console.log("🗑️ Deleting poll:", postId);
 
       // Verify ownership
       const { data: post, error: checkError } = await supabase
@@ -449,7 +444,7 @@ export function useDeletePoll() {
         throw error;
       }
 
-      console.log("✅ Poll deleted");
+      // console.log("✅ Poll deleted");
       return { success: true };
     },
     onSuccess: () => {

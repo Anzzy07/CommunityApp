@@ -19,20 +19,20 @@ export function useSendMessage() {
       imageUrl?: string;
       replyToId?: string;
     }) => {
-      console.log("📤 Sending message:", {
-        groupId,
-        userId,
-        message,
-        imageUrl,
-      });
+      // console.log("📤 Sending message:", {
+      //   groupId,
+      //   userId,
+      //   message,
+      //   imageUrl,
+      // });
 
       // Upload image to Supabase Storage if provided
       let storagePath: string | null = null;
       if (imageUrl) {
         try {
-          console.log("📤 Uploading image to storage...");
+          // console.log("📤 Uploading image to storage...");
           storagePath = await uploadImage(imageUrl);
-          console.log("✅ Image uploaded to:", storagePath);
+          // console.log("✅ Image uploaded to:", storagePath);
         } catch (error) {
           console.error("❌ Error uploading image:", error);
           throw new Error("Failed to upload image");
@@ -56,7 +56,7 @@ export function useSendMessage() {
         throw error;
       }
 
-      console.log("✅ Message sent:", data);
+      // console.log("✅ Message sent:", data);
       return data;
     },
     onSuccess: (_, variables) => {
@@ -81,7 +81,7 @@ export function useMarkMessagesAsRead() {
       groupId: string;
       userId: string;
     }) => {
-      console.log("✓ Marking messages as read for group:", groupId);
+      // console.log("✓ Marking messages as read for group:", groupId);
 
       const { error } = await supabase
         .from("group_messages")
@@ -95,7 +95,7 @@ export function useMarkMessagesAsRead() {
         throw error;
       }
 
-      console.log("✅ Messages marked as read");
+      // console.log("✅ Messages marked as read");
     },
   });
 }

@@ -38,8 +38,8 @@ function PostListItem({
 
   // Fetch streak for this post's author
   const { data: streak } = useSupabaseUserStreak(post.user.id);
-  console.log("🔥 Streak for", post.user.name, ":", streak);
-  console.log("My User ID:", user?.id);
+  // console.log("🔥 Streak for", post.user.name, ":", streak);
+  // console.log("My User ID:", user?.id);
 
   // cache
   const { data: voteStatus } = useUserPostVote(post.id, user?.id);
@@ -338,7 +338,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingVertical: 10,
     gap: 7,
-    borderBottomColor: "#E5E7EB",
+    borderBottomColor: COLORS.border,
     borderBottomWidth: 0.5,
     backgroundColor: "white",
   },

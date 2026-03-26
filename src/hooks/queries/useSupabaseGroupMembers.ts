@@ -39,3 +39,20 @@ export function useSupabaseGroupMembers(userId: string) {
     gcTime: 0,
   });
 }
+
+// Group Memeber Counts in community
+export function useSupabaseGroupMemberCount(groupId: string) {
+  return useQuery({
+    queryKey: ["group-member-count", groupId],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("group_members")
+        .select("*", { count: "exact", head: true })
+        .eq("group_id", groupId);
+
+      if (error) throw error;
+      return count ?? 0;
+    },
+    enabled: !!groupId,
+  });
+}
