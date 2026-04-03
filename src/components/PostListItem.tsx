@@ -10,7 +10,6 @@ import {
   useUserPostAward,
   useUserPostVote,
 } from "@/src/hooks/mutations/useUserVotes";
-import { useSupabaseUserStreak } from "@/src/hooks/queries/useSupabaseUserStreaks";
 import { Post } from "@/src/types";
 import { useUser } from "@clerk/clerk-expo";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -36,12 +35,9 @@ function PostListItem({
   const { user } = useUser();
   const router = useRouter();
 
-  // Fetch streak for this post's author
-  const { data: streak } = useSupabaseUserStreak(post.user.id);
-  // console.log("🔥 Streak for", post.user.name, ":", streak);
-  // console.log("My User ID:", user?.id);
+  // Streak comes directly from post prop — no extra query
+  const streak = post.streak ?? 0;
 
-  // cache
   const { data: voteStatus } = useUserPostVote(post.id, user?.id);
   const { data: hasAwarded } = useUserPostAward(post.id, user?.id);
 
@@ -51,7 +47,6 @@ function PostListItem({
   const joinMutation = useJoinGroup();
   const deletePostMutation = useDeletePost();
 
-  // Read upvotes directly from the post prop
   const upvotes = post.upvotes ?? 0;
   const awarded = hasAwarded ?? false;
   const currentVote = voteStatus ?? null;
@@ -95,9 +90,7 @@ function PostListItem({
         postId: post.id,
         postTitle: post.title,
       });
-    } catch (error) {
-      console.error("Error sharing:", error);
-    }
+    } catch {}
   };
 
   const handleAward = async () => {
@@ -133,7 +126,7 @@ function PostListItem({
               groupId: post.group.id,
               userId: user.id,
             });
-          } catch (error) {
+          } catch {
             Alert.alert("Error", "Failed to join community.");
           }
         },
@@ -143,7 +136,6 @@ function PostListItem({
 
   const handleOptions = () => {
     if (!isOwner) return;
-
     Alert.alert("Post Options", "", [
       {
         text: "Delete Post",
@@ -164,11 +156,8 @@ function PostListItem({
                       userId: user!.id,
                     });
                     Alert.alert("Success", "Post deleted successfully");
-                    // If on detail page, go back
-                    if (isDetailedPost) {
-                      router.back();
-                    }
-                  } catch (error) {
+                    if (isDetailedPost) router.back();
+                  } catch {
                     Alert.alert("Error", "Failed to delete post");
                   }
                 },
@@ -185,7 +174,9 @@ function PostListItem({
     <View style={styles.container}>
       <View style={styles.header}>
         <Image
-          source={{ uri: post.group.image || "https://via.placeholder.com/20" }}
+          source={{
+            uri: post.group.image || "https://via.placeholder.com/20",
+          }}
           style={styles.groupImage}
         />
 
@@ -193,10 +184,10 @@ function PostListItem({
           <View style={styles.headerRow}>
             <Text style={styles.groupName}>{post.group.name}</Text>
 
-            {streak && streak.current_streak && streak.current_streak > 0 && (
+            {streak > 0 && (
               <View style={styles.streakBadge}>
                 <MaterialCommunityIcons name="fire" size={14} color="#FF6A00" />
-                <Text style={styles.streakText}>{streak.current_streak}</Text>
+                <Text style={styles.streakText}>{streak}</Text>
               </View>
             )}
 
@@ -212,7 +203,6 @@ function PostListItem({
           )}
         </View>
 
-        {/* Show options menu if owner, otherwise show join button */}
         {isOwner ? (
           <Pressable onPress={handleOptions} hitSlop={10}>
             <Feather
@@ -324,7 +314,6 @@ function PostListItem({
     </View>
   );
 
-  // Wrap in Pressable via asChild so Link will let post have full width layout
   if (isDetailedPost) return PostContent;
   return (
     <Link href={`/post/${post.id}`} asChild>
@@ -466,15 +455,18 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
 });
-
-export default memo(PostListItem, (prevProps, nextProps) => {
-  // Only re-render if these specific values change
+// Explicit memo comparison — only re-render if data this card actually
+// displays has changed. Ignores unrelated feed updates.
+export default memo(PostListItem, (prev, next) => {
   return (
-    prevProps.post.id === nextProps.post.id &&
-    prevProps.post.upvotes === nextProps.post.upvotes &&
-    prevProps.post.nr_of_comments === nextProps.post.nr_of_comments &&
-    prevProps.post.created_at === nextProps.post.created_at &&
-    prevProps.isJoined === nextProps.isJoined &&
-    prevProps.isDetailedPost === nextProps.isDetailedPost
+    prev.post.id === next.post.id &&
+    prev.post.upvotes === next.post.upvotes &&
+    prev.post.nr_of_comments === next.post.nr_of_comments &&
+    prev.post.streak === next.post.streak &&
+    prev.post.image === next.post.image &&
+    prev.post.title === next.post.title &&
+    prev.post.description === next.post.description &&
+    prev.isJoined === next.isJoined &&
+    prev.isDetailedPost === next.isDetailedPost
   );
 });

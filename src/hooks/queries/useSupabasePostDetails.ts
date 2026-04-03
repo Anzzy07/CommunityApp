@@ -1,13 +1,22 @@
 import { supabase } from "@/src/lib/supabase";
-import { Comment, Post } from "@/src/types";
+import { Comment, PollOption, Post } from "@/src/types";
 import { useQuery } from "@tanstack/react-query";
 
-// Helper function to build nested comment tree
+// Returns false if user missed a day (streak should show 0)
+function isStreakAlive(lastActiveDateStr: string | null): boolean {
+  if (!lastActiveDateStr) return false;
+  const lastActive = new Date(lastActiveDateStr);
+  lastActive.setHours(0, 0, 0, 0);
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  yesterday.setHours(0, 0, 0, 0);
+  return lastActive >= yesterday;
+}
+
 function buildCommentTree(comments: any[]): Comment[] {
   const commentMap = new Map<string, Comment>();
   const rootComments: Comment[] = [];
 
-  // First pass: create all comment objects
   comments.forEach((comment: any) => {
     const commentUser = Array.isArray(comment.user)
       ? comment.user[0]
@@ -32,19 +41,15 @@ function buildCommentTree(comments: any[]): Comment[] {
     commentMap.set(comment.id, commentObj);
   });
 
-  // Second pass: build the tree
   commentMap.forEach((comment) => {
     if (comment.parent_id) {
-      // This is a reply then add it to parent's replies
       const parent = commentMap.get(comment.parent_id);
       if (parent) {
         parent.replies.push(comment);
       } else {
-        // Parent not found then treat as root
         rootComments.push(comment);
       }
     } else {
-      // Root comment
       rootComments.push(comment);
     }
   });
@@ -52,112 +57,132 @@ function buildCommentTree(comments: any[]): Comment[] {
   return rootComments;
 }
 
-// Fetches a single post with its comments from Supabase
 export function useSupabasePostDetails(postId: string) {
   return useQuery({
     queryKey: ["post", postId],
     queryFn: async () => {
-      // Fetch the post using the view
-      const { data: postData, error: postError } = await supabase
-        .from("posts_with_details")
-        .select("*")
-        .eq("id", postId)
+      // Fetch post, poll, comments, and streak in parallel
+      const [postResult, pollResult, commentsResult] = await Promise.all([
+        supabase
+          .from("posts_with_details")
+          .select("*")
+          .eq("id", postId)
+          .single(),
+
+        supabase
+          .from("polls")
+          .select(
+            `
+            id,
+            post_id,
+            question,
+            created_at,
+            poll_options (
+              id,
+              poll_id,
+              text,
+              votes_count,
+              image_url
+            )
+          `,
+          )
+          .eq("post_id", postId)
+          .single(),
+
+        supabase
+          .from("comments")
+          .select(
+            `
+            id,
+            post_id,
+            user_id,
+            parent_id,
+            comment,
+            created_at,
+            upvotes,
+            user:users!user_id (
+              id,
+              username,
+              full_name,
+              image_url
+            )
+          `,
+          )
+          .eq("post_id", postId)
+          .order("created_at", { ascending: true }),
+      ]);
+
+      if (postResult.error) throw postResult.error;
+      if (!postResult.data) throw new Error("Post not found");
+      if (commentsResult.error) throw commentsResult.error;
+
+      const postData = postResult.data;
+      const pollData = postResult.error ? null : pollResult.data;
+
+      // Fetch streak for the post author
+      const { data: streakData } = await supabase
+        .from("user_streaks")
+        .select("current_streak, last_active_date")
+        .eq("user_id", postData.user_id as string)
         .single();
 
-      if (postError) throw postError;
-      if (!postData) throw new Error("Post not found");
+      const alive = isStreakAlive(
+        (streakData?.last_active_date as string | null) ?? null,
+      );
+      const streak = alive
+        ? ((streakData?.current_streak as number | null) ?? 0)
+        : 0;
 
-      // Fetch poll if exists
-      const { data: pollData } = await supabase
-        .from("polls")
-        .select(
-          `
-          id,
-          post_id,
-          question,
-          created_at,
-          poll_options (
-            id,
-            poll_id,
-            text,
-            votes_count,
-            image_url
-          )
-        `,
-        )
-        .eq("post_id", postId)
-        .single();
-
-      // Fetch comments for this post
-      const { data: commentsData, error: commentsError } = await supabase
-        .from("comments")
-        .select(
-          `
-          id,
-          post_id,
-          user_id,
-          parent_id,
-          comment,
-          created_at,
-          upvotes,
-          user:users!user_id (
-            id,
-            username,
-            full_name,
-            image_url
-          )
-        `,
-        )
-        .eq("post_id", postId)
-        .order("created_at", { ascending: true });
-
-      if (commentsError) throw commentsError;
-
-      // Transform poll data
+      // Transform poll
       const pollTransformed = pollData
         ? {
             id: pollData.id,
             post_id: pollData.post_id,
             question: pollData.question,
             created_at: pollData.created_at,
-            options: (pollData.poll_options || []).map((opt: any) => ({
-              id: opt.id,
-              poll_id: opt.poll_id,
-              text: opt.text,
-              votes_count: opt.votes_count,
-              image_url: opt.image_url,
-            })),
+            options: ((pollData.poll_options as any[]) || []).map(
+              (opt): PollOption => ({
+                id: opt.id,
+                poll_id: opt.poll_id,
+                text: opt.text,
+                votes_count: (opt.votes_count as number | null) ?? 0,
+                image_url: opt.image_url ?? null,
+              }),
+            ),
           }
         : null;
 
-      // Transform post data with proper null handling
+      // Transform post — streak now included
       const post: Post = {
-        id: postData.id || "",
-        title: postData.title || "Untitled",
-        description: postData.description,
-        image: postData.image_url,
-        upvotes: postData.upvotes ?? 0,
-        nr_of_comments: postData.comment_count ?? 0,
-        created_at: postData.created_at,
+        id: (postData.id as string) ?? "",
+        title: (postData.title as string) ?? "Untitled",
+        description: (postData.description as string | null) ?? null,
+        image: (postData.image_url as string | null) ?? null,
+        upvotes: (postData.upvotes as number | null) ?? 0,
+        nr_of_comments: (postData.comment_count as number | null) ?? 0,
+        created_at: (postData.created_at as string | null) ?? null,
+        streak,
         user: {
-          id: postData.user_id || "",
-          name: postData.full_name || postData.username || "Unknown",
-          image: postData.user_image || null,
+          id: (postData.user_id as string) ?? "",
+          name:
+            (postData.full_name as string | null) ??
+            (postData.username as string | null) ??
+            "Unknown",
+          image: (postData.user_image as string | null) ?? null,
         },
         group: {
-          id: postData.group_id || "",
-          name: postData.group_name || "Unknown Group",
-          image: postData.group_image || "",
+          id: (postData.group_id as string) ?? "",
+          name: (postData.group_name as string | null) ?? "Unknown Group",
+          image: (postData.group_image as string | null) ?? null,
         },
         poll: pollTransformed,
       };
 
-      // Build comment tree
-      const comments = buildCommentTree(commentsData || []);
+      const comments = buildCommentTree(commentsResult.data || []);
 
       return { post, comments };
     },
     enabled: !!postId,
-    staleTime: 1000 * 60 * 2, // 2 minutes
+    staleTime: 1000 * 60 * 2,
   });
 }

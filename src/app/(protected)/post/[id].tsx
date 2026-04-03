@@ -5,10 +5,11 @@ import PostListItem from "@/src/components/PostListItem";
 import { useCreateComment } from "@/src/hooks/mutations/useCommentMutations";
 import { useSupabaseGroupMembers } from "@/src/hooks/queries/useSupabaseGroupMembers";
 import { useSupabasePostDetails } from "@/src/hooks/queries/useSupabasePostDetails";
+import { Comment } from "@/src/types";
 import { useUser } from "@clerk/clerk-expo";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useLocalSearchParams } from "expo-router";
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -36,18 +37,21 @@ export default function DetailedPost() {
   } | null>(null);
   const [isInputFocused, setIsInputFocused] = useState(false);
 
+  // Optimistic comments stored locally — appear instantly before DB confirms
+  const [optimisticComments, setOptimisticComments] = useState<Comment[]>([]);
+
   const inputRef = useRef<TextInput | null>(null);
 
-  // Fetch post and comments from Supabase
+  // Fetch post details and comments from Supabase using React Query
   const { data, isLoading, error } = useSupabasePostDetails(id as string);
 
-  // Fetch group memberships from Supabase
+  // Fetch group memberships to check if user has joined this community
   const { data: groupMembers = [] } = useSupabaseGroupMembers(user?.id || "");
 
-  // Create comment mutation
+  // Mutation hook for creating comments
   const createCommentMutation = useCreateComment();
 
-  // Sets reply state and focuses the comment input
+  // Sets reply state and focuses the comment input when user taps reply
   const handleReplyPress = useCallback(
     (commentId: string, username: string) => {
       setReplyingTo({ username, commentId });
@@ -56,45 +60,138 @@ export default function DetailedPost() {
     [],
   );
 
-  // Submits the comment to Supabase
+  // Clears the reply state when user cancels a reply
+  const handleCancelReply = useCallback(() => {
+    setReplyingTo(null);
+  }, []);
+
+  // Submits the comment — shows it instantly via optimistic update,
+  // then syncs with the database in the background
   const handleSend = async () => {
-    if (!comment.trim() || !user?.id) {
-      if (!user?.id) {
-        Alert.alert("Sign in required", "Please sign in to comment");
-      }
-      return;
-    }
+    if (!comment.trim() || !user?.id || !data?.post) return;
+
+    const trimmed = comment.trim();
+    const parentId = replyingTo?.commentId || null;
+
+    // Build a temporary comment object so it appears in the list immediately
+    // Uses a unique temporary ID prefixed with "optimistic-" to identify it
+    const optimisticComment: Comment = {
+      id: `optimistic-${Date.now()}`,
+      post_id: data.post.id,
+      user_id: user.id,
+      parent_id: parentId,
+      comment: trimmed,
+      created_at: new Date().toISOString(),
+      upvotes: 0,
+      user: {
+        id: user.id,
+        name:
+          (user.fullName as string | null) ??
+          (user.username as string | null) ??
+          "You",
+        image: (user.imageUrl as string | null) ?? null,
+      },
+      replies: [],
+    };
+
+    // Add optimistic comment to local state — renders instantly
+    setOptimisticComments((prev) => [...prev, optimisticComment]);
+
+    // Clear input and reply state immediately — don't wait for server
+    setComment("");
+    setReplyingTo(null);
 
     try {
       await createCommentMutation.mutateAsync({
-        postId: data!.post.id,
+        postId: data.post.id,
         userId: user.id,
-        comment: comment.trim(),
-        parentId: replyingTo?.commentId || null,
+        comment: trimmed,
+        parentId,
       });
 
-      // Clear input and reply state on success
-      setComment("");
-      setReplyingTo(null);
-
-      // Show success message
-      Alert.alert("Success", "Comment posted!");
-    } catch (error: any) {
-      Alert.alert("Error", error.message || "Failed to post comment");
+      // Remove optimistic comment — the real one will arrive from
+      // the invalidated React Query cache after the mutation succeeds
+      setOptimisticComments((prev) =>
+        prev.filter((c) => c.id !== optimisticComment.id),
+      );
+    } catch (err: any) {
+      // Roll back optimistic comment if the DB call failed
+      setOptimisticComments((prev) =>
+        prev.filter((c) => c.id !== optimisticComment.id),
+      );
+      Alert.alert("Error", err.message || "Failed to post comment");
     }
   };
 
-  // Clears the reply state
-  const handleCancelReply = () => {
-    setReplyingTo(null);
-  };
+  // Merges real comments from React Query with local optimistic comments.
+  // Handles both root-level comments and nested replies at any depth.
+  const allComments = useMemo(() => {
+    if (!data?.comments) return optimisticComments;
+    if (optimisticComments.length === 0) return data.comments;
 
-  // Checks if user is a member of the post community
-  const isJoined = data?.post
-    ? groupMembers.some((m) => m.group_id === data.post.group.id)
-    : false;
+    // Split optimistic comments into root-level and replies
+    const rootOptimistic = optimisticComments.filter((c) => !c.parent_id);
+    const replyOptimistic = optimisticComments.filter((c) => !!c.parent_id);
 
-  // Shows loading spinner while fetching
+    // Recursively walk the comment tree and attach optimistic replies
+    // to their correct parent at any nesting depth
+    const patchReplies = (comments: Comment[]): Comment[] =>
+      comments.map((c) => {
+        const newReplies = replyOptimistic.filter((r) => r.parent_id === c.id);
+        return {
+          ...c,
+          replies:
+            newReplies.length > 0
+              ? [...patchReplies(c.replies), ...newReplies]
+              : patchReplies(c.replies),
+        };
+      });
+
+    // Combine: patched real comments + any new root-level optimistic comments
+    return [...patchReplies(data.comments), ...rootOptimistic];
+  }, [data?.comments, optimisticComments]);
+
+  // Memoised join status — avoids recalculating on every render
+  const isJoined = useMemo(() => {
+    if (!data?.post) return false;
+    return groupMembers.some((m) => m.group_id === data.post.group.id);
+  }, [groupMembers, data?.post?.group?.id]);
+
+  // Stable renderItem — defined with useCallback so FlatList doesn't
+  // re-render every comment card when unrelated state changes
+  const renderComment = useCallback(
+    ({ item }: { item: Comment }) => (
+      <CommentListItem
+        comment={item}
+        depth={0}
+        handleReplyPress={handleReplyPress}
+      />
+    ),
+    [handleReplyPress],
+  );
+
+  // Stable key extractor to help FlatList track items efficiently
+  const keyExtractor = useCallback((item: Comment) => item.id, []);
+
+  // Renders empty state when there are no comments yet
+  const renderEmptyComments = useCallback(
+    () => (
+      <View style={styles.emptyCommentsContainer}>
+        <MaterialCommunityIcons
+          name="comment-outline"
+          size={48}
+          color={COLORS.textSecondary}
+        />
+        <Text style={styles.emptyCommentsTitle}>No comments yet</Text>
+        <Text style={styles.emptyCommentsSubtitle}>
+          Be the first to share your thoughts!
+        </Text>
+      </View>
+    ),
+    [],
+  );
+
+  // Shows loading spinner while fetching post data
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -104,7 +201,7 @@ export default function DetailedPost() {
     );
   }
 
-  // Shows error if post not found or fetch failed
+  // Shows error state if post not found or fetch failed
   if (error || !data) {
     return (
       <View style={styles.notFoundContainer}>
@@ -121,56 +218,42 @@ export default function DetailedPost() {
     );
   }
 
-  const { post, comments } = data;
+  const { post } = data;
 
-  // Renders individual comment with proper nesting
-  const renderComment = ({ item }: { item: (typeof comments)[0] }) => (
-    <CommentListItem
-      comment={item}
-      depth={0}
-      handleReplyPress={handleReplyPress}
-    />
-  );
-
-  // Renders empty state when there are no comments
-  const renderEmptyComments = () => (
-    <View style={styles.emptyCommentsContainer}>
-      <MaterialCommunityIcons
-        name="comment-outline"
-        size={48}
-        color={COLORS.textSecondary}
-      />
-      <Text style={styles.emptyCommentsTitle}>No comments yet</Text>
-      <Text style={styles.emptyCommentsSubtitle}>
-        Be the first to share your thoughts!
-      </Text>
-    </View>
+  // Use PollListItem if the post has a poll, otherwise use PostListItem
+  const ListHeader = post.poll ? (
+    <PollListItem post={post} isDetailedPost isJoined={isJoined} />
+  ) : (
+    <PostListItem post={post} isDetailedPost isJoined={isJoined} />
   );
 
   return (
+    // KeyboardAvoidingView pushes content up when keyboard appears on iOS
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       style={styles.container}
       keyboardVerticalOffset={insets.top + 10}
     >
       <FlatList
-        ListHeaderComponent={
-          // Use PollListItem if post has a poll, otherwise PostListItem
-          post.poll ? (
-            <PollListItem post={post} isDetailedPost isJoined={isJoined} />
-          ) : (
-            <PostListItem post={post} isDetailedPost isJoined={isJoined} />
-          )
-        }
-        data={comments}
-        keyExtractor={(item) => item.id}
+        // Post card renders as the list header above the comments
+        ListHeaderComponent={ListHeader}
+        data={allComments}
+        keyExtractor={keyExtractor}
         renderItem={renderComment}
         ListEmptyComponent={renderEmptyComments}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        // Allows tapping comment items while keyboard is open
+        keyboardShouldPersistTaps="handled"
+        // Performance optimisations
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={10}
+        windowSize={8}
       />
 
+      {/* Comment input bar pinned to bottom of screen */}
       <View style={[styles.inputContainer, { paddingBottom: insets.bottom }]}>
+        {/* Shows who the user is replying to with a cancel option */}
         {replyingTo && (
           <View style={styles.replyPreview}>
             <View style={styles.replyIndicator} />
@@ -202,6 +285,7 @@ export default function DetailedPost() {
             editable={!createCommentMutation.isPending}
           />
 
+          {/* Send button only appears when input is focused or has text */}
           {(isInputFocused || comment.trim()) && (
             <Pressable
               disabled={!comment.trim() || createCommentMutation.isPending}

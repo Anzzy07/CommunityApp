@@ -34,26 +34,17 @@ export default function GroupSelector() {
 
   const isLoading = groupsLoading || membersLoading;
 
-  console.log("🔍 Group Selector Debug:");
-  console.log("- User ID:", user?.id);
-  console.log("- Groups loading:", groupsLoading);
-  console.log("- Members loading:", membersLoading);
-  console.log("- Total groups:", groups.length);
-  console.log("- Groups:", groups);
-  console.log("- Group members:", groupMembers.length);
-  console.log("- Members:", groupMembers);
-
   // Filter to only show groups the user has joined
   const userGroups = useMemo(() => {
     const userGroupIds = groupMembers.map((m) => m.group_id);
-    console.log("- User group IDs:", userGroupIds);
+    // console.log("- User group IDs:", userGroupIds);
 
     const filtered = groups.filter((g) => userGroupIds.includes(g.id));
-    console.log("- Filtered user groups:", filtered.length, "groups");
-    console.log(
-      "- Group names:",
-      filtered.map((g) => g.name),
-    );
+    // console.log("- Filtered user groups:", filtered.length, "groups");
+    // console.log(
+    //   "- Group names:",
+    //   filtered.map((g) => g.name),
+    // );
 
     return filtered;
   }, [groups, groupMembers]);

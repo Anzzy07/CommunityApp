@@ -1,10 +1,37 @@
 import { supabase } from "@/src/lib/supabase";
+import { Post } from "@/src/types";
 import { uploadImage } from "@/src/utils/supabaseImages";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as Clipboard from "expo-clipboard";
 import { Alert, Share } from "react-native";
 
-// Vote on a post (upvote or downvote)
+// Helper: update a single post inside infinite query pages
+function patchPost(
+  old: any,
+  postId: string,
+  updater: (post: Post) => Post,
+): any {
+  if (!old?.pages) return old;
+  return {
+    ...old,
+    pages: old.pages.map((page: Post[]) =>
+      page.map((post) => (post.id === postId ? updater(post) : post)),
+    ),
+  };
+}
+
+// Helper: remove a post from infinite query pages
+function removePost(old: any, postId: string): any {
+  if (!old?.pages) return old;
+  return {
+    ...old,
+    pages: old.pages.map((page: Post[]) =>
+      page.filter((post) => post.id !== postId),
+    ),
+  };
+}
+
+// Vote on a post — fully optimistic, UI updates instantly
 export function usePostVote() {
   const queryClient = useQueryClient();
 
@@ -18,62 +45,125 @@ export function usePostVote() {
       userId: string;
       voteType: "up" | "down";
     }) => {
-      // Check if user already voted
       const { data: existingVote } = await supabase
         .from("post_votes")
-        .select("*")
+        .select("vote_type")
         .eq("post_id", postId)
         .eq("user_id", userId)
         .single();
 
       if (existingVote) {
-        // If same vote type, remove it (un-vote)
         if (existingVote.vote_type === voteType) {
+          // Same vote → remove (un-vote)
           const { error } = await supabase
             .from("post_votes")
             .delete()
             .eq("post_id", postId)
             .eq("user_id", userId);
-
           if (error) throw error;
           return { action: "removed", voteType: null };
         } else {
-          // If different vote type, update it
+          // Different vote → switch
           const { error } = await supabase
             .from("post_votes")
             .update({ vote_type: voteType })
             .eq("post_id", postId)
             .eq("user_id", userId);
-
           if (error) throw error;
           return { action: "updated", voteType };
         }
       } else {
-        // No existing vote, create new one
         const { error } = await supabase.from("post_votes").insert({
           post_id: postId,
           user_id: userId,
           vote_type: voteType,
         });
-
         if (error) throw error;
         return { action: "created", voteType };
       }
     },
-    onSuccess: async (_, variables) => {
-      // Refetch queries to get updated vote count from database
-      await queryClient.refetchQueries({ queryKey: ["posts"] });
-      await queryClient.refetchQueries({
-        queryKey: ["post", variables.postId],
+
+    onMutate: async ({ postId, userId, voteType }) => {
+      await queryClient.cancelQueries({ queryKey: ["posts"] });
+      await queryClient.cancelQueries({ queryKey: ["post", postId] });
+
+      const prevPosts = queryClient.getQueryData(["posts"]);
+      const prevPost = queryClient.getQueryData(["post", postId]);
+      const prevVote = queryClient.getQueryData([
+        "post-vote",
+        postId,
+        userId,
+      ]) as "up" | "down" | null;
+
+      // Calculate vote delta
+      let delta = 0;
+      if (voteType === "up") {
+        if (prevVote === "up")
+          delta = -1; // removing upvote
+        else if (prevVote === "down")
+          delta = 2; // switching down → up
+        else delta = 1; // new upvote
+      } else {
+        if (prevVote === "down")
+          delta = 1; // removing downvote
+        else if (prevVote === "up")
+          delta = -2; // switching up → down
+        else delta = -1; // new downvote
+      }
+
+      const newVote: "up" | "down" | null =
+        prevVote === voteType ? null : voteType;
+
+      // Update feed instantly
+      queryClient.setQueryData(["posts"], (old: any) =>
+        patchPost(old, postId, (post) => ({
+          ...post,
+          upvotes: post.upvotes + delta,
+        })),
+      );
+
+      // Update detail page if open
+      queryClient.setQueryData(["post", postId], (old: any) => {
+        if (!old?.post) return old;
+        return {
+          ...old,
+          post: { ...old.post, upvotes: old.post.upvotes + delta },
+        };
       });
-      await queryClient.refetchQueries({
+
+      // Update vote status immediately
+      queryClient.setQueryData(["post-vote", postId, userId], newVote);
+
+      return { prevPosts, prevPost, prevVote };
+    },
+
+    onError: (_err, variables, context) => {
+      if (context?.prevPosts !== undefined) {
+        queryClient.setQueryData(["posts"], context.prevPosts);
+      }
+      if (context?.prevPost !== undefined) {
+        queryClient.setQueryData(["post", variables.postId], context.prevPost);
+      }
+      if (context?.prevVote !== undefined) {
+        queryClient.setQueryData(
+          ["post-vote", variables.postId, variables.userId],
+          context.prevVote,
+        );
+      }
+    },
+
+    onSettled: (_data, _err, variables) => {
+      // Sync with server quietly in the background
+      queryClient.invalidateQueries({ queryKey: ["posts"] });
+      queryClient.invalidateQueries({ queryKey: ["post", variables.postId] });
+      queryClient.invalidateQueries({
         queryKey: ["post-vote", variables.postId, variables.userId],
       });
     },
   });
 }
 
-// Give or remove award from a post
+// Award a post — optimistic
 export function usePostAward() {
   const queryClient = useQueryClient();
 
@@ -88,46 +178,36 @@ export function usePostAward() {
       remove?: boolean;
     }) => {
       if (remove) {
-        // Remove award
         const { error } = await supabase
           .from("post_awards")
           .delete()
           .eq("post_id", postId)
           .eq("user_id", userId);
-
         if (error) throw error;
         return { action: "removed" };
       } else {
-        // Give award
-        const { error } = await supabase.from("post_awards").insert({
-          post_id: postId,
-          user_id: userId,
-        });
-
+        const { error } = await supabase
+          .from("post_awards")
+          .insert({ post_id: postId, user_id: userId });
         if (error) throw error;
         return { action: "created" };
       }
     },
+
     onMutate: async ({ postId, userId, remove }) => {
-      // Cancel outgoing queries to avoid race conditions
       await queryClient.cancelQueries({
         queryKey: ["post-award", postId, userId],
       });
-
-      // Snapshot previous value
       const previousAward = queryClient.getQueryData([
         "post-award",
         postId,
         userId,
       ]);
-
-      // Optimistically update award status
       queryClient.setQueryData(["post-award", postId, userId], !remove);
-
       return { previousAward };
     },
-    onError: (err, variables, context) => {
-      // Rollback on error
+
+    onError: (_err, variables, context) => {
       if (context?.previousAward !== undefined) {
         queryClient.setQueryData(
           ["post-award", variables.postId, variables.userId],
@@ -135,8 +215,8 @@ export function usePostAward() {
         );
       }
     },
-    onSettled: (_, __, variables) => {
-      // Refetch to ensure sync with server
+
+    onSettled: (_data, _err, variables) => {
       queryClient.invalidateQueries({
         queryKey: ["post-award", variables.postId, variables.userId],
       });
@@ -161,16 +241,9 @@ export function useCreatePost() {
       description?: string;
       imageUri?: string;
     }) => {
-      // Upload image to Supabase Storage if provided
       let storagePath: string | null = null;
       if (imageUri) {
-        try {
-          storagePath = await uploadImage(imageUri);
-          // console.log("✅ Image uploaded to:", storagePath);
-        } catch (error) {
-          console.error("❌ Error uploading image:", error);
-          throw new Error("Failed to upload image");
-        }
+        storagePath = await uploadImage(imageUri);
       }
 
       const { data, error } = await supabase
@@ -180,26 +253,21 @@ export function useCreatePost() {
           user_id: userId,
           title,
           description: description || null,
-          image_url: storagePath, // storage path
+          image_url: storagePath,
         })
         .select()
         .single();
 
-      if (error) {
-        console.error("❌ Error creating post:", error);
-        throw error;
-      }
-
-      // console.log("✅ Post created:", data);
+      if (error) throw error;
       return data;
     },
     onSuccess: () => {
+      // Real-time subscription handles this, but invalidate as a safety net
       queryClient.invalidateQueries({ queryKey: ["posts"] });
     },
   });
 }
 
-// Delete a post
 export function useDeletePost() {
   const queryClient = useQueryClient();
 
@@ -211,9 +279,6 @@ export function useDeletePost() {
       postId: string;
       userId: string;
     }) => {
-      console.log("🗑️ Deleting post:", postId);
-
-      // Verify ownership
       const { data: post, error: checkError } = await supabase
         .from("posts")
         .select("user_id")
@@ -224,96 +289,37 @@ export function useDeletePost() {
         throw new Error("You don't have permission to delete this post");
       }
 
-      // Delete the post
       const { error } = await supabase
         .from("posts")
         .delete()
         .eq("id", postId)
         .eq("user_id", userId);
 
-      if (error) {
-        console.error("❌ Error deleting post:", error);
-        throw error;
-      }
-
-      // console.log("✅ Post deleted");
+      if (error) throw error;
       return { success: true };
     },
-    onSuccess: () => {
+
+    onMutate: async ({ postId }) => {
+      await queryClient.cancelQueries({ queryKey: ["posts"] });
+      const prevPosts = queryClient.getQueryData(["posts"]);
+      // Remove from feed immediately
+      queryClient.setQueryData(["posts"], (old: any) =>
+        removePost(old, postId),
+      );
+      return { prevPosts };
+    },
+
+    onError: (_err, _vars, context) => {
+      if (context?.prevPosts !== undefined) {
+        queryClient.setQueryData(["posts"], context.prevPosts);
+      }
+    },
+
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["posts"] });
     },
   });
 }
-
-// Update a post
-// export function useUpdatePost() {
-//   const queryClient = useQueryClient();
-
-//   return useMutation({
-//     mutationFn: async ({
-//       postId,
-//       userId,
-//       title,
-//       description,
-//       imageUri,
-//     }: {
-//       postId: string;
-//       userId: string;
-//       title: string;
-//       description?: string;
-//       imageUri?: string;
-//     }) => {
-//       console.log("📝 Updating post:", postId);
-
-//       // Verify ownership
-//       const { data: post, error: checkError } = await supabase
-//         .from("posts")
-//         .select("user_id")
-//         .eq("id", postId)
-//         .single();
-
-//       if (checkError || !post || post.user_id !== userId) {
-//         throw new Error("You don't have permission to edit this post");
-//       }
-
-//       // Upload image if provided
-//       let storagePath: string | null = null;
-//       if (imageUri) {
-//         try {
-//           console.log("📤 Uploading image to storage...");
-//           storagePath = await uploadImage(imageUri);
-//           console.log("✅ Image uploaded to:", storagePath);
-//         } catch (error) {
-//           console.error("❌ Error uploading image:", error);
-//           throw new Error("Failed to upload image");
-//         }
-//       }
-
-//       const { data, error } = await supabase
-//         .from("posts")
-//         .update({
-//           title,
-//           description: description || null,
-//           image_url: storagePath,
-//         })
-//         .eq("id", postId)
-//         .eq("user_id", userId)
-//         .select()
-//         .single();
-
-//       if (error) {
-//         console.error("❌ Error updating post:", error);
-//         throw error;
-//       }
-
-//       console.log("✅ Post updated");
-//       return data;
-//     },
-//     onSuccess: () => {
-//       queryClient.invalidateQueries({ queryKey: ["posts"] });
-//     },
-//   });
-// }
 
 export function useCreatePoll() {
   const queryClient = useQueryClient();
@@ -329,30 +335,19 @@ export function useCreatePoll() {
       groupId: string;
       userId: string;
       question: string;
-      options: { text: string; imageUri?: string }[]; // Changed to imageUri
+      options: { text: string; imageUri?: string }[];
       durationHours: number;
     }) => {
-      // Create the post first
       const { data: post, error: postError } = await supabase
         .from("posts")
-        .insert({
-          group_id: groupId,
-          user_id: userId,
-          title: question,
-        })
+        .insert({ group_id: groupId, user_id: userId, title: question })
         .select()
         .single();
+      if (postError) throw postError;
 
-      if (postError) {
-        console.error("❌ Error creating poll post:", postError);
-        throw postError;
-      }
-
-      // Calculate end date
       const endsAt = new Date();
       endsAt.setHours(endsAt.getHours() + durationHours);
 
-      // Create the poll
       const { data: poll, error: pollError } = await supabase
         .from("polls")
         .insert({
@@ -363,42 +358,25 @@ export function useCreatePoll() {
         })
         .select()
         .single();
+      if (pollError) throw pollError;
 
-      if (pollError) {
-        console.error("❌ Error creating poll:", pollError);
-        throw pollError;
-      }
-
-      // Upload images for poll options if they have images
       const optionsWithImages = await Promise.all(
         options.map(async (opt) => {
-          let imagePath: string | undefined;
+          let imagePath: string | null = null;
           if (opt.imageUri) {
             try {
               imagePath = await uploadImage(opt.imageUri);
-            } catch (error) {
-              console.error("❌ Poll option image upload failed:", error);
-            }
+            } catch {}
           }
-          return {
-            poll_id: poll.id,
-            text: opt.text,
-            image_url: imagePath || null,
-          };
+          return { poll_id: poll.id, text: opt.text, image_url: imagePath };
         }),
       );
 
-      // Create poll options
       const { error: optionsError } = await supabase
         .from("poll_options")
         .insert(optionsWithImages);
+      if (optionsError) throw optionsError;
 
-      if (optionsError) {
-        console.error("❌ Error creating poll options:", optionsError);
-        throw optionsError;
-      }
-
-      // console.log("✅ Poll created with options");
       return { post, poll };
     },
     onSuccess: () => {
@@ -407,7 +385,6 @@ export function useCreatePoll() {
   });
 }
 
-// Delete a poll (and its associated post)
 export function useDeletePoll() {
   const queryClient = useQueryClient();
 
@@ -419,9 +396,6 @@ export function useDeletePoll() {
       postId: string;
       userId: string;
     }) => {
-      // console.log("🗑️ Deleting poll:", postId);
-
-      // Verify ownership
       const { data: post, error: checkError } = await supabase
         .from("posts")
         .select("user_id")
@@ -432,28 +406,37 @@ export function useDeletePoll() {
         throw new Error("You don't have permission to delete this poll");
       }
 
-      // Delete the post (this will cascade delete poll, options, and votes)
       const { error } = await supabase
         .from("posts")
         .delete()
         .eq("id", postId)
         .eq("user_id", userId);
 
-      if (error) {
-        console.error("❌ Error deleting poll:", error);
-        throw error;
-      }
-
-      // console.log("✅ Poll deleted");
+      if (error) throw error;
       return { success: true };
     },
-    onSuccess: () => {
+
+    onMutate: async ({ postId }) => {
+      await queryClient.cancelQueries({ queryKey: ["posts"] });
+      const prevPosts = queryClient.getQueryData(["posts"]);
+      queryClient.setQueryData(["posts"], (old: any) =>
+        removePost(old, postId),
+      );
+      return { prevPosts };
+    },
+
+    onError: (_err, _vars, context) => {
+      if (context?.prevPosts !== undefined) {
+        queryClient.setQueryData(["posts"], context.prevPosts);
+      }
+    },
+
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["posts"] });
     },
   });
 }
 
-// Share post with native share or copy link
 export function usePostShare() {
   return useMutation({
     mutationFn: async ({
@@ -463,31 +446,23 @@ export function usePostShare() {
       postId: string;
       postTitle: string;
     }) => {
-      // Create shareable link
       const shareUrl = `https://yourapp.com/post/${postId}`;
       const shareMessage = `Check out this post: ${postTitle}\n\n${shareUrl}`;
-
       try {
-        // Try native share first
         const result = await Share.share({
           message: shareMessage,
           url: shareUrl,
           title: postTitle,
         });
-
         if (result.action === Share.sharedAction) {
           return { success: true, method: "shared" };
-        } else if (result.action === Share.dismissedAction) {
-          return { success: false, method: "dismissed" };
         }
-      } catch (error: any) {
-        // If share fails, copy to clipboard
+        return { success: false, method: "dismissed" };
+      } catch {
         await Clipboard.setStringAsync(shareUrl);
         Alert.alert("Link Copied!", "Post link copied to clipboard");
         return { success: true, method: "copied" };
       }
-
-      return { success: false };
     },
   });
 }

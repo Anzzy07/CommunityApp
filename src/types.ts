@@ -20,13 +20,14 @@ export type Post = {
   id: string;
   title: string;
   created_at: string | null;
-  upvotes: number | null;
+  upvotes: number;
   nr_of_comments: number;
   image: string | null;
   description: string | null;
   group: Group;
   user: User;
   poll?: Poll | null;
+  streak: number;
 };
 
 // COMMENT
@@ -37,7 +38,7 @@ export type Comment = {
   parent_id: string | null;
   comment: string;
   created_at: string | null;
-  upvotes: number | null;
+  upvotes: number;
   user: User;
   replies: Comment[];
 };
@@ -78,7 +79,7 @@ export type PollOption = {
   id: string;
   poll_id: string;
   text: string;
-  votes_count: number | null;
+  votes_count: number;
   image_url?: string | null;
 };
 
@@ -91,8 +92,8 @@ export type PollVote = {
 // USER STREAKS
 export type UserStreak = {
   user_id: string;
-  current_streak: number | null;
-  longest_streak: number | null;
+  current_streak: number;
+  longest_streak: number;
   last_active_date: string | null;
 };
 

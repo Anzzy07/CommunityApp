@@ -3,9 +3,10 @@ import PollListItem from "@/src/components/PollListItem";
 import PostListItem from "@/src/components/PostListItem";
 import { useSupabaseGroupMembers } from "@/src/hooks/queries/useSupabaseGroupMembers";
 import { useSupabasePosts } from "@/src/hooks/queries/useSupabasePosts";
+import { Post } from "@/src/types";
 import { useUser } from "@clerk/clerk-expo";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import React from "react";
+import React, { useCallback, useMemo } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -15,56 +16,82 @@ import {
   View,
 } from "react-native";
 
-// Main home feed screen displaying all posts with pull-to-refresh using React Query
 export default function HomeScreen() {
   const { user } = useUser();
 
-  // Fetch posts from Supabase with React Query
   const {
-    data: posts = [],
+    data,
     isLoading,
     error,
     refetch,
     isRefetching,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
   } = useSupabasePosts();
 
-  // Fetch group memberships from Supabase
   const { data: groupMembers = [] } = useSupabaseGroupMembers(user?.id || "");
 
-  // Checks if user is a member of the given community
-  const isJoined = (groupId: string) => {
-    if (!user?.id) return false;
-    return groupMembers.some((m) => m.group_id === groupId);
-  };
-
-  // Renders individual post item with synced join status
-  const renderPost = ({ item }: { item: (typeof posts)[0] }) => {
-    // Use PollListItem if post has a poll
-    if (item.poll) {
-      return <PollListItem post={item} isJoined={isJoined(item.group.id)} />;
-    }
-
-    return <PostListItem post={item} isJoined={isJoined(item.group.id)} />;
-  };
-
-  // Renders empty state when there are no posts
-  const renderEmpty = () => (
-    <View style={styles.emptyContainer}>
-      <View style={styles.emptyIconContainer}>
-        <MaterialCommunityIcons
-          name="post-outline"
-          size={64}
-          color={COLORS.textSecondary}
-        />
-      </View>
-      <Text style={styles.emptyTitle}>No Posts Yet</Text>
-      <Text style={styles.emptySubtitle}>
-        Join communities and start sharing!
-      </Text>
-    </View>
+  // Stable Set of joined group IDs — only rebuilds when groupMembers changes
+  const joinedGroupIds = useMemo(
+    () => new Set(groupMembers.map((m) => m.group_id)),
+    [groupMembers],
   );
 
-  // Shows loading spinner while fetching initial posts
+  // Flatten pages — only rebuilds when data changes
+  const posts = useMemo(() => data?.pages.flat() ?? [], [data]);
+
+  // renderItem is stable as long as joinedGroupIds and userId don't change.
+  // PostListItem/PollListItem are memo'd so they only re-render if their
+  // own post data changed — not because other posts in the list changed.
+  const renderPost = useCallback(
+    ({ item }: { item: Post }) => {
+      const isJoined = joinedGroupIds.has(item.group.id);
+      if (item.poll) {
+        return <PollListItem post={item} isJoined={isJoined} />;
+      }
+      return <PostListItem post={item} isJoined={isJoined} />;
+    },
+    [joinedGroupIds],
+  );
+
+  const handleEndReached = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  // Stable key extractor
+  const keyExtractor = useCallback((item: Post) => item.id, []);
+
+  const renderFooter = useCallback(() => {
+    if (!isFetchingNextPage) return null;
+    return (
+      <View style={styles.footerLoader}>
+        <ActivityIndicator size="small" color={COLORS.primary} />
+      </View>
+    );
+  }, [isFetchingNextPage]);
+
+  const renderEmpty = useCallback(
+    () => (
+      <View style={styles.emptyContainer}>
+        <View style={styles.emptyIconContainer}>
+          <MaterialCommunityIcons
+            name="post-outline"
+            size={64}
+            color={COLORS.textSecondary}
+          />
+        </View>
+        <Text style={styles.emptyTitle}>No Posts Yet</Text>
+        <Text style={styles.emptySubtitle}>
+          Join communities and start sharing!
+        </Text>
+      </View>
+    ),
+    [],
+  );
+
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -74,7 +101,6 @@ export default function HomeScreen() {
     );
   }
 
-  // Shows error message if fetch failed
   if (error) {
     return (
       <View style={styles.errorContainer}>
@@ -93,19 +119,28 @@ export default function HomeScreen() {
     <View style={styles.container}>
       <FlatList
         data={posts}
-        keyExtractor={(item) => item.id}
+        keyExtractor={keyExtractor}
         renderItem={renderPost}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}
-            onRefresh={() => refetch()}
+            onRefresh={refetch}
             tintColor={COLORS.primary}
             colors={[COLORS.primary]}
           />
         }
+        onEndReached={handleEndReached}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={renderFooter}
         ListEmptyComponent={renderEmpty}
+        // Performance tuning
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={8}
+        updateCellsBatchingPeriod={50}
+        windowSize={8}
+        initialNumToRender={10}
       />
     </View>
   );
@@ -176,5 +211,9 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     textAlign: "center",
     lineHeight: 22,
+  },
+  footerLoader: {
+    paddingVertical: 20,
+    alignItems: "center",
   },
 });

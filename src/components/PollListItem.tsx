@@ -1,7 +1,6 @@
 import { COLORS } from "@/src/colors";
 import { useJoinGroup } from "@/src/hooks/mutations/useGroupMutations";
 import { usePollVote } from "@/src/hooks/mutations/usePollMutations";
-import { useSupabaseUserStreak } from "@/src/hooks/queries/useSupabaseUserStreaks";
 import { useUserPollVote } from "@/src/hooks/queries/useUserPollVote";
 import { Post } from "@/src/types";
 import { useUser } from "@clerk/clerk-expo";
@@ -29,10 +28,9 @@ function PollListItem({
   const { user } = useUser();
   const router = useRouter();
 
-  // Fetch streak for this post's author
-  const { data: streak } = useSupabaseUserStreak(post.user.id);
+  // Streak comes directly from post prop — no extra query
+  const streak = post.streak ?? 0;
 
-  // Get user's vote on this poll
   const { data: userVote } = useUserPollVote(post.poll?.id || "", user?.id);
 
   const pollVoteMutation = usePollVote();
@@ -42,33 +40,29 @@ function PollListItem({
   const isOwner = post.user.id === user?.id;
   const poll = post.poll!;
 
-  // Calculate total votes
   const totalVotes = poll.options.reduce(
-    (sum, opt) => sum + (opt.votes_count || 0),
+    (sum, opt) => sum + (opt.votes_count ?? 0),
     0,
   );
 
-  // Check if poll has ended
-  const pollEnded = false; // You can add ends_at to poll type and check: isPast(new Date(poll.ends_at))
+  const pollEnded = false;
 
   const handleVote = async (optionId: string) => {
     if (!user?.id) {
       Alert.alert("Sign in required", "Please sign in to vote");
       return;
     }
-
     if (pollEnded) {
       Alert.alert("Poll Ended", "This poll has already ended");
       return;
     }
-
     try {
       await pollVoteMutation.mutateAsync({
         pollId: poll.id,
         optionId,
         userId: user.id,
       });
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "Failed to vote. Please try again.");
     }
   };
@@ -88,7 +82,7 @@ function PollListItem({
               groupId: post.group.id,
               userId: user.id,
             });
-          } catch (error) {
+          } catch {
             Alert.alert("Error", "Failed to join community.");
           }
         },
@@ -98,7 +92,6 @@ function PollListItem({
 
   const handleOptions = () => {
     if (!isOwner) return;
-
     Alert.alert("Poll Options", "", [
       {
         text: "Delete Poll",
@@ -119,11 +112,8 @@ function PollListItem({
                       userId: user!.id,
                     });
                     Alert.alert("Success", "Poll deleted successfully");
-                    // If on detail page, go back
-                    if (isDetailedPost) {
-                      router.back();
-                    }
-                  } catch (error) {
+                    if (isDetailedPost) router.back();
+                  } catch {
                     Alert.alert("Error", "Failed to delete poll");
                   }
                 },
@@ -140,7 +130,9 @@ function PollListItem({
     <View style={styles.container}>
       <View style={styles.header}>
         <Image
-          source={{ uri: post.group.image || "https://via.placeholder.com/20" }}
+          source={{
+            uri: post.group.image || "https://via.placeholder.com/20",
+          }}
           style={styles.groupImage}
         />
 
@@ -148,10 +140,10 @@ function PollListItem({
           <View style={styles.headerRow}>
             <Text style={styles.groupName}>{post.group.name}</Text>
 
-            {streak && (streak.current_streak ?? 0) > 0 && (
+            {streak > 0 && (
               <View style={styles.streakBadge}>
                 <MaterialCommunityIcons name="fire" size={14} color="#FF6A00" />
-                <Text style={styles.streakText}>{streak.current_streak}</Text>
+                <Text style={styles.streakText}>{streak}</Text>
               </View>
             )}
 
@@ -167,7 +159,6 @@ function PollListItem({
           )}
         </View>
 
-        {/* Show options menu if owner, otherwise show join button */}
         {isOwner ? (
           <Pressable onPress={handleOptions} hitSlop={10}>
             <Feather
@@ -183,7 +174,6 @@ function PollListItem({
         ) : null}
       </View>
 
-      {/* Poll Question */}
       <View style={styles.pollHeader}>
         <MaterialCommunityIcons
           name="poll"
@@ -194,10 +184,9 @@ function PollListItem({
         <Text style={styles.question}>{poll.question}</Text>
       </View>
 
-      {/* Poll Options */}
       <View style={styles.optionsContainer}>
         {poll.options.map((option) => {
-          const votes = option.votes_count || 0;
+          const votes = option.votes_count ?? 0;
           const percentage = totalVotes > 0 ? (votes / totalVotes) * 100 : 0;
           const isSelected = userVote === option.id;
           const hasVoted = !!userVote;
@@ -213,7 +202,6 @@ function PollListItem({
                 isSelected && styles.optionSelected,
               ]}
             >
-              {/* Progress bar background */}
               {hasVoted && (
                 <View
                   style={[
@@ -224,7 +212,6 @@ function PollListItem({
                 />
               )}
 
-              {/* Option content */}
               <View style={styles.optionContent}>
                 {option.image_url && (
                   <SupabaseImage
@@ -266,7 +253,6 @@ function PollListItem({
         })}
       </View>
 
-      {/* Total votes */}
       <Text style={styles.totalVotes}>
         {totalVotes} {totalVotes === 1 ? "vote" : "votes"}
         {pollEnded && " • Poll ended"}
@@ -274,7 +260,6 @@ function PollListItem({
     </View>
   );
 
-  // Wrap in Pressable via asChild so Link will let post have full width layout
   if (isDetailedPost) return PollContent;
   return (
     <Link href={`/post/${post.id}`} asChild>
@@ -430,4 +415,25 @@ const styles = StyleSheet.create({
   },
 });
 
-export default memo(PollListItem);
+// Only re-render if poll vote counts, comment count, streak or join status changed
+export default memo(PollListItem, (prev, next) => {
+  if (
+    prev.post.id !== next.post.id ||
+    prev.post.nr_of_comments !== next.post.nr_of_comments ||
+    prev.post.streak !== next.post.streak ||
+    prev.isJoined !== next.isJoined ||
+    prev.isDetailedPost !== next.isDetailedPost
+  ) {
+    return false; // re-render
+  }
+
+  // Check if any poll option vote count changed
+  const prevOptions = prev.post.poll?.options ?? [];
+  const nextOptions = next.post.poll?.options ?? [];
+  if (prevOptions.length !== nextOptions.length) return false;
+  for (let i = 0; i < prevOptions.length; i++) {
+    if (prevOptions[i].votes_count !== nextOptions[i].votes_count) return false;
+  }
+
+  return true; // skip re-render
+});
