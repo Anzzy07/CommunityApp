@@ -13,11 +13,12 @@ import {
 } from "@/src/hooks/queries/useSupabaseGroupMembers";
 import { useSupabaseGroups } from "@/src/hooks/queries/useSupabaseGroups";
 import { useSupabasePosts } from "@/src/hooks/queries/useSupabasePosts";
+import { Post } from "@/src/types";
 import { useUser } from "@clerk/clerk-expo";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSetAtom } from "jotai";
-import React, { useMemo } from "react";
+import React, { useCallback, useMemo } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -39,49 +40,49 @@ export default function CommunityDetailsScreen() {
   const { data: groups = [], isLoading: groupsLoading } = useSupabaseGroups();
   const { data: groupMembers = [], isLoading: membersLoading } =
     useSupabaseGroupMembers(user?.id || "");
-  const { data: posts = [], isLoading: postsLoading } = useSupabasePosts();
-  const { data: challenges = [] } = useSupabaseChallenges(id);
 
-  // Get member count for this group
+  // useSupabasePosts now returns an infinite query — data.pages is an array of pages
+  // We flatten all pages into a single array before filtering
+  const { data: postsData } = useSupabasePosts();
+
+  const { data: challenges = [] } = useSupabaseChallenges(id);
   const { data: memberCount = 0 } = useSupabaseGroupMemberCount(id);
 
   // Mutations
   const joinMutation = useJoinGroup();
   const leaveMutation = useLeaveGroup();
 
-  // Find current group
+  // Find current group from the groups list
   const group = groups.find((g) => g.id === id);
 
-  // Check if user has joined this community
+  // Check if current user has joined this community
   const isJoined = groupMembers.some((m) => m.group_id === id);
 
   // Check if current user is the community leader
   const isLeader = group?.leader_id === user?.id;
 
-  // Get posts belonging to this community
-  const groupPosts = useMemo(
-    () => posts.filter((p) => p.group?.id === id),
-    [posts, id],
-  );
+  // Flatten infinite query pages into a single array, then filter to this group.
+  // postsData.pages is an array of pages, each page is an array of Post objects.
+  // We use flatMap to merge all pages, then filter by group id.
+  const groupPosts = useMemo(() => {
+    if (!postsData?.pages) return [];
+    return postsData.pages.flat().filter((p: Post) => p.group?.id === id);
+  }, [postsData?.pages, id]);
 
-  // Handle join
+  // Handles joining this community
   const handleJoin = async () => {
     if (!user?.id) {
       Alert.alert("Sign in required", "Please sign in to join communities");
       return;
     }
-
     try {
-      await joinMutation.mutateAsync({
-        groupId: id,
-        userId: user.id,
-      });
-    } catch (error) {
+      await joinMutation.mutateAsync({ groupId: id, userId: user.id });
+    } catch {
       Alert.alert("Error", "Failed to join community. Please try again.");
     }
   };
 
-  // Handle leave
+  // Handles leaving this community — leaders cannot leave
   const handleLeave = () => {
     if (!user?.id) return;
 
@@ -103,11 +104,8 @@ export default function CommunityDetailsScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              await leaveMutation.mutateAsync({
-                groupId: id,
-                userId: user.id,
-              });
-            } catch (error) {
+              await leaveMutation.mutateAsync({ groupId: id, userId: user.id });
+            } catch {
               Alert.alert(
                 "Error",
                 "Failed to leave community. Please try again.",
@@ -119,7 +117,17 @@ export default function CommunityDetailsScreen() {
     );
   };
 
-  // Loading state
+  // Stable renderItem — useCallback prevents FlatList re-rendering all cards
+  const renderPost = useCallback(
+    ({ item }: { item: Post }) => (
+      <PostListItem post={item} showJoinButton={false} isJoined={isJoined} />
+    ),
+    [isJoined],
+  );
+
+  const keyExtractor = useCallback((item: Post) => item.id, []);
+
+  // Loading state while fetching groups and members
   if (groupsLoading || membersLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -129,7 +137,7 @@ export default function CommunityDetailsScreen() {
     );
   }
 
-  // Not found
+  // Community not found state
   if (!group) {
     return (
       <View style={styles.notFound}>
@@ -143,9 +151,10 @@ export default function CommunityDetailsScreen() {
     );
   }
 
+  // Header rendered above the posts list — includes hero, actions, challenges
   const renderHeader = () => (
     <>
-      {/* Hero Section */}
+      {/* Hero section with cover image, group avatar, name and member count */}
       <View style={styles.heroSection}>
         <Image
           source={{ uri: group.image || "https://via.placeholder.com/80" }}
@@ -160,6 +169,7 @@ export default function CommunityDetailsScreen() {
           <View style={styles.heroInfo}>
             <View style={styles.nameRow}>
               <Text style={styles.heroName}>{group.name}</Text>
+              {/* Crown icon shown next to leader's community name */}
               {isLeader && (
                 <MaterialCommunityIcons
                   name="crown"
@@ -182,15 +192,14 @@ export default function CommunityDetailsScreen() {
         </View>
       </View>
 
-      {/* Action Buttons */}
+      {/* Action buttons — shown when joined: Post, Chat, Challenge (leader only) */}
       <View style={styles.actionsContainer}>
         {isJoined ? (
           <>
-            {/* Create Post */}
+            {/* Create Post — pre-selects this community via Jotai atom */}
             <Pressable
               style={[styles.actionButton, styles.primaryAction]}
               onPress={() => {
-                // Pre-select this community before navigating
                 setSelectedGroup({
                   id: group.id,
                   name: group.name,
@@ -204,7 +213,7 @@ export default function CommunityDetailsScreen() {
               <Text style={styles.primaryActionText}>Create Post</Text>
             </Pressable>
 
-            {/* Chat */}
+            {/* Open group chat */}
             <Pressable
               style={[styles.actionButton, styles.secondaryAction]}
               onPress={() => {
@@ -222,7 +231,7 @@ export default function CommunityDetailsScreen() {
               <Text style={styles.secondaryActionText}>Chat</Text>
             </Pressable>
 
-            {/* Create Challenge (Leader Only) */}
+            {/* Create Challenge — only visible to community leader */}
             {isLeader && (
               <Pressable
                 style={[styles.actionButton, styles.challengeAction]}
@@ -243,6 +252,7 @@ export default function CommunityDetailsScreen() {
             )}
           </>
         ) : (
+          /* Join button shown to non-members */
           <Pressable
             style={[styles.actionButton, styles.joinAction]}
             onPress={handleJoin}
@@ -263,7 +273,7 @@ export default function CommunityDetailsScreen() {
           </Pressable>
         )}
 
-        {/* Leave Button (if joined and not leader) */}
+        {/* Leave button — only shown to members who are not the leader */}
         {isJoined && !isLeader && (
           <Pressable
             style={[styles.actionButton, styles.leaveAction]}
@@ -283,7 +293,7 @@ export default function CommunityDetailsScreen() {
         )}
       </View>
 
-      {/* Status Banner */}
+      {/* Membership status banner */}
       {isJoined && (
         <View style={styles.statusBanner}>
           <MaterialCommunityIcons
@@ -301,7 +311,7 @@ export default function CommunityDetailsScreen() {
         </View>
       )}
 
-      {/* Challenges Section */}
+      {/* Active challenges section — only shown if challenges exist */}
       {challenges.length > 0 && (
         <>
           <View style={styles.sectionHeader}>
@@ -319,7 +329,7 @@ export default function CommunityDetailsScreen() {
         </>
       )}
 
-      {/* Posts Header */}
+      {/* Posts section header with count */}
       <View style={styles.postsHeader}>
         <Text style={styles.postsTitle}>Community Posts</Text>
         <Text style={styles.postsCount}>{groupPosts.length}</Text>
@@ -331,14 +341,8 @@ export default function CommunityDetailsScreen() {
     <SafeAreaView style={styles.container} edges={["bottom"]}>
       <FlatList
         data={groupPosts}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <PostListItem
-            post={item}
-            showJoinButton={false}
-            isJoined={isJoined}
-          />
-        )}
+        keyExtractor={keyExtractor}
+        renderItem={renderPost}
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={
           <View style={styles.emptyPosts}>
@@ -355,6 +359,11 @@ export default function CommunityDetailsScreen() {
             </Text>
           </View>
         }
+        // Performance optimisations
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={8}
+        windowSize={8}
+        initialNumToRender={10}
       />
     </SafeAreaView>
   );

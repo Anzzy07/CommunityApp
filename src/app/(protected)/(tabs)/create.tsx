@@ -589,7 +589,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   postButtonDisabled: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.disableBtn,
     opacity: 0.5,
   },
   postText: {

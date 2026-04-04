@@ -33,17 +33,18 @@ export default function InboxScreen() {
     isLoading,
     refetch,
   } = useSupabaseNotifications(user?.id || "");
+
   const markReadMutation = useMarkNotificationRead();
   const markAllReadMutation = useMarkAllNotificationsRead();
 
-  // Clears badge when screen is focused
+  // Clears the app badge when the notifications screen is focused
   useFocusEffect(
     useCallback(() => {
       clearBadge();
     }, []),
   );
 
-  // Updates badge count when notifications change
+  // Keeps the iOS badge count in sync with actual unread count
   useEffect(() => {
     const unreadCount = notifications.filter((n) => !n.is_read).length;
     if (Platform.OS === "ios") {
@@ -51,7 +52,7 @@ export default function InboxScreen() {
     }
   }, [notifications]);
 
-  // Filters notifications based on selected filter
+  // Filters notifications based on selected tab (all / unread)
   const filteredNotifications = useMemo(() => {
     if (filter === "unread") {
       return notifications.filter((n) => !n.is_read);
@@ -59,7 +60,7 @@ export default function InboxScreen() {
     return notifications;
   }, [notifications, filter]);
 
-  // Separates notifications into today and earlier sections
+  // Separates filtered notifications into today and earlier sections
   const { todayNotifications, earlierNotifications } = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -70,7 +71,6 @@ export default function InboxScreen() {
     filteredNotifications.forEach((notification) => {
       const notifDate = new Date(notification.created_at);
       notifDate.setHours(0, 0, 0, 0);
-
       if (notifDate.getTime() === today.getTime()) {
         todayList.push(notification);
       } else {
@@ -78,13 +78,10 @@ export default function InboxScreen() {
       }
     });
 
-    return {
-      todayNotifications: todayList,
-      earlierNotifications: earlierList,
-    };
+    return { todayNotifications: todayList, earlierNotifications: earlierList };
   }, [filteredNotifications]);
 
-  // Combines notifications with section headers for FlatList
+  // Combines section headers and notifications into a single flat list for FlatList
   const sectionsData = useMemo(() => {
     const data: Array<Notification | { type: "header"; title: string }> = [];
 
@@ -92,7 +89,6 @@ export default function InboxScreen() {
       data.push({ type: "header", title: "Today" });
       data.push(...todayNotifications);
     }
-
     if (earlierNotifications.length > 0) {
       data.push({ type: "header", title: "Earlier" });
       data.push(...earlierNotifications);
@@ -101,154 +97,182 @@ export default function InboxScreen() {
     return data;
   }, [todayNotifications, earlierNotifications]);
 
-  const unreadCount = notifications.filter((n) => !n.is_read).length;
+  const unreadCount = useMemo(
+    () => notifications.filter((n) => !n.is_read).length,
+    [notifications],
+  );
 
-  // Marks notification as read and navigates to relevant screen
-  const handlePress = async (id: string, type: string, ref: string) => {
-    // Mark as read in Supabase
-    await markReadMutation.mutateAsync(id);
+  // Marks notification as read optimistically then navigates to relevant content
+  const handlePress = useCallback(
+    async (id: string, type: string, ref: string) => {
+      // Optimistic update runs instantly — unread dot disappears before navigation
+      await markReadMutation.mutateAsync(id);
 
-    // Navigate based on type
-    if (type === "comment" || type === "post" || type === "poll") {
-      router.push(`/post/${ref}`);
-    }
-    if (type === "challenge") {
-      router.push(`/community/${ref}`);
-    }
-    if (type === "message") {
-      router.push("/chat");
-    }
-  };
+      // Navigate to the relevant screen based on notification type
+      if (type === "comment" || type === "post" || type === "poll") {
+        router.push(`/post/${ref}`);
+      }
+      if (type === "challenge") {
+        router.push(`/community/${ref}`);
+      }
+      if (type === "message") {
+        router.push("/chat");
+      }
+    },
+    [markReadMutation],
+  );
 
-  // Removes notification from the list
-  const handleDelete = async (id: string) => {
-    // Already handled in NotificationListItem via useDeleteNotification
-  };
-
-  // Marks all notifications as read
-  const handleMarkAllRead = async () => {
+  // Marks all notifications as read and clears the app badge
+  const handleMarkAllRead = useCallback(async () => {
     if (!user?.id) return;
     await markAllReadMutation.mutateAsync(user.id);
     clearBadge();
-  };
+  }, [user?.id, markAllReadMutation]);
 
-  // Renders either section header or notification item
-  const renderItem = ({
-    item,
-  }: {
-    item: Notification | { type: "header"; title: string };
-  }) => {
-    if ("type" in item && item.type === "header") {
-      return (
-        <View style={styles.sectionHeader}>
-          <View style={styles.sectionHeaderLine} />
-          <Text style={styles.sectionTitle}>{item.title}</Text>
-          <View style={styles.sectionHeaderLine} />
-        </View>
-      );
-    }
-
-    const notification = item as Notification;
-    return (
-      <NotificationListItem
-        notification={notification}
-        onPress={() =>
-          handlePress(
-            notification.id,
-            notification.type,
-            notification.reference_id,
-          )
-        }
-        onDelete={() => handleDelete(notification.id)}
-      />
-    );
-  };
-
-  // Renders filter tabs and mark all as read button
-  const renderHeader = () => (
-    <View style={styles.header}>
-      <View style={styles.filterContainer}>
-        <Pressable
-          onPress={() => setFilter("all")}
-          style={[styles.filterTab, filter === "all" && styles.activeFilterTab]}
-        >
-          <Text
-            style={[
-              styles.filterText,
-              filter === "all" && styles.activeFilterText,
-            ]}
-          >
-            All
-          </Text>
-          <View
-            style={[
-              styles.filterBadge,
-              filter === "all" && styles.activeFilterBadge,
-            ]}
-          >
-            <Text
-              style={[
-                styles.filterBadgeText,
-                filter === "all" && styles.activeFilterBadgeText,
-              ]}
-            >
-              {notifications.length}
-            </Text>
-          </View>
-        </Pressable>
-
-        <Pressable
-          onPress={() => setFilter("unread")}
-          style={[
-            styles.filterTab,
-            filter === "unread" && styles.activeFilterTab,
-          ]}
-        >
-          <Text
-            style={[
-              styles.filterText,
-              filter === "unread" && styles.activeFilterText,
-            ]}
-          >
-            Unread
-          </Text>
-          <View
-            style={[
-              styles.filterBadge,
-              filter === "unread" && styles.activeFilterBadge,
-            ]}
-          >
-            <Text
-              style={[
-                styles.filterBadgeText,
-                filter === "unread" && styles.activeFilterBadgeText,
-              ]}
-            >
-              {unreadCount}
-            </Text>
-          </View>
-        </Pressable>
-
-        {unreadCount > 0 && (
-          <Pressable
-            onPress={handleMarkAllRead}
-            style={styles.markAsReadButton}
-            disabled={markAllReadMutation.isPending}
-          >
-            <MaterialCommunityIcons
-              name="check-all"
-              size={18}
-              color={COLORS.primary}
-            />
-            <Text style={styles.markAsReadText}>Mark all read</Text>
-          </Pressable>
-        )}
-      </View>
-    </View>
+  // Stable keyExtractor — section headers use their title, notifications use id
+  const keyExtractor = useCallback(
+    (item: Notification | { type: "header"; title: string }, index: number) => {
+      if ("type" in item && item.type === "header") {
+        return `header-${item.title}`;
+      }
+      return (item as Notification).id;
+    },
+    [],
   );
 
-  // Renders empty state when no notifications
-  const renderEmpty = () => {
+  // Renders either a section header divider or a swipeable notification card
+  const renderItem = useCallback(
+    ({ item }: { item: Notification | { type: "header"; title: string } }) => {
+      // Section header divider
+      if ("type" in item && item.type === "header") {
+        return (
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionHeaderLine} />
+            <Text style={styles.sectionTitle}>{item.title}</Text>
+            <View style={styles.sectionHeaderLine} />
+          </View>
+        );
+      }
+
+      // Notification card with swipe-to-delete
+      const notification = item as Notification;
+      return (
+        <NotificationListItem
+          notification={notification}
+          onPress={() =>
+            handlePress(
+              notification.id,
+              notification.type,
+              notification.reference_id,
+            )
+          }
+          onDelete={() => {}}
+        />
+      );
+    },
+    [handlePress],
+  );
+
+  // Filter tabs and mark all read button shown above the list
+  const renderHeader = useCallback(
+    () => (
+      <View style={styles.header}>
+        <View style={styles.filterContainer}>
+          {/* All notifications tab */}
+          <Pressable
+            onPress={() => setFilter("all")}
+            style={[
+              styles.filterTab,
+              filter === "all" && styles.activeFilterTab,
+            ]}
+          >
+            <Text
+              style={[
+                styles.filterText,
+                filter === "all" && styles.activeFilterText,
+              ]}
+            >
+              All
+            </Text>
+            <View
+              style={[
+                styles.filterBadge,
+                filter === "all" && styles.activeFilterBadge,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.filterBadgeText,
+                  filter === "all" && styles.activeFilterBadgeText,
+                ]}
+              >
+                {notifications.length}
+              </Text>
+            </View>
+          </Pressable>
+
+          {/* Unread only tab */}
+          <Pressable
+            onPress={() => setFilter("unread")}
+            style={[
+              styles.filterTab,
+              filter === "unread" && styles.activeFilterTab,
+            ]}
+          >
+            <Text
+              style={[
+                styles.filterText,
+                filter === "unread" && styles.activeFilterText,
+              ]}
+            >
+              Unread
+            </Text>
+            <View
+              style={[
+                styles.filterBadge,
+                filter === "unread" && styles.activeFilterBadge,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.filterBadgeText,
+                  filter === "unread" && styles.activeFilterBadgeText,
+                ]}
+              >
+                {unreadCount}
+              </Text>
+            </View>
+          </Pressable>
+
+          {/* Mark all read button — only shown when there are unread notifications */}
+          {unreadCount > 0 && (
+            <Pressable
+              onPress={handleMarkAllRead}
+              style={styles.markAsReadButton}
+              disabled={markAllReadMutation.isPending}
+            >
+              <MaterialCommunityIcons
+                name="check-all"
+                size={18}
+                color={COLORS.primary}
+              />
+              <Text style={styles.markAsReadText}>Mark all read</Text>
+            </Pressable>
+          )}
+        </View>
+      </View>
+    ),
+    [
+      filter,
+      notifications.length,
+      unreadCount,
+      handleMarkAllRead,
+      markAllReadMutation.isPending,
+    ],
+  );
+
+  // Empty state — shows loading spinner or empty message based on state
+  const renderEmpty = useCallback(() => {
     if (isLoading) {
       return (
         <View style={styles.loadingContainer}>
@@ -277,17 +301,13 @@ export default function InboxScreen() {
         </Text>
       </View>
     );
-  };
+  }, [isLoading, filter]);
 
   return (
     <SafeAreaView style={styles.container} edges={["bottom"]}>
       <FlatList
         data={sectionsData}
-        keyExtractor={(item, index) =>
-          "type" in item && item.type === "header"
-            ? `header-${item.title}`
-            : (item as Notification).id
-        }
+        keyExtractor={keyExtractor}
         renderItem={renderItem}
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={renderEmpty}
@@ -295,6 +315,10 @@ export default function InboxScreen() {
         showsVerticalScrollIndicator={false}
         onRefresh={refetch}
         refreshing={isLoading}
+        // Performance
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={15}
+        windowSize={8}
       />
     </SafeAreaView>
   );
@@ -423,10 +447,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 20,
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 3,

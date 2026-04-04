@@ -1,8 +1,43 @@
 import { supabase } from "@/src/lib/supabase";
 import { Notification } from "@/src/types";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 
+// Fetches all notifications for a user with real-time updates
 export function useSupabaseNotifications(userId: string) {
+  const queryClient = useQueryClient();
+
+  // Real-time subscription — new notifications appear instantly without polling
+  useEffect(() => {
+    if (!userId) return;
+
+    const channel = supabase
+      .channel(`notifications-${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*", // INSERT, UPDATE, DELETE
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${userId}`,
+        },
+        () => {
+          // Invalidate both notification queries so badge and list stay in sync
+          queryClient.invalidateQueries({
+            queryKey: ["notifications", userId],
+          });
+          queryClient.invalidateQueries({
+            queryKey: ["notifications-unread-count", userId],
+          });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId, queryClient]);
+
   return useQuery({
     queryKey: ["notifications", userId],
     queryFn: async () => {
@@ -29,12 +64,41 @@ export function useSupabaseNotifications(userId: string) {
       return notifications;
     },
     enabled: !!userId,
-    staleTime: 1000 * 30, // 30 seconds
+    staleTime: 1000 * 30,
   });
 }
 
-// Get unread count
+// Get unread count for badge display on the notifications tab
 export function useSupabaseUnreadNotificationsCount(userId: string) {
+  const queryClient = useQueryClient();
+
+  // Same real-time channel keeps badge count in sync instantly
+  useEffect(() => {
+    if (!userId) return;
+
+    const channel = supabase
+      .channel(`notifications-count-${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${userId}`,
+        },
+        () => {
+          queryClient.invalidateQueries({
+            queryKey: ["notifications-unread-count", userId],
+          });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId, queryClient]);
+
   return useQuery({
     queryKey: ["notifications-unread-count", userId],
     queryFn: async () => {
@@ -51,7 +115,8 @@ export function useSupabaseUnreadNotificationsCount(userId: string) {
       return count || 0;
     },
     enabled: !!userId,
-    staleTime: 1000 * 10, // 10 seconds - refresh more often
-    refetchInterval: 1000 * 30, // Auto-refetch every 30 seconds
+    staleTime: 1000 * 10,
+    // Remove polling — real-time handles updates now
+    // refetchInterval was 30s before, real-time is instant
   });
 }

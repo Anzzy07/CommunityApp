@@ -240,7 +240,7 @@ export default function CommunitiesScreen() {
         <Feather name="search" size={20} color={COLORS.textSecondary} />
         <TextInput
           placeholder="Search communities..."
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor="rgb(39, 44, 35)"
           style={styles.searchInput}
           value={searchValue}
           onChangeText={setSearchValue}

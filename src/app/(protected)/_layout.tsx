@@ -68,7 +68,7 @@ export default function AppLayout() {
               }}
             >
               <Pressable onPress={() => router.back()} hitSlop={10}>
-                <AntDesign name="close" size={24} color="white" />
+                <AntDesign name="close" size={24} color="#727a6a" />
               </Pressable>
             </View>
           ),
@@ -83,9 +83,9 @@ export default function AppLayout() {
                 paddingHorizontal: 14,
               }}
             >
-              <AntDesign name="search" size={24} color="white" />
-              <MaterialIcons name="sort" size={27} color="white" />
-              <Entypo name="dots-three-horizontal" size={24} color="white" />
+              <AntDesign name="search" size={24} color="#727a6a" />
+              <MaterialIcons name="sort" size={27} color="#727a6a" />
+              <Entypo name="dots-three-horizontal" size={24} color="#727a6a" />
             </View>
           ),
         }}
