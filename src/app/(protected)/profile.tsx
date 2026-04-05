@@ -13,7 +13,7 @@ import { Comment, Post } from "@/src/types";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import { AntDesign, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -26,18 +26,21 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function ProfileScreen() {
+  // userId param is present when viewing someone else's profile
   const { userId } = useLocalSearchParams<{ userId?: string }>();
   const { user } = useUser();
   const { signOut } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
+  // Active tab controls which data is shown in the FlatList
   const [activeTab, setActiveTab] = useState<TabType>("posts");
 
+  // Determine if this is the current user's own profile or another user's
   const isOwnProfile = !userId || userId === user?.id;
   const profileUserId = userId || user?.id || "";
 
-  // Fetch data from Supabase
+  // Fetch all profile data from Supabase using React Query
   const { data: userPosts = [], isLoading: postsLoading } =
     useSupabaseUserPosts(profileUserId);
   const { data: userComments = [], isLoading: commentsLoading } =
@@ -56,7 +59,23 @@ export default function ProfileScreen() {
     streakLoading ||
     communitiesLoading;
 
-  const handleSignOut = () => {
+  // Memoised tab data — only recalculates when the tab or underlying data changes.
+  // Avoids creating a new array reference on every render which would cause FlatList flicker.
+  const tabData = useMemo((): (Post | Comment)[] => {
+    switch (activeTab) {
+      case "posts":
+        return userPosts;
+      case "comments":
+        return userComments;
+      case "communities":
+        return []; // Communities are shown in the footer, not the list
+      default:
+        return [];
+    }
+  }, [activeTab, userPosts, userComments]);
+
+  // Shows a sign out confirmation alert then clears the session
+  const handleSignOut = useCallback(() => {
     Alert.alert("Sign Out", "Are you sure you want to sign out?", [
       { text: "Cancel", style: "cancel" },
       {
@@ -68,57 +87,59 @@ export default function ProfileScreen() {
         },
       },
     ]);
-  };
+  }, [signOut, router]);
 
-  const handleEditProfile = () => {
+  // Navigates to the edit profile screen
+  const handleEditProfile = useCallback(() => {
     router.push("/editProfile");
-  };
+  }, [router]);
 
-  const getTabData = (): (Post | Comment)[] => {
-    switch (activeTab) {
-      case "posts":
-        return userPosts;
-      case "comments":
-        return userComments;
-      case "communities":
-        return [];
-      default:
-        return [];
-    }
-  };
-
-  const renderListHeader = () => (
-    <>
-      <ProfileHeader
-        user={user}
-        userStreak={
-          userStreak &&
-          typeof userStreak === "object" &&
-          "user_id" in userStreak
-            ? userStreak
-            : undefined
-        }
-        totalPosts={userStats?.totalPosts || 0}
-        totalUpvotes={userStats?.totalUpvotes || 0}
-        communitiesCount={joinedCommunities.length}
-        isOwnProfile={isOwnProfile}
-        onEditProfile={handleEditProfile}
-      />
-      <ProfileTabs activeTab={activeTab} onTabChange={setActiveTab} />
-    </>
+  // Renders the profile header and tab selector above the list
+  // useCallback prevents this from recreating on every render
+  const renderListHeader = useCallback(
+    () => (
+      <>
+        <ProfileHeader
+          user={user}
+          userStreak={
+            userStreak &&
+            typeof userStreak === "object" &&
+            "user_id" in userStreak
+              ? userStreak
+              : undefined
+          }
+          totalPosts={userStats?.totalPosts || 0}
+          totalUpvotes={userStats?.totalUpvotes || 0}
+          communitiesCount={joinedCommunities.length}
+          isOwnProfile={isOwnProfile}
+          onEditProfile={handleEditProfile}
+        />
+        <ProfileTabs activeTab={activeTab} onTabChange={setActiveTab} />
+      </>
+    ),
+    [
+      user,
+      userStreak,
+      userStats,
+      joinedCommunities.length,
+      isOwnProfile,
+      handleEditProfile,
+      activeTab,
+    ],
   );
 
-  const renderListFooter = () => {
+  // Renders the communities grid below the list when communities tab is active
+  const renderListFooter = useCallback(() => {
     if (activeTab === "communities") {
       return <CommunitiesGrid communities={joinedCommunities.slice(0, 6)} />;
     }
     return null;
-  };
+  }, [activeTab, joinedCommunities]);
 
-  const renderEmptyComponent = () => {
-    if (activeTab === "communities") {
-      return null;
-    }
+  // Renders the empty state for posts and comments tabs
+  const renderEmptyComponent = useCallback(() => {
+    // Communities tab uses the footer grid instead of an empty message
+    if (activeTab === "communities") return null;
 
     if (isLoading) {
       return (
@@ -129,39 +150,37 @@ export default function ProfileScreen() {
       );
     }
 
-    let icon: "post-outline" | "comment-outline" = "post-outline";
-    let text = "No posts yet";
-
-    if (activeTab === "comments") {
-      icon = "comment-outline";
-      text = "No comments yet";
-    }
-
     return (
       <View style={styles.emptyState}>
         <MaterialCommunityIcons
-          name={icon}
+          name={activeTab === "comments" ? "comment-outline" : "post-outline"}
           size={48}
           color={COLORS.textSecondary}
         />
-        <Text style={styles.emptyText}>{text}</Text>
+        <Text style={styles.emptyText}>
+          {activeTab === "comments" ? "No comments yet" : "No posts yet"}
+        </Text>
       </View>
     );
-  };
+  }, [activeTab, isLoading]);
 
-  const renderItem = ({ item }: { item: Post | Comment }) => {
-    // Check if it's a Post or Comment
+  // Renders either a PostListItem or CommentListItemSimple based on item type.
+  // "title" in item is a quick way to distinguish Post from Comment at runtime.
+  const renderItem = useCallback(({ item }: { item: Post | Comment }) => {
     if ("title" in item) {
-      // if it's a Post then
-      return <PostListItem post={item} showJoinButton={false} />;
-    } else {
-      // if it's a Comment then
-      return <CommentListItemSimple comment={item} />;
+      // Item is a Post — show full post card without join button
+      return <PostListItem post={item as Post} showJoinButton={false} />;
     }
-  };
+    // Item is a Comment — show simplified comment card that links to the post
+    return <CommentListItemSimple comment={item as Comment} />;
+  }, []);
+
+  // Stable key extractor — uses item id for both Post and Comment
+  const keyExtractor = useCallback((item: Post | Comment) => item.id, []);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
+      {/* Top navigation header with back button and sign out */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} hitSlop={10}>
           <AntDesign name="left" size={24} color="white" />
@@ -169,24 +188,31 @@ export default function ProfileScreen() {
 
         <Text style={styles.headerTitle}>Profile</Text>
 
+        {/* Sign out button only shown on own profile */}
         {isOwnProfile && (
           <Pressable onPress={handleSignOut} hitSlop={10}>
             <Feather name="log-out" size={22} color="white" />
           </Pressable>
         )}
 
+        {/* Spacer to keep title centred on other users' profiles */}
         {!isOwnProfile && <View style={{ width: 22 }} />}
       </View>
 
+      {/* Main scrollable list — header contains profile info and tabs,
+          footer contains the communities grid when that tab is active */}
       <FlatList
-        data={getTabData()}
-        keyExtractor={(item) => item.id}
+        data={tabData}
+        keyExtractor={keyExtractor}
         renderItem={renderItem}
         ListHeaderComponent={renderListHeader}
         ListFooterComponent={renderListFooter}
         ListEmptyComponent={renderEmptyComponent}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={10}
+        windowSize={8}
       />
     </View>
   );

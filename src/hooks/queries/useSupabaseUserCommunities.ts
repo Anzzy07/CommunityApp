@@ -2,44 +2,36 @@ import { supabase } from "@/src/lib/supabase";
 import { Group } from "@/src/types";
 import { useQuery } from "@tanstack/react-query";
 
+// Fetches all communities the user has joined for the profile communities tab.
+// First gets group IDs from group_members, then fetches group details.
 export function useSupabaseUserCommunities(userId: string) {
   return useQuery({
     queryKey: ["user-communities", userId],
     queryFn: async () => {
-      if (!userId) {
-        return [];
-      }
+      if (!userId) return [];
 
-      // Get all group_ids the user is a member of
+      // Step 1: Get all group_ids this user is a member of
       const { data: memberships, error: membershipsError } = await supabase
         .from("group_members")
         .select("group_id")
         .eq("user_id", userId);
 
-      if (membershipsError) {
-        console.error("❌ Error fetching memberships:", membershipsError);
-        throw membershipsError;
-      }
+      if (membershipsError) throw membershipsError;
 
       const groupIds = memberships?.map((m) => m.group_id) || [];
 
-      if (groupIds.length === 0) {
-        return [];
-      }
+      // No memberships — return early to avoid an empty .in() query
+      if (groupIds.length === 0) return [];
 
-      // Get group details
+      // Step 2: Fetch the full group details for all joined groups
       const { data: groups, error: groupsError } = await supabase
         .from("groups")
         .select("*")
         .in("id", groupIds);
 
-      if (groupsError) {
-        console.error("❌ Error fetching groups:", groupsError);
-        throw groupsError;
-      }
+      if (groupsError) throw groupsError;
 
-      // console.log("Fetched user communities:", groups?.length || 0);
-
+      // Transform to typed Group objects
       const communities: Group[] = (groups || []).map((g) => ({
         id: g.id,
         name: g.name,
@@ -51,5 +43,6 @@ export function useSupabaseUserCommunities(userId: string) {
       return communities;
     },
     enabled: !!userId,
+    staleTime: 1000 * 60 * 5, // 5 minutes — community memberships rarely change
   });
 }

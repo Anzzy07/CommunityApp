@@ -33,19 +33,22 @@ interface PollOption {
   image?: string;
 }
 
+// Screen for creating a new post or poll — switches between modes via a toggle
 export default function CreateScreen() {
   const { user } = useUser();
 
-  // Mode state
+  // Controls whether the user is creating a post or a poll
   const [mode, setMode] = useState<CreateMode>("post");
 
-  // Post states
+  // Post form state
   const [title, setTitle] = useState<string>("");
   const [bodyText, setBodyText] = useState<string>("");
   const [postImage, setPostImage] = useState<string | null>(null);
+
+  // Jotai atom — stores the selected community so it persists across navigation
   const [group, setGroup] = useAtom(selectedGroupAtom);
 
-  // Poll states
+  // Poll form state
   const [pollQuestion, setPollQuestion] = useState<string>("");
   const [pollOptions, setPollOptions] = useState<PollOption[]>([
     { id: "1", text: "" },
@@ -53,15 +56,16 @@ export default function CreateScreen() {
   ]);
   const [pollDuration, setPollDuration] = useState<string>("24h");
 
-  // Focus states
+  // Focus states — used to highlight the active input field with a border
   const [titleFocused, setTitleFocused] = useState(false);
   const [bodyFocused, setBodyFocused] = useState(false);
   const [pollQuestionFocused, setPollQuestionFocused] = useState(false);
 
-  // Mutations
+  // Mutation hooks for creating posts and polls in Supabase
   const createPostMutation = useCreatePost();
   const createPollMutation = useCreatePoll();
 
+  // Available durations for polls — shown as selectable chips
   const pollDurations = [
     { label: "1 hour", value: "1h", hours: 1 },
     { label: "6 hours", value: "6h", hours: 6 },
@@ -70,6 +74,7 @@ export default function CreateScreen() {
     { label: "7 days", value: "7d", hours: 168 },
   ];
 
+  // Resets all form fields and navigates back to the previous screen
   const goBack = () => {
     setTitle("");
     setBodyText("");
@@ -83,6 +88,7 @@ export default function CreateScreen() {
     router.back();
   };
 
+  // Opens the device image picker for selecting a post image
   const pickPostImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
@@ -105,6 +111,7 @@ export default function CreateScreen() {
     }
   };
 
+  // Opens the image picker for a specific poll option
   const pickPollOptionImage = async (optionId: string) => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
@@ -123,6 +130,7 @@ export default function CreateScreen() {
     });
 
     if (!result.canceled) {
+      // Update only the matching option, leave others unchanged
       setPollOptions((prev) =>
         prev.map((opt) =>
           opt.id === optionId ? { ...opt, image: result.assets[0].uri } : opt,
@@ -131,6 +139,7 @@ export default function CreateScreen() {
     }
   };
 
+  // Removes the image from a specific poll option
   const removePollOptionImage = (optionId: string) => {
     setPollOptions((prev) =>
       prev.map((opt) =>
@@ -139,24 +148,28 @@ export default function CreateScreen() {
     );
   };
 
+  // Adds a new empty poll option — max 4 options allowed
   const addPollOption = () => {
     if (pollOptions.length < 4) {
       setPollOptions([...pollOptions, { id: Date.now().toString(), text: "" }]);
     }
   };
 
+  // Removes a poll option by id — minimum 2 options must remain
   const removePollOption = (id: string) => {
     if (pollOptions.length > 2) {
       setPollOptions(pollOptions.filter((opt) => opt.id !== id));
     }
   };
 
+  // Updates the text of a specific poll option
   const updatePollOption = (id: string, text: string) => {
     setPollOptions(
       pollOptions.map((opt) => (opt.id === id ? { ...opt, text } : opt)),
     );
   };
 
+  // Validates form then submits either a post or poll to Supabase
   const handlePost = async () => {
     if (!user?.id || !group) {
       Alert.alert("Error", "Please select a community and sign in");
@@ -165,6 +178,7 @@ export default function CreateScreen() {
 
     try {
       if (mode === "post") {
+        // Create a regular post with title, optional body and optional image
         await createPostMutation.mutateAsync({
           groupId: group.id,
           userId: user.id,
@@ -175,9 +189,11 @@ export default function CreateScreen() {
 
         Alert.alert("Success!", "Your post has been created! 🎉");
       } else {
+        // Find the number of hours matching the selected duration chip
         const durationHours =
           pollDurations.find((d) => d.value === pollDuration)?.hours || 24;
 
+        // Only include options that have text — filter out empty ones
         const validOptions = pollOptions
           .filter((opt) => opt.text.trim().length > 0)
           .map((opt) => ({
@@ -185,6 +201,7 @@ export default function CreateScreen() {
             imageUri: opt.image,
           }));
 
+        // Create a poll post with question, options and duration
         await createPollMutation.mutateAsync({
           groupId: group.id,
           userId: user.id,
@@ -196,18 +213,20 @@ export default function CreateScreen() {
         Alert.alert("Success!", "Your poll has been created! 📊");
       }
 
-      // Reset and go back
+      // Clear form and go back after successful creation
       goBack();
-    } catch (error) {
-      console.error("Create error:", error);
+    } catch {
       Alert.alert("Error", "Failed to create post. Please try again.");
     }
   };
 
+  // Returns true only when the form has enough data to submit
   const canPost = () => {
     if (mode === "post") {
+      // Post needs at least a title and a community
       return title.trim().length > 0 && group !== null;
     } else {
+      // Poll needs a question, at least 2 filled options, and a community
       return (
         pollQuestion.trim().length > 0 &&
         pollOptions.filter((opt) => opt.text.trim().length > 0).length >= 2 &&
@@ -216,6 +235,7 @@ export default function CreateScreen() {
     }
   };
 
+  // True when either mutation is in progress — disables all inputs during upload
   const isPosting =
     createPostMutation.isPending || createPollMutation.isPending;
 
@@ -227,12 +247,13 @@ export default function CreateScreen() {
         paddingHorizontal: 10,
       }}
     >
-      {/* Header */}
+      {/* Header: close button on left, Post button on right */}
       <View style={styles.header}>
         <Pressable onPress={goBack} hitSlop={10} disabled={isPosting}>
           <AntDesign name="close" size={28} color={COLORS.textPrimary} />
         </Pressable>
 
+        {/* Post button — disabled until form is valid or while submitting */}
         <Pressable
           onPress={handlePost}
           hitSlop={10}
@@ -250,7 +271,7 @@ export default function CreateScreen() {
         </Pressable>
       </View>
 
-      {/* Mode Toggle */}
+      {/* Mode toggle: switches between Post and Poll creation forms */}
       <View style={styles.modeToggle}>
         <Pressable
           onPress={() => setMode("post")}
@@ -293,6 +314,7 @@ export default function CreateScreen() {
         </Pressable>
       </View>
 
+      {/* KeyboardAvoidingView pushes content up when keyboard appears on iOS */}
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1 }}
@@ -301,7 +323,7 @@ export default function CreateScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Community Selector */}
+          {/* Community selector — navigates to groupSelector screen and stores selection in Jotai atom */}
           <Link href={"groupSelector"} asChild>
             <Pressable style={styles.communityContainer} disabled={isPosting}>
               {group ? (
@@ -335,10 +357,10 @@ export default function CreateScreen() {
             </Pressable>
           </Link>
 
-          {/* POST MODE */}
+          {/* POST MODE — title, body text and image upload */}
           {mode === "post" && (
             <>
-              {/* Title Input */}
+              {/* Title input — required field */}
               <View
                 style={[
                   styles.inputContainer,
@@ -361,7 +383,7 @@ export default function CreateScreen() {
                 />
               </View>
 
-              {/* Body Input */}
+              {/* Body text input — optional */}
               <View
                 style={[
                   styles.bodyContainer,
@@ -383,7 +405,7 @@ export default function CreateScreen() {
                 />
               </View>
 
-              {/* Image Upload */}
+              {/* Image preview with remove button, or add image button if no image */}
               {postImage ? (
                 <View style={styles.imagePreviewContainer}>
                   <Image
@@ -416,10 +438,10 @@ export default function CreateScreen() {
             </>
           )}
 
-          {/* POLL MODE */}
+          {/* POLL MODE — question, options with optional images, duration selector */}
           {mode === "poll" && (
             <>
-              {/* Poll Question */}
+              {/* Poll question input — acts as the post title */}
               <View
                 style={[
                   styles.inputContainer,
@@ -442,7 +464,7 @@ export default function CreateScreen() {
                 />
               </View>
 
-              {/* Poll Options */}
+              {/* List of poll options — each has a text input and optional image */}
               <View style={styles.pollOptionsContainer}>
                 {pollOptions.map((option, index) => (
                   <View key={option.id} style={styles.pollOptionWrapper}>
@@ -450,6 +472,7 @@ export default function CreateScreen() {
                       <Text style={styles.pollOptionLabel}>
                         Option {index + 1}
                       </Text>
+                      {/* Delete button only shown when there are more than 2 options */}
                       {pollOptions.length > 2 && (
                         <Pressable
                           onPress={() => removePollOption(option.id)}
@@ -476,7 +499,7 @@ export default function CreateScreen() {
                       editable={!isPosting}
                     />
 
-                    {/* Option Image */}
+                    {/* Image for this poll option — optional */}
                     {option.image ? (
                       <View style={styles.pollOptionImageContainer}>
                         <Image
@@ -515,7 +538,7 @@ export default function CreateScreen() {
                   </View>
                 ))}
 
-                {/* Add Option Button */}
+                {/* Add option button — hidden when 4 options already exist */}
                 {pollOptions.length < 4 && (
                   <Pressable
                     onPress={addPollOption}
@@ -532,7 +555,7 @@ export default function CreateScreen() {
                 )}
               </View>
 
-              {/* Poll Duration */}
+              {/* Duration selector — horizontally scrollable chips */}
               <View style={styles.durationContainer}>
                 <Text style={styles.durationLabel}>Poll duration</Text>
                 <ScrollView
@@ -567,6 +590,7 @@ export default function CreateScreen() {
             </>
           )}
 
+          {/* Bottom padding so content isn't hidden behind the keyboard */}
           <View style={{ height: 100 }} />
         </ScrollView>
       </KeyboardAvoidingView>

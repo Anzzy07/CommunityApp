@@ -1,6 +1,8 @@
 import { supabase } from "@/src/lib/supabase";
 import { useQuery } from "@tanstack/react-query";
 
+// Fetches total posts, upvotes and comments for a user's profile stats bar.
+// Runs all three counts in parallel via Promise.all — was 3 sequential queries before.
 export function useSupabaseUserStats(userId: string) {
   return useQuery({
     queryKey: ["user-stats", userId],
@@ -9,51 +11,39 @@ export function useSupabaseUserStats(userId: string) {
         return { totalPosts: 0, totalUpvotes: 0, totalComments: 0 };
       }
 
-      // Get total posts count
-      const { count: postsCount, error: postsError } = await supabase
-        .from("posts")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", userId);
+      // Run all three DB calls at the same time — faster than sequential
+      const [postsCountResult, upvotesResult, commentsCountResult] =
+        await Promise.all([
+          // Count total posts by this user
+          supabase
+            .from("posts")
+            .select("*", { count: "exact", head: true })
+            .eq("user_id", userId),
 
-      if (postsError) {
-        console.error("❌ Error fetching posts count:", postsError);
-      }
+          // Fetch upvote values to sum them up
+          supabase.from("posts").select("upvotes").eq("user_id", userId),
 
-      // Get total upvotes across all posts
-      const { data: postsData, error: upvotesError } = await supabase
-        .from("posts")
-        .select("upvotes")
-        .eq("user_id", userId);
+          // Count total comments by this user
+          supabase
+            .from("comments")
+            .select("*", { count: "exact", head: true })
+            .eq("user_id", userId),
+        ]);
 
-      if (upvotesError) {
-        console.error("❌ Error fetching upvotes:", upvotesError);
-      }
-
+      // Sum all upvotes across the user's posts
       const totalUpvotes =
-        postsData?.reduce((sum, post) => sum + (post.upvotes || 0), 0) || 0;
-
-      // Get total comments count
-      const { count: commentsCount, error: commentsError } = await supabase
-        .from("comments")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", userId);
-
-      if (commentsError) {
-        console.error("❌ Error fetching comments count:", commentsError);
-      }
-
-      // console.log(" User stats:", {
-      //   totalPosts: postsCount || 0,
-      //   totalUpvotes,
-      //   totalComments: commentsCount || 0,
-      // });
+        upvotesResult.data?.reduce(
+          (sum, post) => sum + (post.upvotes || 0),
+          0,
+        ) || 0;
 
       return {
-        totalPosts: postsCount || 0,
+        totalPosts: postsCountResult.count || 0,
         totalUpvotes,
-        totalComments: commentsCount || 0,
+        totalComments: commentsCountResult.count || 0,
       };
     },
     enabled: !!userId,
+    staleTime: 1000 * 60 * 5, // 5 minutes — stats don't change every second
   });
 }

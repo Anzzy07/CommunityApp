@@ -28,11 +28,13 @@ function PollListItem({
   const { user } = useUser();
   const router = useRouter();
 
-  // Streak comes directly from post prop — no extra query
+  // Streak comes from the post prop — no extra DB query per card
   const streak = post.streak ?? 0;
 
+  // Reads the user's current vote on this poll from React Query cache
   const { data: userVote } = useUserPollVote(post.poll?.id || "", user?.id);
 
+  // Mutation hooks
   const pollVoteMutation = usePollVote();
   const joinMutation = useJoinGroup();
   const deletePollMutation = useDeletePoll();
@@ -40,13 +42,15 @@ function PollListItem({
   const isOwner = post.user.id === user?.id;
   const poll = post.poll!;
 
+  // Sum all option vote counts to calculate percentages
   const totalVotes = poll.options.reduce(
     (sum, opt) => sum + (opt.votes_count ?? 0),
     0,
   );
 
-  const pollEnded = false;
+  const pollEnded = false; // Could check poll.ends_at against current date
 
+  // Handles voting on a poll option — optimistic update in usePollVote makes it instant
   const handleVote = async (optionId: string) => {
     if (!user?.id) {
       Alert.alert("Sign in required", "Please sign in to vote");
@@ -67,6 +71,7 @@ function PollListItem({
     }
   };
 
+  // Prompts user to join the community that posted this poll
   const handleJoinCommunity = () => {
     if (!user?.id) {
       Alert.alert("Sign in required", "Please sign in to join communities");
@@ -90,6 +95,7 @@ function PollListItem({
     ]);
   };
 
+  // Shows delete option for poll owners — confirms before deleting
   const handleOptions = () => {
     if (!isOwner) return;
     Alert.alert("Poll Options", "", [
@@ -112,6 +118,7 @@ function PollListItem({
                       userId: user!.id,
                     });
                     Alert.alert("Success", "Poll deleted successfully");
+                    // Navigate back if deleting from the detail screen
                     if (isDetailedPost) router.back();
                   } catch {
                     Alert.alert("Error", "Failed to delete poll");
@@ -128,6 +135,7 @@ function PollListItem({
 
   const PollContent = (
     <View style={styles.container}>
+      {/* Header: community image, name, streak badge, timestamp, owner/join button */}
       <View style={styles.header}>
         <Image
           source={{
@@ -140,6 +148,7 @@ function PollListItem({
           <View style={styles.headerRow}>
             <Text style={styles.groupName}>{post.group.name}</Text>
 
+            {/* Fire streak badge — only shows when streak > 0 */}
             {streak > 0 && (
               <View style={styles.streakBadge}>
                 <MaterialCommunityIcons name="fire" size={14} color="#FF6A00" />
@@ -154,11 +163,13 @@ function PollListItem({
             </Text>
           </View>
 
+          {/* Author name only shown on the detail screen */}
           {isDetailedPost && (
             <Text style={styles.authorName}>{post.user.name}</Text>
           )}
         </View>
 
+        {/* Options menu for owner, join button for non-members */}
         {isOwner ? (
           <Pressable onPress={handleOptions} hitSlop={10}>
             <Feather
@@ -174,6 +185,7 @@ function PollListItem({
         ) : null}
       </View>
 
+      {/* Poll question shown with a poll icon */}
       <View style={styles.pollHeader}>
         <MaterialCommunityIcons
           name="poll"
@@ -184,9 +196,11 @@ function PollListItem({
         <Text style={styles.question}>{poll.question}</Text>
       </View>
 
+      {/* Poll options — each shows a progress bar after user votes */}
       <View style={styles.optionsContainer}>
         {poll.options.map((option) => {
           const votes = option.votes_count ?? 0;
+          // Calculate this option's share of the total votes as a percentage
           const percentage = totalVotes > 0 ? (votes / totalVotes) * 100 : 0;
           const isSelected = userVote === option.id;
           const hasVoted = !!userVote;
@@ -195,6 +209,7 @@ function PollListItem({
             <Pressable
               key={option.id}
               onPress={() => handleVote(option.id)}
+              // Disable voting after user has voted or poll has ended
               disabled={hasVoted || pollEnded || pollVoteMutation.isPending}
               style={[
                 styles.option,
@@ -202,6 +217,7 @@ function PollListItem({
                 isSelected && styles.optionSelected,
               ]}
             >
+              {/* Progress bar shown behind option text after voting */}
               {hasVoted && (
                 <View
                   style={[
@@ -213,6 +229,7 @@ function PollListItem({
               )}
 
               <View style={styles.optionContent}>
+                {/* Optional image for this poll option */}
                 {option.image_url && (
                   <SupabaseImage
                     path={option.image_url}
@@ -228,6 +245,7 @@ function PollListItem({
                   {option.text}
                 </Text>
 
+                {/* Percentage and check mark shown after voting */}
                 {hasVoted && (
                   <View style={styles.voteStats}>
                     {isSelected && (
@@ -253,6 +271,7 @@ function PollListItem({
         })}
       </View>
 
+      {/* Total vote count shown below options */}
       <Text style={styles.totalVotes}>
         {totalVotes} {totalVotes === 1 ? "vote" : "votes"}
         {pollEnded && " • Poll ended"}
@@ -260,6 +279,7 @@ function PollListItem({
     </View>
   );
 
+  // In feed: wrap in Link for navigation. In detail view: render content directly.
   if (isDetailedPost) return PollContent;
   return (
     <Link href={`/post/${post.id}`} asChild>
@@ -415,7 +435,8 @@ const styles = StyleSheet.create({
   },
 });
 
-// Only re-render if poll vote counts, comment count, streak or join status changed
+// Custom memo comparator — only re-renders this card when values it displays have changed.
+// Checks poll option vote counts individually since they update on voting.
 export default memo(PollListItem, (prev, next) => {
   if (
     prev.post.id !== next.post.id ||
@@ -424,10 +445,10 @@ export default memo(PollListItem, (prev, next) => {
     prev.isJoined !== next.isJoined ||
     prev.isDetailedPost !== next.isDetailedPost
   ) {
-    return false; // re-render
+    return false; // props changed — re-render
   }
 
-  // Check if any poll option vote count changed
+  // Check if any individual poll option vote count changed
   const prevOptions = prev.post.poll?.options ?? [];
   const nextOptions = next.post.poll?.options ?? [];
   if (prevOptions.length !== nextOptions.length) return false;
@@ -435,5 +456,5 @@ export default memo(PollListItem, (prev, next) => {
     if (prevOptions[i].votes_count !== nextOptions[i].votes_count) return false;
   }
 
-  return true; // skip re-render
+  return true; // nothing relevant changed — skip re-render
 });
