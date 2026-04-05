@@ -1,8 +1,9 @@
 import { supabase } from "@/src/lib/supabase";
+import { GroupMember } from "@/src/types";
 import { uploadImage } from "@/src/utils/supabaseImages";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-// Join a group
+// Joins a community — optimistic update so the Join button flips instantly
 export function useJoinGroup() {
   const queryClient = useQueryClient();
 
@@ -14,6 +15,7 @@ export function useJoinGroup() {
       groupId: string;
       userId: string;
     }) => {
+      // Insert a new row into group_members to record this user joining
       const { error } = await supabase.from("group_members").insert({
         group_id: groupId,
         user_id: userId,
@@ -22,16 +24,61 @@ export function useJoinGroup() {
       if (error) throw error;
       return { success: true };
     },
-    onSuccess: async (_, variables) => {
-      await queryClient.refetchQueries({
+
+    onMutate: async ({ groupId, userId }) => {
+      // Cancel any outgoing refetches so they don't overwrite our optimistic update
+      await queryClient.cancelQueries({
+        queryKey: ["group-members", userId],
+      });
+
+      // Snapshot the previous state so we can roll back if the DB call fails
+      const previousMembers = queryClient.getQueryData([
+        "group-members",
+        userId,
+      ]);
+
+      // Instantly add this group to the user's membership list in the cache
+      // This makes the Join button flip to "Joined" without waiting for the server
+      queryClient.setQueryData(
+        ["group-members", userId],
+        (old: GroupMember[] | undefined) => [
+          ...(old ?? []),
+          {
+            id: `optimistic-${Date.now()}`,
+            group_id: groupId,
+            user_id: userId,
+            joined_at: new Date().toISOString(),
+          } as GroupMember,
+        ],
+      );
+
+      return { previousMembers };
+    },
+
+    onError: (_err, variables, context) => {
+      // Roll back to the previous membership list if joining failed
+      if (context?.previousMembers !== undefined) {
+        queryClient.setQueryData(
+          ["group-members", variables.userId],
+          context.previousMembers,
+        );
+      }
+    },
+
+    onSettled: (_data, _err, variables) => {
+      // Sync with the real DB data in the background after mutation completes
+      queryClient.invalidateQueries({
         queryKey: ["group-members", variables.userId],
       });
-      await queryClient.refetchQueries({ queryKey: ["groups"] });
+      queryClient.invalidateQueries({ queryKey: ["groups"] });
+      queryClient.invalidateQueries({
+        queryKey: ["group-member-count"],
+      });
     },
   });
 }
 
-// Leave a group
+// Leaves a community — optimistic update so the button flips instantly
 export function useLeaveGroup() {
   const queryClient = useQueryClient();
 
@@ -43,6 +90,7 @@ export function useLeaveGroup() {
       groupId: string;
       userId: string;
     }) => {
+      // Delete the row from group_members that matches this user and group
       const { error } = await supabase
         .from("group_members")
         .delete()
@@ -52,16 +100,52 @@ export function useLeaveGroup() {
       if (error) throw error;
       return { success: true };
     },
-    onSuccess: async (_, variables) => {
-      await queryClient.refetchQueries({
+
+    onMutate: async ({ groupId, userId }) => {
+      await queryClient.cancelQueries({
+        queryKey: ["group-members", userId],
+      });
+
+      const previousMembers = queryClient.getQueryData([
+        "group-members",
+        userId,
+      ]);
+
+      // Instantly remove this group from the user's membership list in the cache
+      // This makes the "Joined" button flip back to "Join" without waiting for the server
+      queryClient.setQueryData(
+        ["group-members", userId],
+        (old: GroupMember[] | undefined) =>
+          (old ?? []).filter((m) => m.group_id !== groupId),
+      );
+
+      return { previousMembers };
+    },
+
+    onError: (_err, variables, context) => {
+      // Roll back to the previous membership list if leaving failed
+      if (context?.previousMembers !== undefined) {
+        queryClient.setQueryData(
+          ["group-members", variables.userId],
+          context.previousMembers,
+        );
+      }
+    },
+
+    onSettled: (_data, _err, variables) => {
+      // Sync with real DB data in background
+      queryClient.invalidateQueries({
         queryKey: ["group-members", variables.userId],
       });
-      await queryClient.refetchQueries({ queryKey: ["groups"] });
+      queryClient.invalidateQueries({ queryKey: ["groups"] });
+      queryClient.invalidateQueries({
+        queryKey: ["group-member-count"],
+      });
     },
   });
 }
 
-// Create a new group
+// Creates a new community — uploads image, creates group, auto-joins creator
 export function useCreateGroup() {
   const queryClient = useQueryClient();
 
@@ -77,45 +161,38 @@ export function useCreateGroup() {
       imageUri?: string;
       userId: string;
     }) => {
-      console.log("🏘️ Creating group:", { name, userId });
-
-      // Upload image using the same utility as posts/challenge entries
+      // Upload the community image to Supabase Storage if one was provided
       let uploadedImagePath: string | null = null;
       if (imageUri) {
         try {
           uploadedImagePath = await uploadImage(imageUri);
-          console.log("✅ Group image uploaded:", uploadedImagePath);
         } catch (error) {
-          console.error("❌ Error uploading group image:", error);
-          // Continue without image rather than failing group creation
+          // Continue without image rather than blocking group creation
           uploadedImagePath = null;
         }
       }
 
-      // Get public URL from storage path (uploadImage returns a path, not a full URL)
+      // Convert the storage path to a full public URL for display
       const imageUrl = uploadedImagePath
         ? supabase.storage.from("images").getPublicUrl(uploadedImagePath).data
             .publicUrl
         : null;
 
-      // Create the group
+      // Insert the new group into the groups table
       const { data: newGroup, error: groupError } = await supabase
         .from("groups")
         .insert({
           name,
           description: description || null,
           image_url: imageUrl,
-          leader_id: userId,
+          leader_id: userId, // Creator becomes the leader automatically
         })
         .select()
         .single();
 
-      if (groupError) {
-        console.error("❌ Error creating group:", groupError);
-        throw groupError;
-      }
+      if (groupError) throw groupError;
 
-      // Auto-join the creator as a member
+      // Auto-join the creator as a member of their own community
       const { error: memberError } = await supabase
         .from("group_members")
         .insert({
@@ -123,17 +200,15 @@ export function useCreateGroup() {
           user_id: userId,
         });
 
-      if (memberError) {
-        console.error("❌ Error adding member:", memberError);
-        throw memberError;
-      }
+      if (memberError) throw memberError;
 
-      console.log("✅ Group created:", newGroup.id);
       return newGroup;
     },
-    onSuccess: async (_, variables) => {
-      await queryClient.refetchQueries({ queryKey: ["groups"] });
-      await queryClient.refetchQueries({
+
+    onSuccess: (_data, variables) => {
+      // Refresh the groups list and user memberships after creation
+      queryClient.invalidateQueries({ queryKey: ["groups"] });
+      queryClient.invalidateQueries({
         queryKey: ["group-members", variables.userId],
       });
     },

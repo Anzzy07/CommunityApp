@@ -1,12 +1,12 @@
 import { supabase } from "@/src/lib/supabase";
 import { useQuery } from "@tanstack/react-query";
 
+// Fetches all entries for a specific challenge, with user info joined
 export function useSupabaseChallengeEntries(challengeId: string) {
   return useQuery({
     queryKey: ["challenge-entries", challengeId],
     queryFn: async () => {
-      // console.log("Fetching challenge entries for:", challengeId);
-
+      // Fetch entries with user details joined in a single query
       const { data, error } = await supabase
         .from("challenge_entries")
         .select(
@@ -23,16 +23,11 @@ export function useSupabaseChallengeEntries(challengeId: string) {
         .eq("challenge_id", challengeId)
         .order("created_at", { ascending: false });
 
-      if (error) {
-        console.error(":( Error fetching entries:", error);
-        throw error;
-      }
+      if (error) throw error;
 
-      // console.log(":) Fetched entries count:", data?.length || 0);
-
+      // Flatten the joined user object — Supabase returns it as an array
       return (data || []).map((entry: any) => {
         const userData = Array.isArray(entry.user) ? entry.user[0] : entry.user;
-
         return {
           ...entry,
           user: {
@@ -44,18 +39,16 @@ export function useSupabaseChallengeEntries(challengeId: string) {
       });
     },
     enabled: !!challengeId,
-    staleTime: 0,
-    gcTime: 0,
-    refetchOnMount: true,
-    refetchOnWindowFocus: true,
+    staleTime: 1000 * 60 * 1, // 1 minute — entries change less often than posts
   });
 }
 
-// Get entries count for a challenge
+// Fetches just the count of entries for a challenge — used in the header badge
 export function useSupabaseChallengeEntriesCount(challengeId: string) {
   return useQuery({
     queryKey: ["challenge-entries-count", challengeId],
     queryFn: async () => {
+      // head: true means only fetch the count, not the actual rows — very fast
       const { count, error } = await supabase
         .from("challenge_entries")
         .select("*", { count: "exact", head: true })
@@ -65,12 +58,11 @@ export function useSupabaseChallengeEntriesCount(challengeId: string) {
       return count || 0;
     },
     enabled: !!challengeId,
-    staleTime: 0,
-    gcTime: 0,
+    staleTime: 1000 * 60 * 1,
   });
 }
 
-// Get users entry for a specific challenge
+// Fetches the current user's own entry for a challenge — used to show Update vs Submit
 export function useSupabaseUserChallengeEntry(
   challengeId: string,
   userId?: string,
@@ -87,11 +79,11 @@ export function useSupabaseUserChallengeEntry(
         .eq("user_id", userId)
         .single();
 
-      if (error && error.code !== "PGRST116") throw error; // Ignore "not found"
-      return data;
+      // PGRST116 means "no rows found" — this is expected when user hasn't entered yet
+      if (error && error.code !== "PGRST116") throw error;
+      return data ?? null;
     },
     enabled: !!challengeId && !!userId,
-    staleTime: 0,
-    gcTime: 0,
+    staleTime: 1000 * 60 * 2,
   });
 }

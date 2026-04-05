@@ -2,7 +2,7 @@ import { supabase } from "@/src/lib/supabase";
 import { uploadImage } from "@/src/utils/supabaseImages";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-// Submit a challenge entry
+// Submits a new entry for a challenge — uploads image first if provided
 export function useSubmitChallengeEntry() {
   const queryClient = useQueryClient();
 
@@ -18,25 +18,17 @@ export function useSubmitChallengeEntry() {
       content: string;
       imageUrl?: string;
     }) => {
-      console.log("📤 Submitting challenge entry:", {
-        challengeId,
-        userId,
-        imageUrl,
-      });
-
-      // Upload image to Supabase Storage if provided
+      // Upload the entry image to Supabase Storage if one was selected
       let storagePath: string | null = null;
       if (imageUrl) {
         try {
-          console.log("📤 Uploading image to storage...");
           storagePath = await uploadImage(imageUrl);
-          console.log("✅ Image uploaded to:", storagePath);
         } catch (error) {
-          console.error("❌ Error uploading image:", error);
           throw new Error("Failed to upload image");
         }
       }
 
+      // Insert the challenge entry into the database
       const { data, error } = await supabase
         .from("challenge_entries")
         .insert({
@@ -49,10 +41,11 @@ export function useSubmitChallengeEntry() {
         .single();
 
       if (error) throw error;
-      console.log("✅ Challenge entry submitted");
       return data;
     },
-    onSuccess: (_, variables) => {
+
+    onSuccess: (_data, variables) => {
+      // Refresh entries list, count, and user's own entry after submission
       queryClient.invalidateQueries({
         queryKey: ["challenge-entries", variables.challengeId],
       });
@@ -70,7 +63,7 @@ export function useSubmitChallengeEntry() {
   });
 }
 
-// Update a challenge entry
+// Updates an existing challenge entry — replaces content and image
 export function useUpdateChallengeEntry() {
   const queryClient = useQueryClient();
 
@@ -88,36 +81,30 @@ export function useUpdateChallengeEntry() {
       content: string;
       imageUrl?: string;
     }) => {
-      console.log("📤 Updating challenge entry:", { entryId, imageUrl });
-
-      // Upload image to Supabase Storage if provided
+      // Upload new image if one was selected
       let storagePath: string | null = null;
       if (imageUrl) {
         try {
-          console.log("📤 Uploading image to storage...");
           storagePath = await uploadImage(imageUrl);
-          console.log("✅ Image uploaded to:", storagePath);
         } catch (error) {
-          console.error("❌ Error uploading image:", error);
           throw new Error("Failed to upload image");
         }
       }
 
+      // Update the entry row with new content and image
       const { data, error } = await supabase
         .from("challenge_entries")
-        .update({
-          content,
-          image_url: storagePath,
-        })
+        .update({ content, image_url: storagePath })
         .eq("id", entryId)
         .select()
         .single();
 
       if (error) throw error;
-      console.log("✅ Challenge entry updated");
       return data;
     },
-    onSuccess: (_, variables) => {
+
+    onSuccess: (_data, variables) => {
+      // Refresh entries and user's entry after update
       queryClient.invalidateQueries({
         queryKey: ["challenge-entries", variables.challengeId],
       });
@@ -132,7 +119,7 @@ export function useUpdateChallengeEntry() {
   });
 }
 
-// Delete a challenge entry
+// Deletes a challenge entry — verifies ownership before deleting
 export function useDeleteChallengeEntry() {
   const queryClient = useQueryClient();
 
@@ -146,7 +133,7 @@ export function useDeleteChallengeEntry() {
       challengeId: string;
       userId: string;
     }) => {
-      // First verify the entry exists and belongs to user
+      // Verify the entry exists and belongs to this user before deleting
       const { data: existingEntry, error: checkError } = await supabase
         .from("challenge_entries")
         .select("*")
@@ -155,59 +142,66 @@ export function useDeleteChallengeEntry() {
         .single();
 
       if (checkError || !existingEntry) {
-        console.error("Entry not found or not owned by user");
         throw new Error(
           "Entry not found or you don't have permission to delete it",
         );
       }
 
-      // Now delete
+      // Delete the entry from the database
       const { error, count } = await supabase
         .from("challenge_entries")
         .delete({ count: "exact" })
         .eq("id", entryId)
         .eq("user_id", userId);
 
-      if (error) {
-        console.error("DELETE error:", error);
-        throw error;
-      }
+      if (error) throw error;
+      if (count === 0) throw new Error("Failed to delete entry");
 
-      if (count === 0) {
-        console.error("No rows deleted");
-        throw new Error("Failed to delete entry");
-      }
-
-      return { success: true, deletedCount: count };
+      return { success: true };
     },
-    onSuccess: async (result, variables) => {
-      // Remove from cache immediately
+
+    onMutate: async ({ entryId, challengeId }) => {
+      await queryClient.cancelQueries({
+        queryKey: ["challenge-entries", challengeId],
+      });
+
+      const previousEntries = queryClient.getQueryData([
+        "challenge-entries",
+        challengeId,
+      ]);
+
+      // Remove the entry from the list instantly — delete feels immediate
       queryClient.setQueryData(
-        ["challenge-entries", variables.challengeId],
-        (old: any) => {
-          if (!old) return old;
-          return old.filter((entry: any) => entry.id !== variables.entryId);
-        },
+        ["challenge-entries", challengeId],
+        (old: any[]) => (old ?? []).filter((e) => e.id !== entryId),
       );
 
-      // Then refetch to be sure
-      await queryClient.invalidateQueries({
+      return { previousEntries };
+    },
+
+    onError: (_err, variables, context) => {
+      // Roll back if delete failed
+      if (context?.previousEntries !== undefined) {
+        queryClient.setQueryData(
+          ["challenge-entries", variables.challengeId],
+          context.previousEntries,
+        );
+      }
+    },
+
+    onSettled: (_data, _err, variables) => {
+      // Sync with DB in background
+      queryClient.invalidateQueries({
         queryKey: ["challenge-entries", variables.challengeId],
       });
-
-      await queryClient.invalidateQueries({
+      queryClient.invalidateQueries({
         queryKey: ["challenge-entries-count", variables.challengeId],
-      });
-
-      await queryClient.refetchQueries({
-        queryKey: ["challenge-entries", variables.challengeId],
-        type: "active",
       });
     },
   });
 }
 
-// Vote on a challenge entry (upvote/downvote)
+// Votes on a challenge entry — optimistic update, no setTimeout delay
 export function useVoteChallengeEntry() {
   const queryClient = useQueryClient();
 
@@ -216,91 +210,121 @@ export function useVoteChallengeEntry() {
       entryId,
       userId,
       voteType,
+      challengeId,
     }: {
       entryId: string;
       userId: string;
       voteType: "up" | "down";
+      challengeId: string;
     }) => {
-      const { data: existingVote, error: fetchError } = await supabase
+      // Check if user has already voted on this entry
+      const { data: existingVote } = await supabase
         .from("challenge_entry_votes")
-        .select("*")
+        .select("vote_type")
         .eq("entry_id", entryId)
         .eq("user_id", userId)
         .single();
 
       if (existingVote) {
         if (existingVote.vote_type === voteType) {
+          // Same vote type — remove the vote (un-vote)
           const { error } = await supabase
             .from("challenge_entry_votes")
             .delete()
             .eq("entry_id", entryId)
             .eq("user_id", userId);
-
-          if (error) {
-            console.error("Delete error:", error);
-            throw error;
-          }
-          return { action: "removed", voteType: null, entryId };
+          if (error) throw error;
+          return { action: "removed", voteType: null };
         } else {
+          // Different vote — switch from one type to the other
           const { error } = await supabase
             .from("challenge_entry_votes")
             .update({ vote_type: voteType })
             .eq("entry_id", entryId)
             .eq("user_id", userId);
-
-          if (error) {
-            console.error("Update error:", error);
-            throw error;
-          }
-          return { action: "updated", voteType, entryId };
+          if (error) throw error;
+          return { action: "updated", voteType };
         }
       } else {
-        const { error } = await supabase.from("challenge_entry_votes").insert({
-          entry_id: entryId,
-          user_id: userId,
-          vote_type: voteType,
-        });
-
-        if (error) {
-          console.error("Insert error:", error);
-          throw error;
-        }
-        return { action: "created", voteType, entryId };
+        // No existing vote — create a new one
+        const { error } = await supabase
+          .from("challenge_entry_votes")
+          .insert({ entry_id: entryId, user_id: userId, vote_type: voteType });
+        if (error) throw error;
+        return { action: "created", voteType };
       }
     },
-    onSuccess: async (result, variables) => {
-      // Get the challenge_id
-      const { data: entryData } = await supabase
-        .from("challenge_entries")
-        .select("challenge_id")
-        .eq("id", variables.entryId)
-        .single();
 
-      const challengeId = entryData?.challenge_id;
-
-      if (!challengeId) {
-        console.error("Could not find challenge_id");
-        return;
-      }
-
-      // Update the vote status in cache immediately
-      queryClient.setQueryData(
-        ["challenge-entry-vote", variables.entryId, variables.userId],
-        result.voteType,
-      );
-
-      // Waiting for trigger to update vote count
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      // ONLY refetch entries for vote counts not the vote status
-      queryClient.invalidateQueries({
+    onMutate: async ({ entryId, userId, voteType, challengeId }) => {
+      await queryClient.cancelQueries({
         queryKey: ["challenge-entries", challengeId],
       });
 
-      await queryClient.refetchQueries({
-        queryKey: ["challenge-entries", challengeId],
-        exact: true,
-        type: "active",
+      const previousEntries = queryClient.getQueryData([
+        "challenge-entries",
+        challengeId,
+      ]);
+
+      const prevVote = queryClient.getQueryData([
+        "challenge-entry-vote",
+        entryId,
+        userId,
+      ]) as "up" | "down" | null;
+
+      // Calculate vote delta for the upvote count display
+      let delta = 0;
+      if (voteType === "up") {
+        delta = prevVote === "up" ? -1 : prevVote === "down" ? 2 : 1;
+      } else {
+        delta = prevVote === "down" ? 1 : prevVote === "up" ? -2 : -1;
+      }
+
+      const newVote: "up" | "down" | null =
+        prevVote === voteType ? null : voteType;
+
+      // Update vote status immediately in cache — icon changes instantly
+      queryClient.setQueryData(
+        ["challenge-entry-vote", entryId, userId],
+        newVote,
+      );
+
+      // Update vote count in the entries list instantly — no delay needed
+      queryClient.setQueryData(
+        ["challenge-entries", challengeId],
+        (old: any[]) =>
+          (old ?? []).map((entry) =>
+            entry.id === entryId
+              ? { ...entry, votes: (entry.votes ?? 0) + delta }
+              : entry,
+          ),
+      );
+
+      return { previousEntries, prevVote };
+    },
+
+    onError: (_err, variables, context) => {
+      // Roll back vote status and entry list on error
+      if (context?.previousEntries !== undefined) {
+        queryClient.setQueryData(
+          ["challenge-entries", variables.challengeId],
+          context.previousEntries,
+        );
+      }
+      if (context?.prevVote !== undefined) {
+        queryClient.setQueryData(
+          ["challenge-entry-vote", variables.entryId, variables.userId],
+          context.prevVote,
+        );
+      }
+    },
+
+    onSettled: (_data, _err, variables) => {
+      // Sync with real DB data in background — no setTimeout needed
+      queryClient.invalidateQueries({
+        queryKey: ["challenge-entries", variables.challengeId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["challenge-entry-vote", variables.entryId, variables.userId],
       });
     },
   });

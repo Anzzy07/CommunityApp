@@ -25,14 +25,20 @@ type ChallengeEntry = {
 
 type Props = {
   entry: ChallengeEntry;
+  // challengeId is required so the vote mutation can update the correct cache key
+  challengeId: string;
   onDelete?: () => void;
 };
 
-export default function ChallengeEntryCard({ entry, onDelete }: Props) {
+export default function ChallengeEntryCard({
+  entry,
+  challengeId,
+  onDelete,
+}: Props) {
   const { user } = useUser();
   const voteMutation = useVoteChallengeEntry();
 
-  // Get user's current vote from database
+  // Reads the current user's vote status for this entry from React Query cache
   const { data: currentVote } = useSupabaseChallengeEntryVote(
     entry.id,
     user?.id,
@@ -40,54 +46,38 @@ export default function ChallengeEntryCard({ entry, onDelete }: Props) {
 
   const isOwner = user?.id === entry.user_id;
 
+  // Handles upvote or downvote — passes challengeId so the optimistic
+  // update in useVoteChallengeEntry can find the correct cache to update
   const handleVote = async (voteType: "up" | "down") => {
-    // console.log("Vote clicked:", voteType, "Entry ID:", entry.id);
-
     if (!user?.id) {
       Alert.alert("Sign in required", "Please sign in to vote");
       return;
     }
 
-    // console.log("User ID:", user.id, "Current vote:", currentVote);
-
     try {
-      const result = await voteMutation.mutateAsync({
+      await voteMutation.mutateAsync({
         entryId: entry.id,
         userId: user.id,
         voteType,
+        challengeId, // required for optimistic cache update
       });
-      // console.log(":) Vote result:", result);
-    } catch (error) {
-      console.error(":( Vote error:", error);
+    } catch {
       Alert.alert("Error", "Failed to vote");
     }
   };
 
+  // Confirms before deleting — only shown to the entry owner
   const handleDelete = () => {
-    if (onDelete) {
-      Alert.alert(
-        "Delete Entry",
-        "Are you sure you want to delete this entry?",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Delete",
-            style: "destructive",
-            onPress: () => {
-              console.log("🗑️ Executing delete...");
-              onDelete();
-            },
-          },
-        ],
-      );
-    } else {
-      console.log(":( onDelete is undefined");
-    }
+    if (!onDelete) return;
+    Alert.alert("Delete Entry", "Are you sure you want to delete this entry?", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Delete", style: "destructive", onPress: onDelete },
+    ]);
   };
 
   return (
     <View style={styles.container}>
-      {/* User Info */}
+      {/* Entry header: user avatar, name, timestamp and delete button for owner */}
       <View style={styles.header}>
         <Image
           source={{
@@ -102,6 +92,7 @@ export default function ChallengeEntryCard({ entry, onDelete }: Props) {
           </Text>
         </View>
 
+        {/* Delete button only visible to the entry's owner */}
         {isOwner && onDelete && (
           <Pressable onPress={handleDelete} hitSlop={10}>
             <MaterialCommunityIcons
@@ -113,18 +104,18 @@ export default function ChallengeEntryCard({ entry, onDelete }: Props) {
         )}
       </View>
 
-      {/* Content */}
+      {/* Entry text content */}
       {entry.content && <Text style={styles.content}>{entry.content}</Text>}
 
-      {/* Image */}
+      {/* Entry image loaded from Supabase Storage */}
       {entry.image_url && (
         <SupabaseImage path={entry.image_url} style={styles.image} />
       )}
 
-      {/*  Votes */}
+      {/* Vote buttons with current count — updates instantly via optimistic update */}
       <View style={styles.footer}>
         <View style={styles.voteContainer}>
-          {/* Upvote */}
+          {/* Upvote button — filled icon when user has upvoted */}
           <Pressable
             onPress={() => handleVote("up")}
             disabled={voteMutation.isPending}
@@ -141,9 +132,10 @@ export default function ChallengeEntryCard({ entry, onDelete }: Props) {
             />
           </Pressable>
 
+          {/* Fixed minWidth prevents layout jump when vote count digit count changes */}
           <Text style={styles.voteCount}>{entry.votes ?? 0}</Text>
 
-          {/* Downvote */}
+          {/* Downvote button — filled icon when user has downvoted */}
           <Pressable
             onPress={() => handleVote("down")}
             disabled={voteMutation.isPending}
@@ -173,10 +165,7 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 12,
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,

@@ -16,7 +16,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { formatDistanceToNowStrict, isPast } from "date-fns";
 import * as ImagePicker from "expo-image-picker";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -33,33 +33,42 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function ChallengeDetailsScreen() {
+  // id is the challenge ID from the route params
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useUser();
 
+  // Local form state for the entry submission section
   const [entryContent, setEntryContent] = useState("");
   const [entryImage, setEntryImage] = useState<string | null>(null);
 
-  // Queries
+  // Fetch all challenges to find the current one by id
   const { data: challenges = [] } = useSupabaseChallenges();
+
+  // Fetch entries, entry count, and user's own entry for this challenge
   const { data: entries = [], isLoading: entriesLoading } =
     useSupabaseChallengeEntries(id);
   const { data: entriesCount = 0 } = useSupabaseChallengeEntriesCount(id);
   const { data: userEntry } = useSupabaseUserChallengeEntry(id, user?.id);
 
-  // Mutations
+  // Mutation hooks for submitting, updating and deleting entries
   const submitMutation = useSubmitChallengeEntry();
   const updateMutation = useUpdateChallengeEntry();
   const deleteMutation = useDeleteChallengeEntry();
 
+  // Find the challenge object matching the current route id
   const challenge = challenges.find((c) => c.id === id);
 
+  // Check if the challenge end date has passed
   const isExpired = challenge ? isPast(new Date(challenge.end_date)) : false;
+
+  // Human-readable time remaining until the challenge ends
   const timeRemaining = challenge
     ? formatDistanceToNowStrict(new Date(challenge.end_date), {
         addSuffix: false,
       })
     : "";
 
+  // Opens the device image picker for selecting an entry photo
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
@@ -79,6 +88,7 @@ export default function ChallengeDetailsScreen() {
     }
   };
 
+  // Submits a new entry or updates existing one depending on userEntry state
   const handleSubmitEntry = async () => {
     if (!user?.id) {
       Alert.alert("Sign in required", "Please sign in to submit an entry");
@@ -92,7 +102,7 @@ export default function ChallengeDetailsScreen() {
 
     try {
       if (userEntry) {
-        // Update existing entry
+        // User already has an entry — update it instead of creating a new one
         await updateMutation.mutateAsync({
           entryId: userEntry.id,
           challengeId: id,
@@ -102,7 +112,7 @@ export default function ChallengeDetailsScreen() {
         });
         Alert.alert("Success!", "Your entry has been updated! 🎉");
       } else {
-        // Create new entry
+        // No existing entry — submit a brand new one
         await submitMutation.mutateAsync({
           challengeId: id,
           userId: user.id,
@@ -112,36 +122,51 @@ export default function ChallengeDetailsScreen() {
         Alert.alert("Success!", "Your entry has been submitted! 🎉");
       }
 
-      // Clear fields after successful submission
+      // Reset the form after successful submission
       setEntryContent("");
       setEntryImage(null);
-    } catch (error) {
-      console.error("Submit error:", error);
+    } catch {
       Alert.alert("Error", "Failed to submit entry");
     }
   };
 
-  const handleDeleteEntry = async (entryId: string) => {
-    // console.log(" DeleteEntry called:", entryId, "User:", user?.id);
+  // Deletes an entry from the database — optimistic removal happens in the mutation
+  const handleDeleteEntry = useCallback(
+    async (entryId: string) => {
+      if (!user?.id) return;
+      try {
+        await deleteMutation.mutateAsync({
+          entryId,
+          challengeId: id,
+          userId: user.id,
+        });
+      } catch {
+        Alert.alert("Error", "Failed to delete entry");
+      }
+    },
+    [user?.id, id, deleteMutation],
+  );
 
-    if (!user?.id) {
-      // console.log("No user ID");
-      return;
-    }
+  // Stable renderItem — useCallback prevents FlatList re-rendering all cards
+  // when unrelated state (like entryContent text) changes
+  const renderItem = useCallback(
+    ({ item }: { item: any }) => {
+      const isOwner = item.user_id === user?.id;
+      return (
+        // Pass challengeId so the vote mutation can update the correct cache key
+        <ChallengeEntryCard
+          entry={item}
+          challengeId={id}
+          onDelete={isOwner ? () => handleDeleteEntry(item.id) : undefined}
+        />
+      );
+    },
+    [user?.id, id, handleDeleteEntry],
+  );
 
-    try {
-      await deleteMutation.mutateAsync({
-        entryId,
-        challengeId: id,
-        userId: user.id,
-      });
-      // console.log("Delete successful");
-    } catch (error) {
-      console.error(":( Delete error:", error);
-      Alert.alert("Error", "Failed to delete entry");
-    }
-  };
+  const keyExtractor = useCallback((item: any) => item.id, []);
 
+  // Loading state while challenge data is being fetched
   if (!challenge) {
     return (
       <View style={styles.loadingContainer}>
@@ -153,6 +178,7 @@ export default function ChallengeDetailsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Header with back button */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} hitSlop={10}>
           <MaterialCommunityIcons name="arrow-left" size={24} color="white" />
@@ -161,29 +187,18 @@ export default function ChallengeDetailsScreen() {
         <View style={{ width: 24 }} />
       </View>
 
+      {/* KeyboardAvoidingView so the entry form isn't hidden by the keyboard */}
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1 }}
       >
         <FlatList
           data={entries}
-          keyExtractor={(item: any) => item.id}
-          renderItem={({ item }) => {
-            const isOwner = item.user_id === user?.id;
-            console.log("🔍 Rendering entry:", item.id, "isOwner:", isOwner);
-
-            return (
-              <ChallengeEntryCard
-                entry={item}
-                onDelete={
-                  isOwner ? () => handleDeleteEntry(item.id) : undefined
-                }
-              />
-            );
-          }}
+          keyExtractor={keyExtractor}
+          renderItem={renderItem}
           ListHeaderComponent={
             <>
-              {/* Challenge Info */}
+              {/* Challenge info card: trophy icon, title, description, time and count */}
               <View style={styles.challengeInfo}>
                 <View style={styles.iconContainer}>
                   <MaterialCommunityIcons
@@ -218,6 +233,7 @@ export default function ChallengeDetailsScreen() {
                   </Text>
                 </View>
 
+                {/* Expired banner shown when challenge end date has passed */}
                 {isExpired && (
                   <View style={styles.expiredBanner}>
                     <MaterialCommunityIcons
@@ -232,13 +248,14 @@ export default function ChallengeDetailsScreen() {
                 )}
               </View>
 
-              {/* Submit Entry Section */}
+              {/* Entry submission form — hidden when challenge is expired */}
               {!isExpired && (
                 <View style={styles.submitSection}>
                   <Text style={styles.sectionTitle}>
                     {userEntry ? "Update Your Entry" : "Submit Your Entry"}
                   </Text>
 
+                  {/* Multi-line text input for entry description */}
                   <TextInput
                     placeholder="Share your progress..."
                     placeholderTextColor="#9CA3AF"
@@ -249,6 +266,7 @@ export default function ChallengeDetailsScreen() {
                     maxLength={200}
                   />
 
+                  {/* Image preview with remove button */}
                   {entryImage && (
                     <View style={styles.imagePreview}>
                       <Image
@@ -269,6 +287,7 @@ export default function ChallengeDetailsScreen() {
                   )}
 
                   <View style={styles.submitActions}>
+                    {/* Photo picker button */}
                     <Pressable onPress={pickImage} style={styles.imageButton}>
                       <MaterialCommunityIcons
                         name="image-plus"
@@ -278,6 +297,7 @@ export default function ChallengeDetailsScreen() {
                       <Text style={styles.imageButtonText}>Add Photo</Text>
                     </Pressable>
 
+                    {/* Submit/Update button with loading spinner */}
                     <Pressable
                       onPress={handleSubmitEntry}
                       disabled={
@@ -304,7 +324,7 @@ export default function ChallengeDetailsScreen() {
                 </View>
               )}
 
-              {/* Entries List Header */}
+              {/* Entries list header showing participant count */}
               <View style={styles.entriesHeader}>
                 <Text style={styles.entriesTitle}>Participant Entries</Text>
                 <Text style={styles.entriesCount}>{entriesCount}</Text>
@@ -327,6 +347,9 @@ export default function ChallengeDetailsScreen() {
             ) : null
           }
           contentContainerStyle={styles.listContent}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={8}
+          windowSize={8}
         />
       </KeyboardAvoidingView>
     </SafeAreaView>

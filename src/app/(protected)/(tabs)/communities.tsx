@@ -9,7 +9,7 @@ import { Group } from "@/src/types";
 import { useUser } from "@clerk/clerk-expo";
 import { AntDesign, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Link } from "expo-router";
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -28,94 +28,102 @@ export default function CommunitiesScreen() {
   const { user } = useUser();
   const [searchValue, setSearchValue] = useState("");
 
-  // Fetch groups and group members from Supabase
+  // Fetch all communities and current user's memberships from Supabase
   const {
     data: groups = [],
     isLoading: groupsLoading,
     refetch: refetchGroups,
   } = useSupabaseGroups();
+
   const {
     data: groupMembers = [],
     isLoading: membersLoading,
     refetch: refetchMembers,
   } = useSupabaseGroupMembers(user?.id || "");
 
-  // Mutations
+  // Mutation hooks for joining and leaving communities
   const joinMutation = useJoinGroup();
   const leaveMutation = useLeaveGroup();
 
   const isLoading = groupsLoading || membersLoading;
 
-  // Check if user joined a group
-  const isJoined = (groupId: string) => {
-    return groupMembers.some((m) => m.group_id === groupId);
-  };
+  // Build a Set of joined group IDs for O(1) lookup
+  // Much faster than calling .some() on every render for every card
+  const joinedGroupIds = useMemo(
+    () => new Set(groupMembers.map((m) => m.group_id)),
+    [groupMembers],
+  );
 
-  // Handle join/leave
-  const handleJoinToggle = async (group: Group, joined: boolean) => {
-    if (!user?.id) {
-      Alert.alert("Sign in required", "Please sign in to join communities");
-      return;
-    }
+  // Check if the current user is a member of a specific group
+  const isJoined = useCallback(
+    (groupId: string) => joinedGroupIds.has(groupId),
+    [joinedGroupIds],
+  );
 
-    if (joined) {
-      // Check if user is leader
-      const isLeader = group.leader_id === user.id;
-
-      if (isLeader) {
-        Alert.alert(
-          "Cannot Leave",
-          "You're the leader of this community. You cannot leave a community you created.",
-          [{ text: "OK" }],
-        );
+  // Handles both join and leave depending on current membership status.
+  // Optimistic updates in useJoinGroup/useLeaveGroup make the button
+  // flip instantly without waiting for the server response.
+  const handleJoinToggle = useCallback(
+    async (group: Group, joined: boolean) => {
+      if (!user?.id) {
+        Alert.alert("Sign in required", "Please sign in to join communities");
         return;
       }
 
-      // Leave group
-      Alert.alert(
-        "Leave Community",
-        `Are you sure you want to leave ${group.name}?`,
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Leave",
-            style: "destructive",
-            onPress: async () => {
-              // console.log(" Attempting to leave group:", group.id);
-              try {
-                const result = await leaveMutation.mutateAsync({
-                  groupId: group.id,
-                  userId: user.id,
-                });
-                // console.log(" Leave successful:", result);
-              } catch (error) {
-                console.error("Leave failed:", error);
-                Alert.alert(
-                  "Error",
-                  "Failed to leave group. Please try again.",
-                );
-              }
-            },
-          },
-        ],
-      );
-    } else {
-      // Join group
-      // console.log(" Attempting to join group:", group.id);
-      try {
-        const result = await joinMutation.mutateAsync({
-          groupId: group.id,
-          userId: user.id,
-        });
-        // console.log(" Join successful:", result);
-      } catch (error) {
-        console.error("❌ Join failed:", error);
-        Alert.alert("Error", "Failed to join group. Please try again.");
-      }
-    }
-  };
+      if (joined) {
+        // Leaders cannot leave their own community
+        const isLeader = group.leader_id === user.id;
+        if (isLeader) {
+          Alert.alert(
+            "Cannot Leave",
+            "You're the leader of this community. You cannot leave a community you created.",
+            [{ text: "OK" }],
+          );
+          return;
+        }
 
-  // Split communities into joined & discover
+        // Confirm before leaving
+        Alert.alert(
+          "Leave Community",
+          `Are you sure you want to leave ${group.name}?`,
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Leave",
+              style: "destructive",
+              onPress: async () => {
+                try {
+                  await leaveMutation.mutateAsync({
+                    groupId: group.id,
+                    userId: user.id,
+                  });
+                } catch {
+                  Alert.alert(
+                    "Error",
+                    "Failed to leave group. Please try again.",
+                  );
+                }
+              },
+            },
+          ],
+        );
+      } else {
+        // Join immediately — optimistic update shows result instantly
+        try {
+          await joinMutation.mutateAsync({
+            groupId: group.id,
+            userId: user.id,
+          });
+        } catch {
+          Alert.alert("Error", "Failed to join group. Please try again.");
+        }
+      }
+    },
+    [user?.id, joinMutation, leaveMutation],
+  );
+
+  // Splits communities into "My Communities" (joined) and "Discover" (not joined)
+  // Also filters by search text. Recalculates only when groups, members or search changes.
   const { joinedGroups, discoverGroups } = useMemo(() => {
     const filtered = groups.filter((group) =>
       group.name.toLowerCase().includes(searchValue.toLowerCase()),
@@ -125,117 +133,137 @@ export default function CommunitiesScreen() {
       joinedGroups: filtered.filter((g) => isJoined(g.id)),
       discoverGroups: filtered.filter((g) => !isJoined(g.id)),
     };
-  }, [groups, groupMembers, searchValue]);
+  }, [groups, joinedGroupIds, searchValue, isJoined]);
 
-  const renderCommunity = ({ item }: { item: Group }) => {
-    const joined = isJoined(item.id);
-    const isLeader = joined && item.leader_id === user?.id;
+  // Renders a single community card with image, name, and join/leave button
+  const renderCommunity = useCallback(
+    ({ item }: { item: Group }) => {
+      const joined = isJoined(item.id);
+      const isLeader = joined && item.leader_id === user?.id;
 
-    return (
-      <Link href={`/community/${item.id}`} asChild>
-        <Pressable style={styles.card}>
-          {/* Community Image */}
-          <Image
-            source={{ uri: item.image || "https://via.placeholder.com/400" }}
-            style={styles.image}
-          />
+      return (
+        // Tapping the card navigates to the community detail screen
+        <Link href={`/community/${item.id}`} asChild>
+          <Pressable style={styles.card}>
+            {/* Community avatar image */}
+            <Image
+              source={{
+                uri: item.image || "https://via.placeholder.com/400",
+              }}
+              style={styles.image}
+            />
 
-          {/* Community Info */}
-          <View style={styles.content}>
-            <View style={styles.nameRow}>
-              <Text style={styles.name} numberOfLines={1}>
-                {item.name}
-              </Text>
-              {isLeader && (
-                <MaterialCommunityIcons
-                  name="crown"
-                  size={16}
-                  color="#F59E0B"
-                />
-              )}
-            </View>
-            <Text style={styles.subtitle}>
-              {joined
-                ? isLeader
-                  ? "You're the leader"
-                  : "Member"
-                : "Tap to explore"}
-            </Text>
-          </View>
-
-          {/* Join/Joined Button */}
-          <Pressable
-            onPress={(e) => {
-              e.stopPropagation();
-              handleJoinToggle(item, joined);
-            }}
-            disabled={joinMutation.isPending || leaveMutation.isPending}
-            style={[
-              styles.joinButton,
-              joined && styles.joinedButton,
-              isLeader && styles.leaderButton,
-            ]}
-          >
-            {joinMutation.isPending || leaveMutation.isPending ? (
-              <ActivityIndicator
-                size="small"
-                color={joined ? COLORS.primary : "white"}
-              />
-            ) : (
-              <>
-                {joined ? (
+            {/* Community name and membership status */}
+            <View style={styles.content}>
+              <View style={styles.nameRow}>
+                <Text style={styles.name} numberOfLines={1}>
+                  {item.name}
+                </Text>
+                {/* Crown icon shown next to communities where user is the leader */}
+                {isLeader && (
                   <MaterialCommunityIcons
-                    name="check-circle"
-                    size={18}
-                    color={isLeader ? "#F59E0B" : COLORS.primary}
-                  />
-                ) : (
-                  <MaterialCommunityIcons
-                    name="plus-circle"
-                    size={18}
-                    color="white"
+                    name="crown"
+                    size={16}
+                    color="#F59E0B"
                   />
                 )}
-                <Text
-                  style={[
-                    styles.joinText,
-                    joined && styles.joinedText,
-                    isLeader && styles.leaderText,
-                  ]}
-                >
-                  {joined ? (isLeader ? "Leader" : "Joined") : "Join"}
-                </Text>
-              </>
-            )}
-          </Pressable>
-        </Pressable>
-      </Link>
-    );
-  };
+              </View>
+              <Text style={styles.subtitle}>
+                {joined
+                  ? isLeader
+                    ? "You're the leader"
+                    : "Member"
+                  : "Tap to explore"}
+              </Text>
+            </View>
 
-  const renderSection = ({ item }: any) => (
-    <>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>{item.title}</Text>
-        <Text style={styles.sectionCount}>{item.data.length}</Text>
-      </View>
-      <FlatList
-        data={item.data}
-        keyExtractor={(g) => g.id}
-        renderItem={renderCommunity}
-        scrollEnabled={false}
-      />
-    </>
+            {/* Join/Leave button — stopPropagation prevents card navigation when tapping button */}
+            <Pressable
+              onPress={(e) => {
+                e.stopPropagation();
+                handleJoinToggle(item, joined);
+              }}
+              disabled={joinMutation.isPending || leaveMutation.isPending}
+              style={[
+                styles.joinButton,
+                joined && styles.joinedButton,
+                isLeader && styles.leaderButton,
+              ]}
+            >
+              {joinMutation.isPending || leaveMutation.isPending ? (
+                <ActivityIndicator
+                  size="small"
+                  color={joined ? COLORS.primary : "white"}
+                />
+              ) : (
+                <>
+                  {joined ? (
+                    <MaterialCommunityIcons
+                      name="check-circle"
+                      size={18}
+                      color={isLeader ? "#F59E0B" : COLORS.primary}
+                    />
+                  ) : (
+                    <MaterialCommunityIcons
+                      name="plus-circle"
+                      size={18}
+                      color="white"
+                    />
+                  )}
+                  <Text
+                    style={[
+                      styles.joinText,
+                      joined && styles.joinedText,
+                      isLeader && styles.leaderText,
+                    ]}
+                  >
+                    {joined ? (isLeader ? "Leader" : "Joined") : "Join"}
+                  </Text>
+                </>
+              )}
+            </Pressable>
+          </Pressable>
+        </Link>
+      );
+    },
+    [
+      isJoined,
+      user?.id,
+      handleJoinToggle,
+      joinMutation.isPending,
+      leaveMutation.isPending,
+    ],
   );
 
-  // Handle refresh
-  const handleRefresh = async () => {
+  // Renders a section (My Communities or Discover) with a header and its list of cards
+  const renderSection = useCallback(
+    ({ item }: any) => (
+      <>
+        {/* Section header showing title and count */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>{item.title}</Text>
+          <Text style={styles.sectionCount}>{item.data.length}</Text>
+        </View>
+        {/* Nested FlatList is scrollDisabled so the outer FlatList handles scrolling */}
+        <FlatList
+          data={item.data}
+          keyExtractor={(g) => g.id}
+          renderItem={renderCommunity}
+          scrollEnabled={false}
+        />
+      </>
+    ),
+    [renderCommunity],
+  );
+
+  // Refreshes both groups and members when user pulls down to refresh
+  const handleRefresh = useCallback(async () => {
     await Promise.all([refetchGroups(), refetchMembers()]);
-  };
+  }, [refetchGroups, refetchMembers]);
 
   return (
     <SafeAreaView style={styles.container} edges={["bottom"]}>
-      {/* Search Bar */}
+      {/* Search bar to filter communities by name */}
       <View style={styles.searchContainer}>
         <Feather name="search" size={20} color={COLORS.textSecondary} />
         <TextInput
@@ -245,6 +273,7 @@ export default function CommunitiesScreen() {
           value={searchValue}
           onChangeText={setSearchValue}
         />
+        {/* Clear button only shown when search has text */}
         {searchValue.length > 0 && (
           <Pressable onPress={() => setSearchValue("")} hitSlop={10}>
             <AntDesign name="close-circle" size={18} color="#9CA3AF" />
@@ -252,19 +281,21 @@ export default function CommunitiesScreen() {
         )}
       </View>
 
-      {/* Loading State */}
+      {/* Loading spinner shown on first load */}
       {isLoading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
           <Text style={styles.loadingText}>Loading communities...</Text>
         </View>
       ) : (
-        /* Communities List */
+        // Main list — sections are "My Communities" and "Discover"
         <FlatList
           data={[
+            // Only show "My Communities" section if user has joined at least one
             ...(joinedGroups.length > 0
               ? [{ id: "joined", title: "My Communities", data: joinedGroups }]
               : []),
+            // Only show "Discover" section if there are communities to join
             ...(discoverGroups.length > 0
               ? [{ id: "discover", title: "Discover", data: discoverGroups }]
               : []),
@@ -279,6 +310,7 @@ export default function CommunitiesScreen() {
               tintColor={COLORS.primary}
             />
           }
+          // Empty state when search returns no results
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <View style={styles.emptyIconContainer}>
@@ -313,10 +345,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     gap: 10,
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 2,
@@ -367,10 +396,7 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 16,
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 2,

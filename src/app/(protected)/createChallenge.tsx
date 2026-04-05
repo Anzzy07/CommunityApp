@@ -18,15 +18,19 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+// Screen for community leaders to create a new challenge
 export default function CreateChallengeScreen() {
+  // groupId comes from the route params — set when navigating from community screen
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
   const { user } = useUser();
   const createChallengeMutation = useCreateChallenge();
 
+  // Form state for the challenge fields
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [duration, setDuration] = useState("7d");
+  const [duration, setDuration] = useState("7d"); // default to 7 days
 
+  // Available duration options shown as selectable buttons
   const durations = [
     { label: "3 days", value: "3d", days: 3 },
     { label: "7 days", value: "7d", days: 7 },
@@ -34,6 +38,7 @@ export default function CreateChallengeScreen() {
     { label: "30 days", value: "30d", days: 30 },
   ];
 
+  // Validates form and submits the challenge to the database
   const handleCreate = async () => {
     if (!title.trim() || !groupId) {
       Alert.alert("Title Required", "Please enter a challenge title");
@@ -45,6 +50,7 @@ export default function CreateChallengeScreen() {
       return;
     }
 
+    // Find the number of days matching the selected duration button
     const selectedDuration = durations.find((d) => d.value === duration);
     const daysToAdd = selectedDuration?.days || 7;
 
@@ -57,14 +63,16 @@ export default function CreateChallengeScreen() {
         userId: user.id,
       });
 
+      // Go back to the community screen after successful creation
       router.back();
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "Failed to create challenge. Please try again.");
     }
   };
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Header with close button, title, and create action */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} hitSlop={10}>
           <AntDesign name="close" size={26} color="white" />
@@ -72,6 +80,7 @@ export default function CreateChallengeScreen() {
 
         <Text style={styles.headerTitle}>Create Challenge</Text>
 
+        {/* Create button — disabled until title is entered */}
         <Pressable
           onPress={handleCreate}
           disabled={!title.trim() || createChallengeMutation.isPending}
@@ -89,6 +98,7 @@ export default function CreateChallengeScreen() {
         </Pressable>
       </View>
 
+      {/* KeyboardAvoidingView pushes content up when keyboard opens on iOS */}
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1 }}
@@ -97,6 +107,7 @@ export default function CreateChallengeScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
+          {/* Trophy icon shown at the top of the form */}
           <View style={styles.iconSection}>
             <View style={styles.iconContainer}>
               <MaterialCommunityIcons
@@ -108,6 +119,7 @@ export default function CreateChallengeScreen() {
             <Text style={styles.iconLabel}>Challenge</Text>
           </View>
 
+          {/* Challenge title input with character counter */}
           <View style={styles.inputWrapper}>
             <Text style={styles.label}>Challenge Title</Text>
             <TextInput
@@ -121,6 +133,7 @@ export default function CreateChallengeScreen() {
             <Text style={styles.charCount}>{title.length}/60</Text>
           </View>
 
+          {/* Optional description input with character counter */}
           <View style={styles.inputWrapper}>
             <Text style={styles.label}>Description (Optional)</Text>
             <TextInput
@@ -135,6 +148,7 @@ export default function CreateChallengeScreen() {
             <Text style={styles.charCount}>{description.length}/200</Text>
           </View>
 
+          {/* Duration selector — tap a button to select how long the challenge runs */}
           <View style={styles.durationSection}>
             <Text style={styles.sectionTitle}>Duration</Text>
             <View style={styles.durationGrid}>
@@ -167,6 +181,7 @@ export default function CreateChallengeScreen() {
             </View>
           </View>
 
+          {/* Info box explaining what the challenge does */}
           <View style={styles.infoBox}>
             <MaterialCommunityIcons
               name="information"
@@ -236,10 +251,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,
@@ -289,10 +301,7 @@ const styles = StyleSheet.create({
     gap: 8,
     minWidth: "47%",
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,
