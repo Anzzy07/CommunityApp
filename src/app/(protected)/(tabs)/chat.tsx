@@ -7,7 +7,7 @@ import { Group } from "@/src/types";
 import { useUser } from "@clerk/clerk-expo";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useMemo } from "react";
+import React, { useCallback, useMemo } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -21,74 +21,99 @@ export default function ChatGroupsList() {
   const { user } = useUser();
   const router = useRouter();
 
-  // Fetch groups and memberships from Supabase
+  // Fetch all groups and the current user's memberships
   const { data: groups = [], isLoading: groupsLoading } = useSupabaseGroups();
   const { data: groupMembers = [], isLoading: membersLoading } =
     useSupabaseGroupMembers(user?.id || "");
 
-  // Get groups user is a member of
+  // Filter to only groups the user has joined
   const userGroups = useMemo(() => {
-    const memberGroupIds = groupMembers.map((m) => m.group_id);
-    return groups.filter((g) => memberGroupIds.includes(g.id));
+    const memberGroupIds = new Set(groupMembers.map((m) => m.group_id));
+    return groups.filter((g) => memberGroupIds.has(g.id));
   }, [groups, groupMembers]);
 
-  // Fetch last messages for user's groups
+  // Get IDs of user's groups for the last messages query
   const groupIds = useMemo(() => userGroups.map((g) => g.id), [userGroups]);
+
+  // Fetch last message and unread count for each group in one batch query.
+  // Pass currentUserId so unread counts correctly exclude the user's own messages.
   const { data: lastMessages = [], isLoading: messagesLoading } =
-    useSupabaseGroupLastMessages(groupIds);
+    useSupabaseGroupLastMessages(groupIds, user?.id);
 
   const isLoading = groupsLoading || membersLoading || messagesLoading;
 
-  // Sort groups by most recent message
+  // Sort groups by most recent message — groups with newer messages appear first
   const sortedGroups = useMemo(() => {
     return [...userGroups].sort((a, b) => {
-      const aMessage = lastMessages.find((m) => m?.groupId === a.id);
-      const bMessage = lastMessages.find((m) => m?.groupId === b.id);
+      const aMsg = lastMessages.find((m) => m?.groupId === a.id);
+      const bMsg = lastMessages.find((m) => m?.groupId === b.id);
 
-      if (!aMessage && !bMessage) return 0;
-      if (!aMessage) return 1;
-      if (!bMessage) return -1;
+      if (!aMsg?.timestamp && !bMsg?.timestamp) return 0;
+      if (!aMsg?.timestamp) return 1;
+      if (!bMsg?.timestamp) return -1;
 
-      const aTime = new Date(aMessage.timestamp || 0).getTime();
-      const bTime = new Date(bMessage.timestamp || 0).getTime();
-
-      return bTime - aTime; // Most recent first
+      return (
+        new Date(bMsg.timestamp).getTime() - new Date(aMsg.timestamp).getTime()
+      );
     });
   }, [userGroups, lastMessages]);
 
-  // Get last message for a specific group
-  const getGroupData = (groupId: string) => {
-    const lastMessage = lastMessages.find((m) => m?.groupId === groupId);
+  // Navigates to the group chat screen for the selected group
+  const handleGroupPress = useCallback(
+    (group: Group) => {
+      router.push({
+        pathname: "/groupChat/[id]",
+        params: { id: group.id, name: group.name },
+      });
+    },
+    [router],
+  );
 
-    return {
-      lastMessage: lastMessage
-        ? {
-            text: lastMessage.message,
-            timestamp: lastMessage.timestamp,
-            sender: lastMessage.sender,
+  // Stable renderItem — useCallback prevents re-rendering all group cards
+  // when unrelated state changes
+  const renderItem = useCallback(
+    ({ item }: { item: Group }) => {
+      const msgData = lastMessages.find((m) => m?.groupId === item.id);
+      return (
+        <GroupListItem
+          group={item}
+          lastMessage={
+            msgData?.message
+              ? {
+                  text: msgData.message,
+                  timestamp: msgData.timestamp ?? null,
+                  sender: msgData.sender ?? "",
+                }
+              : undefined
           }
-        : undefined,
-      unreadCount: 0, // TODO: Implement unread count later
-    };
-  };
+          // Real unread count — how many messages the user hasn't read yet
+          unreadCount={msgData?.unreadCount ?? 0}
+          onPress={() => handleGroupPress(item)}
+        />
+      );
+    },
+    [lastMessages, handleGroupPress],
+  );
 
-  const handleGroupPress = (group: Group) => {
-    router.push({
-      pathname: "/groupChat/[id]",
-      params: { id: group.id, name: group.name },
-    });
-  };
+  const keyExtractor = useCallback((item: Group) => item.id, []);
 
-  const renderEmpty = () => (
-    <View style={styles.emptyContainer}>
-      <View style={styles.emptyIconContainer}>
-        <Feather name="message-circle" size={64} color={COLORS.textSecondary} />
+  const renderEmpty = useCallback(
+    () => (
+      <View style={styles.emptyContainer}>
+        <View style={styles.emptyIconContainer}>
+          <Feather
+            name="message-circle"
+            size={64}
+            color={COLORS.textSecondary}
+          />
+        </View>
+        <Text style={styles.emptyTitle}>No Group Chats Yet</Text>
+        <Text style={styles.emptySubtitle}>
+          Join communities to start chatting with members
+        </Text>
       </View>
-      <Text style={styles.emptyTitle}>No Group Chats Yet</Text>
-      <Text style={styles.emptySubtitle}>
-        Join communities to start chatting with members
-      </Text>
-    </View>
+    ),
+    [],
   );
 
   if (isLoading) {
@@ -106,20 +131,13 @@ export default function ChatGroupsList() {
     <SafeAreaView style={styles.container} edges={["bottom"]}>
       <FlatList
         data={sortedGroups}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => {
-          const { lastMessage, unreadCount } = getGroupData(item.id);
-          return (
-            <GroupListItem
-              group={item}
-              lastMessage={lastMessage}
-              unreadCount={unreadCount}
-              onPress={() => handleGroupPress(item)}
-            />
-          );
-        }}
+        keyExtractor={keyExtractor}
+        renderItem={renderItem}
         ListEmptyComponent={renderEmpty}
         contentContainerStyle={sortedGroups.length === 0 && { flex: 1 }}
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={15}
+        windowSize={8}
       />
     </SafeAreaView>
   );

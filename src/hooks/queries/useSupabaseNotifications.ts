@@ -3,11 +3,12 @@ import { Notification } from "@/src/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 
-// Fetches all notifications for a user with real-time updates
-export function useSupabaseNotifications(userId: string) {
+// Single shared real-time hook — call this ONCE at the app root level
+// (e.g. in your tab layout) so the subscription stays alive across screens.
+// It updates BOTH the notification list and the badge count in one place.
+export function useNotificationsRealtime(userId: string | undefined) {
   const queryClient = useQueryClient();
 
-  // Real-time subscription — new notifications appear instantly without polling
   useEffect(() => {
     if (!userId) return;
 
@@ -22,7 +23,7 @@ export function useSupabaseNotifications(userId: string) {
           filter: `user_id=eq.${userId}`,
         },
         () => {
-          // Invalidate both notification queries so badge and list stay in sync
+          // Invalidate both queries in one place so badge and list always sync
           queryClient.invalidateQueries({
             queryKey: ["notifications", userId],
           });
@@ -37,7 +38,10 @@ export function useSupabaseNotifications(userId: string) {
       supabase.removeChannel(channel);
     };
   }, [userId, queryClient]);
+}
 
+// Fetches all notifications for a user — no real-time here, handled above
+export function useSupabaseNotifications(userId: string) {
   return useQuery({
     queryKey: ["notifications", userId],
     queryFn: async () => {
@@ -68,37 +72,8 @@ export function useSupabaseNotifications(userId: string) {
   });
 }
 
-// Get unread count for badge display on the notifications tab
+// Fetches just the unread count — used for the tab badge icon
 export function useSupabaseUnreadNotificationsCount(userId: string) {
-  const queryClient = useQueryClient();
-
-  // Same real-time channel keeps badge count in sync instantly
-  useEffect(() => {
-    if (!userId) return;
-
-    const channel = supabase
-      .channel(`notifications-count-${userId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${userId}`,
-        },
-        () => {
-          queryClient.invalidateQueries({
-            queryKey: ["notifications-unread-count", userId],
-          });
-        },
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [userId, queryClient]);
-
   return useQuery({
     queryKey: ["notifications-unread-count", userId],
     queryFn: async () => {
@@ -111,12 +86,9 @@ export function useSupabaseUnreadNotificationsCount(userId: string) {
         .eq("is_read", false);
 
       if (error) throw error;
-
       return count || 0;
     },
     enabled: !!userId,
     staleTime: 1000 * 10,
-    // Remove polling — real-time handles updates now
-    // refetchInterval was 30s before, real-time is instant
   });
 }

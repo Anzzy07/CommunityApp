@@ -2,28 +2,20 @@ import { supabase } from "@/src/lib/supabase";
 import { GroupMember } from "@/src/types";
 import { useQuery } from "@tanstack/react-query";
 
+// Fetches all groups the current user is a member of.
+// Used throughout the app to check join status and show correct buttons.
 export function useSupabaseGroupMembers(userId: string) {
   return useQuery({
     queryKey: ["group-members", userId],
     queryFn: async () => {
-      // console.log("Fetching group members for user:", userId);
-
-      if (!userId) {
-        // console.log("No userId provided");
-        return [];
-      }
+      if (!userId) return [];
 
       const { data, error } = await supabase
         .from("group_members")
         .select("*")
         .eq("user_id", userId);
 
-      if (error) {
-        console.error("❌ Error fetching group members:", error);
-        throw error;
-      }
-
-      // console.log("Fetched group members:", data);
+      if (error) throw error;
 
       const members: GroupMember[] = (data || []).map((m) => ({
         id: m.id,
@@ -35,16 +27,19 @@ export function useSupabaseGroupMembers(userId: string) {
       return members;
     },
     enabled: !!userId,
-    staleTime: 0,
-    gcTime: 0,
+    // 2 minutes — optimistic updates in join/leave keep UI accurate between refetches.
+    // Was staleTime:0 before which caused a refetch on every screen visit.
+    staleTime: 1000 * 60 * 2,
+    gcTime: 1000 * 60 * 5,
   });
 }
 
-// Group Memeber Counts in community
+// Fetches the total member count for a specific group — used on community detail screen
 export function useSupabaseGroupMemberCount(groupId: string) {
   return useQuery({
     queryKey: ["group-member-count", groupId],
     queryFn: async () => {
+      // head: true means only fetch the count, not the actual rows — very fast
       const { count, error } = await supabase
         .from("group_members")
         .select("*", { count: "exact", head: true })
@@ -54,5 +49,6 @@ export function useSupabaseGroupMemberCount(groupId: string) {
       return count ?? 0;
     },
     enabled: !!groupId,
+    staleTime: 1000 * 60 * 2,
   });
 }

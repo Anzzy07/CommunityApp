@@ -50,154 +50,161 @@ export default function GroupChatScreen() {
   const [text, setText] = useState("");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
-  // Queries
-  const {
-    data: messages = [],
-    isLoading: messagesLoading,
-    refetch: refetchMessages,
-  } = useSupabaseGroupMessages(groupId);
+  // Fetch messages and user's group memberships
+  const { data: messages = [], isLoading: messagesLoading } =
+    useSupabaseGroupMessages(groupId);
   const { data: groupMembers = [] } = useSupabaseGroupMembers(user?.id || "");
 
-  // Mutations
   const sendMessageMutation = useSendMessage();
   const markAsReadMutation = useMarkMessagesAsRead();
   const leaveMutation = useLeaveGroup();
 
-  // Check if user is a member
+  // Check if current user is a member of this group
   const isMember = groupMembers.some((m) => m.group_id === groupId);
 
-  // Real-time subscription
-  const handleNewMessage = useCallback(() => {
-    refetchMessages();
+  // Callback to scroll to bottom — passed to the real-time subscription
+  // so it fires when any new message arrives on any device
+  const scrollToBottom = useCallback(() => {
     setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated: true });
     }, 100);
-  }, [refetchMessages]);
+  }, []);
 
-  useGroupMessagesSubscription(groupId, handleNewMessage);
+  // Subscribe to real-time messages — works for ALL devices including sender's
+  // The subscription appends new messages to cache and calls scrollToBottom
+  useGroupMessagesSubscription(groupId, scrollToBottom);
 
-  // Mark messages as read when opening chat
+  // Mark all unread messages as read when the user opens this chat
   useEffect(() => {
     if (isMember && user?.id) {
-      markAsReadMutation.mutate({
-        groupId,
-        userId: user.id,
-      });
+      markAsReadMutation.mutate({ groupId, userId: user.id });
     }
   }, [groupId, isMember, user?.id]);
 
-  // Scroll to bottom when messages load
+  // Scroll to bottom when messages first load
   useEffect(() => {
     if (messages.length > 0) {
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: false });
-      }, 100);
+      }, 150);
     }
   }, [messages.length]);
 
-  // Determines which messages should show avatar and username
-  const getMessageDisplay = (index: number) => {
-    const currentMessage = messages[index];
-    const nextMessage = messages[index + 1];
-    const prevMessage = messages[index - 1];
+  // Groups consecutive messages from the same sender — last shows avatar,
+  // first shows username (like WhatsApp/Slack)
+  const getMessageDisplay = useCallback(
+    (index: number) => {
+      const current = messages[index];
+      const next = messages[index + 1];
+      const prev = messages[index - 1];
+      const isMe = current.user.id === user?.id;
+      return {
+        showAvatar: !next || next.user.id !== current.user.id,
+        showUsername: !isMe && (!prev || prev.user.id !== current.user.id),
+      };
+    },
+    [messages, user?.id],
+  );
 
-    const isMe = currentMessage.user.id === user?.id;
-
-    // Always show avatar for the last message in a group
-    const showAvatar =
-      !nextMessage || nextMessage.user.id !== currentMessage.user.id;
-
-    // Show username for the first message in a group (only for others)
-    const showUsername =
-      !isMe && (!prevMessage || prevMessage.user.id !== currentMessage.user.id);
-
-    return { showAvatar, showUsername };
-  };
-
-  // Opens image picker
-  const pickImage = async () => {
+  const pickImage = useCallback(async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
     if (status !== "granted") {
       Alert.alert("Permission Required", "Please allow access to your photos.");
       return;
     }
-
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: "images",
       allowsEditing: true,
       aspect: [16, 9],
       quality: 0.8,
     });
-
     if (!result.canceled && result.assets[0]) {
       setSelectedImage(result.assets[0].uri);
     }
-  };
+  }, []);
 
-  // Removes selected image
-  const removeImage = () => {
-    setSelectedImage(null);
-  };
-
-  // Sends message
-  const handleSend = async () => {
+  // Sends a message — optimistic update makes it appear instantly for the sender.
+  // Real-time subscription delivers it to all other devices.
+  const handleSend = useCallback(async () => {
     if ((!text.trim() && !selectedImage) || !isMember || !user?.id) return;
+
+    const messageText = text.trim();
+    const imageToSend = selectedImage;
+
+    // Clear input immediately so user can keep typing
+    setText("");
+    setReplyTo(null);
+    setSelectedImage(null);
 
     try {
       await sendMessageMutation.mutateAsync({
         groupId,
         userId: user.id,
-        message: text.trim(),
-        imageUrl: selectedImage || undefined,
+        message: messageText,
+        imageUrl: imageToSend || undefined,
         replyToId: replyTo?.id,
       });
-
-      setText("");
-      setReplyTo(null);
-      setSelectedImage(null);
-
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
-    } catch (error) {
+      scrollToBottom();
+    } catch {
       Alert.alert("Error", "Failed to send message");
     }
-  };
+  }, [
+    text,
+    selectedImage,
+    isMember,
+    user?.id,
+    groupId,
+    replyTo,
+    sendMessageMutation,
+    scrollToBottom,
+  ]);
 
-  // Shows leave chat confirmation
-  const handleLeaveChat = () => {
+  const handleLeaveChat = useCallback(() => {
     if (!user?.id) return;
-
-    Alert.alert("Leave Chat", `Are you sure you want to leave ${groupName}?`, [
+    Alert.alert("Leave Chat", `Leave ${groupName}?`, [
       { text: "Cancel", style: "cancel" },
       {
         text: "Leave",
         style: "destructive",
         onPress: async () => {
           try {
-            await leaveMutation.mutateAsync({
-              groupId,
-              userId: user.id,
-            });
+            await leaveMutation.mutateAsync({ groupId, userId: user.id });
             router.back();
-          } catch (error) {
+          } catch {
             Alert.alert("Error", "Failed to leave group");
           }
         },
       },
     ]);
-  };
+  }, [user?.id, groupName, groupId, leaveMutation, router]);
 
-  // Shows chat options
-  const handleOptions = () => {
+  const handleOptions = useCallback(() => {
     Alert.alert("Chat Options", "", [
       { text: "Leave Chat", onPress: handleLeaveChat, style: "destructive" },
       { text: "Cancel", style: "cancel" },
     ]);
-  };
+  }, [handleLeaveChat]);
 
-  // Show join view if not a member
+  // Stable renderItem — useCallback prevents re-rendering all messages on each keystroke
+  const renderItem = useCallback(
+    ({ item, index }: { item: GroupMessage; index: number }) => {
+      const { showAvatar, showUsername } = getMessageDisplay(index);
+      return (
+        <ChatMessageItem
+          item={item}
+          isMe={item.user.id === user?.id}
+          isMember={isMember}
+          onReply={setReplyTo}
+          showAvatar={showAvatar}
+          showUsername={showUsername}
+        />
+      );
+    },
+    [getMessageDisplay, user?.id, isMember],
+  );
+
+  const keyExtractor = useCallback((item: GroupMessage) => item.id, []);
+
   if (!isMember) {
     return (
       <View style={styles.container}>
@@ -223,7 +230,7 @@ export default function GroupChatScreen() {
       style={styles.container}
       keyboardVerticalOffset={insets.top}
     >
-      {/* HEADER */}
+      {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top }]}>
         <Pressable
           onPress={() => router.back()}
@@ -240,25 +247,13 @@ export default function GroupChatScreen() {
         </Pressable>
       </View>
 
-      {/* MESSAGES LIST */}
+      {/* Messages list */}
       <FlatList
         ref={flatListRef}
         data={messages}
-        keyExtractor={(item) => item.id}
+        keyExtractor={keyExtractor}
+        renderItem={renderItem}
         contentContainerStyle={styles.messagesList}
-        renderItem={({ item, index }) => {
-          const { showAvatar, showUsername } = getMessageDisplay(index);
-          return (
-            <ChatMessageItem
-              item={item}
-              isMe={item.user.id === user?.id}
-              isMember={isMember}
-              onReply={setReplyTo}
-              showAvatar={showAvatar}
-              showUsername={showUsername}
-            />
-          );
-        }}
         onContentSizeChange={() =>
           flatListRef.current?.scrollToEnd({ animated: false })
         }
@@ -275,9 +270,14 @@ export default function GroupChatScreen() {
             </View>
           ) : null
         }
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={20}
+        windowSize={10}
+        initialNumToRender={20}
+        maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
       />
 
-      {/* REPLY PREVIEW */}
+      {/* Reply preview */}
       {replyTo && (
         <View style={styles.replyPreview}>
           <View style={styles.replyIndicator} />
@@ -295,25 +295,25 @@ export default function GroupChatScreen() {
         </View>
       )}
 
-      {/* IMAGE PREVIEW */}
+      {/* Image preview */}
       {selectedImage && (
         <View style={styles.imagePreviewContainer}>
           <Image source={{ uri: selectedImage }} style={styles.imagePreview} />
-          <Pressable onPress={removeImage} style={styles.removeImageButton}>
+          <Pressable
+            onPress={() => setSelectedImage(null)}
+            style={styles.removeImageButton}
+          >
             <Ionicons name="close-circle" size={24} color="white" />
           </Pressable>
         </View>
       )}
 
-      {/* MESSAGE INPUT */}
+      {/* Input bar */}
       <View style={[styles.inputContainer, { paddingBottom: insets.bottom }]}>
         <View style={styles.inputWrapper}>
-          {/* IMAGE BUTTON */}
           <Pressable onPress={pickImage} style={styles.imageButton}>
             <Ionicons name="image-outline" size={24} color={COLORS.primary} />
           </Pressable>
-
-          {/* TEXT INPUT */}
           <TextInput
             placeholder="Type a message..."
             placeholderTextColor="#9CA3AF"
@@ -323,8 +323,6 @@ export default function GroupChatScreen() {
             multiline
             maxLength={1000}
           />
-
-          {/* SEND BUTTON */}
           <Pressable
             onPress={handleSend}
             disabled={
@@ -344,10 +342,7 @@ export default function GroupChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
+  container: { flex: 1, backgroundColor: COLORS.background },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -358,9 +353,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0.5,
     borderBottomColor: "#E5E7EB",
   },
-  backButton: {
-    padding: 4,
-  },
+  backButton: { padding: 4 },
   headerTitle: {
     flex: 1,
     fontSize: 18,
@@ -368,10 +361,7 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     marginHorizontal: 12,
   },
-  messagesList: {
-    paddingVertical: 12,
-    flexGrow: 1,
-  },
+  messagesList: { paddingVertical: 12, flexGrow: 1 },
   emptyMessages: {
     flex: 1,
     justifyContent: "center",
@@ -384,11 +374,7 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     marginTop: 12,
   },
-  emptySubtext: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    marginTop: 4,
-  },
+  emptySubtext: { fontSize: 14, color: COLORS.textSecondary, marginTop: 4 },
   replyPreview: {
     flexDirection: "row",
     alignItems: "center",
@@ -405,19 +391,14 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     marginRight: 12,
   },
-  replyContent: {
-    flex: 1,
-  },
+  replyContent: { flex: 1 },
   replyLabel: {
     fontSize: 13,
     fontWeight: "600",
     color: COLORS.primary,
     marginBottom: 2,
   },
-  replyMessage: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-  },
+  replyMessage: { fontSize: 14, color: COLORS.textSecondary },
   imagePreviewContainer: {
     position: "relative",
     paddingHorizontal: 15,
@@ -426,11 +407,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 0.5,
     borderTopColor: "#E5E7EB",
   },
-  imagePreview: {
-    width: "100%",
-    height: 150,
-    borderRadius: 12,
-  },
+  imagePreview: { width: "100%", height: 150, borderRadius: 12 },
   removeImageButton: {
     position: "absolute",
     top: 20,
@@ -445,16 +422,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingTop: 12,
   },
-  inputWrapper: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: 10,
-  },
-  imageButton: {
-    padding: 8,
-    justifyContent: "center",
-    alignItems: "center",
-  },
+  inputWrapper: { flexDirection: "row", alignItems: "flex-end", gap: 10 },
+  imageButton: { padding: 8, justifyContent: "center", alignItems: "center" },
   input: {
     flex: 1,
     backgroundColor: COLORS.background,
@@ -473,7 +442,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  sendButtonDisabled: {
-    opacity: 0.5,
-  },
+  sendButtonDisabled: { opacity: 0.5 },
 });

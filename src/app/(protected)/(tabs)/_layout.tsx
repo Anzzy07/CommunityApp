@@ -1,5 +1,8 @@
 import { COLORS } from "@/src/colors";
-import { useSupabaseUnreadNotificationsCount } from "@/src/hooks/queries/useSupabaseNotifications";
+import {
+  useNotificationsRealtime,
+  useSupabaseUnreadNotificationsCount,
+} from "@/src/hooks/queries/useSupabaseNotifications";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import {
   AntDesign,
@@ -14,6 +17,7 @@ export default function TabLayout() {
   const { signOut } = useAuth();
   const { user } = useUser();
 
+  useNotificationsRealtime(user?.id);
   const { data: unreadCount = 0 } = useSupabaseUnreadNotificationsCount(
     user?.id || "",
   );
@@ -159,7 +163,7 @@ export default function TabLayout() {
                       fontWeight: "bold",
                     }}
                   >
-                    {unreadCount > 99 ? "99+" : unreadCount}
+                    {unreadCount > 0 ? unreadCount : undefined}
                   </Text>
                 </View>
               )}
