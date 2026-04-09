@@ -297,7 +297,6 @@ export default function EditProfileScreen() {
   );
 }
 
-// ... keep all the existing styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -312,13 +311,13 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     color: "white",
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: "600",
   },
   saveText: {
     color: "white",
     fontWeight: "600",
-    fontSize: 16,
+    fontSize: 22,
   },
   content: {
     padding: 20,
@@ -333,9 +332,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
     borderWidth: 3,
     borderColor: "white",
   },
@@ -366,13 +365,13 @@ const styles = StyleSheet.create({
   changePhotoText: {
     color: COLORS.primary,
     fontWeight: "600",
-    fontSize: 15,
+    fontSize: 18,
   },
   inputSection: {
     marginBottom: 24,
   },
   label: {
-    fontSize: 14,
+    fontSize: 18, // 14 → 16
     fontWeight: "600",
     color: "white",
     marginBottom: 8,
@@ -396,7 +395,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 18,
     color: COLORS.textPrimary,
   },
   disabledContainer: {
@@ -404,11 +403,11 @@ const styles = StyleSheet.create({
   },
   disabledText: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 18,
     color: COLORS.textSecondary,
   },
   hint: {
-    fontSize: 12,
+    fontSize: 16,
     color: "rgba(255,255,255,0.7)",
     marginTop: 6,
     marginLeft: 4,
@@ -423,8 +422,8 @@ const styles = StyleSheet.create({
   },
   infoText: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 16,
     color: "white",
-    lineHeight: 18,
+    lineHeight: 20,
   },
 });

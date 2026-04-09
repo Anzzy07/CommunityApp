@@ -358,7 +358,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
   },
   filterText: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: "600",
     color: COLORS.textSecondary,
   },
@@ -377,7 +377,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.3)",
   },
   filterBadgeText: {
-    fontSize: 12,
+    fontSize: 15,
     fontWeight: "700",
     color: COLORS.textPrimary,
   },
@@ -397,7 +397,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primary,
   },
   markAsReadText: {
-    fontSize: 13,
+    fontSize: 16,
     fontWeight: "600",
     color: COLORS.primary,
   },
@@ -414,7 +414,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#E5E7EB",
   },
   sectionTitle: {
-    fontSize: 13,
+    fontSize: 16,
     fontWeight: "700",
     color: COLORS.textSecondary,
     textTransform: "uppercase",
@@ -428,7 +428,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   loadingText: {
-    fontSize: 15,
+    fontSize: 17,
     color: COLORS.textSecondary,
   },
   emptyContainer: {
@@ -447,7 +447,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 20,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 3,

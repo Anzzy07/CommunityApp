@@ -251,13 +251,13 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     color: "white",
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "600",
   },
   createText: {
     color: "white",
     fontWeight: "600",
-    fontSize: 16,
+    fontSize: 20,
   },
   scrollContent: {
     padding: 20,
@@ -272,18 +272,18 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   communityImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 3,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 4,
     borderColor: "white",
   },
   placeholderImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
     backgroundColor: "rgba(255,255,255,0.2)",
-    borderWidth: 3,
+    borderWidth: 4,
     borderColor: "white",
     justifyContent: "center",
     alignItems: "center",
@@ -315,7 +315,7 @@ const styles = StyleSheet.create({
   changeImageText: {
     color: COLORS.primary,
     fontWeight: "600",
-    fontSize: 15,
+    fontSize: 18,
   },
   inputWrapper: {
     backgroundColor: "white",
@@ -332,13 +332,13 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   label: {
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: "600",
     color: COLORS.textSecondary,
     marginBottom: 8,
   },
   input: {
-    fontSize: 16,
+    fontSize: 17,
     color: COLORS.textPrimary,
     padding: 0,
   },
@@ -347,7 +347,7 @@ const styles = StyleSheet.create({
     textAlignVertical: "top",
   },
   charCount: {
-    fontSize: 12,
+    fontSize: 14,
     color: COLORS.textSecondary,
     textAlign: "right",
     marginTop: 8,
@@ -362,7 +362,7 @@ const styles = StyleSheet.create({
   },
   infoText: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 17,
     color: "white",
     lineHeight: 20,
   },

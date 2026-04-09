@@ -16,7 +16,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { formatDistanceToNowStrict, isPast } from "date-fns";
 import * as ImagePicker from "expo-image-picker";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -33,76 +33,73 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function ChallengeDetailsScreen() {
-  // id is the challenge ID from the route params
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useUser();
 
-  // Local form state for the entry submission section
   const [entryContent, setEntryContent] = useState("");
   const [entryImage, setEntryImage] = useState<string | null>(null);
 
-  // Fetch all challenges to find the current one by id
   const { data: challenges = [] } = useSupabaseChallenges();
-
-  // Fetch entries, entry count, and user's own entry for this challenge
   const { data: entries = [], isLoading: entriesLoading } =
     useSupabaseChallengeEntries(id);
   const { data: entriesCount = 0 } = useSupabaseChallengeEntriesCount(id);
   const { data: userEntry } = useSupabaseUserChallengeEntry(id, user?.id);
 
-  // Mutation hooks for submitting, updating and deleting entries
   const submitMutation = useSubmitChallengeEntry();
   const updateMutation = useUpdateChallengeEntry();
   const deleteMutation = useDeleteChallengeEntry();
 
-  // Find the challenge object matching the current route id
   const challenge = challenges.find((c) => c.id === id);
-
-  // Check if the challenge end date has passed
   const isExpired = challenge ? isPast(new Date(challenge.end_date)) : false;
 
-  // Human-readable time remaining until the challenge ends
   const timeRemaining = challenge
     ? formatDistanceToNowStrict(new Date(challenge.end_date), {
         addSuffix: false,
       })
     : "";
 
-  // Opens the device image picker for selecting an entry photo
+  // Sort entries by votes descending — used for leaderboard when expired
+  // useMemo so we don't re-sort on every render
+  const sortedEntries = useMemo(() => {
+    if (!isExpired) return entries;
+    return [...entries].sort((a, b) => (b.votes ?? 0) - (a.votes ?? 0));
+  }, [entries, isExpired]);
+
+  // The winner is the first entry after sorting (highest votes)
+  const winner =
+    isExpired && sortedEntries.length > 0 ? sortedEntries[0] : null;
+
+  // For a non-expired challenge keep original order; expired = sorted by rank
+  const displayEntries = isExpired ? sortedEntries : entries;
+
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
       Alert.alert("Permission Required", "Please allow access to your photos.");
       return;
     }
-
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: "images",
       allowsEditing: true,
       aspect: [4, 3],
       quality: 0.8,
     });
-
     if (!result.canceled && result.assets[0]) {
       setEntryImage(result.assets[0].uri);
     }
   };
 
-  // Submits a new entry or updates existing one depending on userEntry state
   const handleSubmitEntry = async () => {
     if (!user?.id) {
       Alert.alert("Sign in required", "Please sign in to submit an entry");
       return;
     }
-
     if (!entryContent.trim() && !entryImage) {
       Alert.alert("Entry Required", "Please add content or an image");
       return;
     }
-
     try {
       if (userEntry) {
-        // User already has an entry — update it instead of creating a new one
         await updateMutation.mutateAsync({
           entryId: userEntry.id,
           challengeId: id,
@@ -112,7 +109,6 @@ export default function ChallengeDetailsScreen() {
         });
         Alert.alert("Success!", "Your entry has been updated! 🎉");
       } else {
-        // No existing entry — submit a brand new one
         await submitMutation.mutateAsync({
           challengeId: id,
           userId: user.id,
@@ -121,8 +117,6 @@ export default function ChallengeDetailsScreen() {
         });
         Alert.alert("Success!", "Your entry has been submitted! 🎉");
       }
-
-      // Reset the form after successful submission
       setEntryContent("");
       setEntryImage(null);
     } catch {
@@ -130,7 +124,6 @@ export default function ChallengeDetailsScreen() {
     }
   };
 
-  // Deletes an entry from the database — optimistic removal happens in the mutation
   const handleDeleteEntry = useCallback(
     async (entryId: string) => {
       if (!user?.id) return;
@@ -147,26 +140,29 @@ export default function ChallengeDetailsScreen() {
     [user?.id, id, deleteMutation],
   );
 
-  // Stable renderItem — useCallback prevents FlatList re-rendering all cards
-  // when unrelated state (like entryContent text) changes
   const renderItem = useCallback(
-    ({ item }: { item: any }) => {
+    ({ item, index }: { item: any; index: number }) => {
       const isOwner = item.user_id === user?.id;
+      // rank is 1-based — only passed after challenge ends
+      const rank = isExpired ? index + 1 : undefined;
+      const isWinner = isExpired && index === 0 && (item.votes ?? 0) > 0;
+
       return (
-        // Pass challengeId so the vote mutation can update the correct cache key
         <ChallengeEntryCard
           entry={item}
           challengeId={id}
           onDelete={isOwner ? () => handleDeleteEntry(item.id) : undefined}
+          rank={rank}
+          isWinner={isWinner}
+          isExpired={isExpired}
         />
       );
     },
-    [user?.id, id, handleDeleteEntry],
+    [user?.id, id, handleDeleteEntry, isExpired],
   );
 
   const keyExtractor = useCallback((item: any) => item.id, []);
 
-  // Loading state while challenge data is being fetched
   if (!challenge) {
     return (
       <View style={styles.loadingContainer}>
@@ -176,9 +172,212 @@ export default function ChallengeDetailsScreen() {
     );
   }
 
+  // Winner banner shown at the top of entries section when challenge has ended
+  const WinnerBanner = winner ? (
+    <View style={styles.winnerBanner}>
+      <View style={styles.winnerBannerGlow} />
+      <Text style={styles.winnerTrophy}>🏆</Text>
+      <View style={styles.winnerBannerContent}>
+        <Text style={styles.winnerBannerTitle}>Challenge Winner</Text>
+        <View style={styles.winnerBannerRow}>
+          <Image
+            source={{
+              uri: winner.user?.image || "https://via.placeholder.com/30",
+            }}
+            style={styles.winnerBannerAvatar}
+          />
+          <Text style={styles.winnerBannerName}>{winner.user?.name}</Text>
+          <View style={styles.winnerVotePill}>
+            <MaterialCommunityIcons name="thumb-up" size={12} color="#B8860B" />
+            <Text style={styles.winnerVoteText}>{winner.votes ?? 0} votes</Text>
+          </View>
+        </View>
+      </View>
+    </View>
+  ) : null;
+
+  // Podium leaderboard — top 3 entries shown as medal positions
+  const LeaderboardPodium =
+    isExpired && sortedEntries.length >= 2 ? (
+      <View style={styles.podiumSection}>
+        <View style={styles.podiumHeader}>
+          <MaterialCommunityIcons
+            name="podium"
+            size={18}
+            color={COLORS.primary}
+          />
+          <Text style={styles.podiumTitle}>Leaderboard</Text>
+        </View>
+        <View style={styles.podiumRow}>
+          {sortedEntries.slice(0, 3).map((entry, idx) => {
+            const medals = ["🥇", "🥈", "🥉"];
+            const heights = [72, 56, 44];
+            const bgColors = ["#FEF9E7", "#F3F4F6", "#FEF3C7"];
+            const borderColors = ["#F59E0B", "#9CA3AF", "#D97706"];
+            return (
+              <View key={entry.id} style={styles.podiumItem}>
+                <Image
+                  source={{
+                    uri: entry.user?.image || "https://via.placeholder.com/36",
+                  }}
+                  style={[
+                    styles.podiumAvatar,
+                    idx === 0 && styles.podiumAvatarWinner,
+                  ]}
+                />
+                <Text style={styles.podiumMedal}>{medals[idx]}</Text>
+                <Text style={styles.podiumName} numberOfLines={1}>
+                  {entry.user?.name?.split(" ")[0]}
+                </Text>
+                <Text style={styles.podiumVotes}>{entry.votes ?? 0} votes</Text>
+                <View
+                  style={[
+                    styles.podiumBar,
+                    {
+                      height: heights[idx],
+                      backgroundColor: bgColors[idx],
+                      borderTopColor: borderColors[idx],
+                    },
+                  ]}
+                />
+              </View>
+            );
+          })}
+        </View>
+      </View>
+    ) : null;
+
+  const renderHeader = () => (
+    <>
+      {/* Challenge info card */}
+      <View style={styles.challengeInfo}>
+        <View
+          style={[
+            styles.iconContainer,
+            isExpired && styles.iconContainerExpired,
+          ]}
+        >
+          <MaterialCommunityIcons
+            name="trophy"
+            size={32}
+            color={isExpired ? "#9CA3AF" : "#F59E0B"}
+          />
+        </View>
+        <Text style={styles.challengeTitle}>{challenge.title}</Text>
+        {challenge.description && (
+          <Text style={styles.challengeDescription}>
+            {challenge.description}
+          </Text>
+        )}
+        <View style={styles.metaRow}>
+          <MaterialCommunityIcons
+            name="clock-outline"
+            size={16}
+            color={COLORS.textSecondary}
+          />
+          <Text style={styles.metaText}>
+            {isExpired ? "Ended" : `${timeRemaining} left`}
+          </Text>
+          <Text style={styles.separator}>•</Text>
+          <MaterialCommunityIcons
+            name="account-group"
+            size={16}
+            color={COLORS.textSecondary}
+          />
+          <Text style={styles.metaText}>
+            {entriesCount} {entriesCount === 1 ? "entry" : "entries"}
+          </Text>
+        </View>
+
+        {isExpired && (
+          <View style={styles.expiredBanner}>
+            <MaterialCommunityIcons
+              name="information"
+              size={16}
+              color="#DC2626"
+            />
+            <Text style={styles.expiredText}>This challenge has ended</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Winner banner — only after challenge ends and entries exist */}
+      {isExpired && WinnerBanner}
+
+      {/* Podium leaderboard — only after challenge ends with 2+ entries */}
+      {isExpired && LeaderboardPodium}
+
+      {/* Entry submission form — hidden when expired */}
+      {!isExpired && (
+        <View style={styles.submitSection}>
+          <Text style={styles.sectionTitle}>
+            {userEntry ? "Update Your Entry" : "Submit Your Entry"}
+          </Text>
+
+          <TextInput
+            placeholder="Share your progress..."
+            placeholderTextColor="rgb(39, 44, 35)"
+            value={entryContent}
+            onChangeText={setEntryContent}
+            multiline
+            style={styles.textInput}
+            maxLength={200}
+          />
+
+          {entryImage && (
+            <View style={styles.imagePreview}>
+              <Image source={{ uri: entryImage }} style={styles.previewImage} />
+              <Pressable
+                onPress={() => setEntryImage(null)}
+                style={styles.removeImageButton}
+              >
+                <MaterialCommunityIcons name="close" size={20} color="white" />
+              </Pressable>
+            </View>
+          )}
+
+          <View style={styles.submitActions}>
+            <Pressable onPress={pickImage} style={styles.imageButton}>
+              <MaterialCommunityIcons
+                name="image-plus"
+                size={20}
+                color={COLORS.primary}
+              />
+              <Text style={styles.imageButtonText}>Add Photo</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={handleSubmitEntry}
+              disabled={submitMutation.isPending || updateMutation.isPending}
+              style={styles.submitButton}
+            >
+              {submitMutation.isPending || updateMutation.isPending ? (
+                <ActivityIndicator color="white" size="small" />
+              ) : (
+                <>
+                  <MaterialCommunityIcons name="send" size={18} color="white" />
+                  <Text style={styles.submitButtonText}>
+                    {userEntry ? "Update Entry" : "Submit Entry"}
+                  </Text>
+                </>
+              )}
+            </Pressable>
+          </View>
+        </View>
+      )}
+
+      {/* Entries section header */}
+      <View style={styles.entriesHeader}>
+        <Text style={styles.entriesTitle}>
+          {isExpired ? "All Entries" : "Participant Entries"}
+        </Text>
+        <Text style={styles.entriesCount}>{entriesCount}</Text>
+      </View>
+    </>
+  );
+
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header with back button */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} hitSlop={10}>
           <MaterialCommunityIcons name="arrow-left" size={24} color="white" />
@@ -187,150 +386,15 @@ export default function ChallengeDetailsScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      {/* KeyboardAvoidingView so the entry form isn't hidden by the keyboard */}
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1 }}
       >
         <FlatList
-          data={entries}
+          data={displayEntries}
           keyExtractor={keyExtractor}
           renderItem={renderItem}
-          ListHeaderComponent={
-            <>
-              {/* Challenge info card: trophy icon, title, description, time and count */}
-              <View style={styles.challengeInfo}>
-                <View style={styles.iconContainer}>
-                  <MaterialCommunityIcons
-                    name="trophy"
-                    size={32}
-                    color={isExpired ? "#9CA3AF" : "#F59E0B"}
-                  />
-                </View>
-                <Text style={styles.challengeTitle}>{challenge.title}</Text>
-                {challenge.description && (
-                  <Text style={styles.challengeDescription}>
-                    {challenge.description}
-                  </Text>
-                )}
-                <View style={styles.metaRow}>
-                  <MaterialCommunityIcons
-                    name="clock-outline"
-                    size={16}
-                    color={COLORS.textSecondary}
-                  />
-                  <Text style={styles.metaText}>
-                    {isExpired ? "Ended" : `${timeRemaining} left`}
-                  </Text>
-                  <Text style={styles.separator}>•</Text>
-                  <MaterialCommunityIcons
-                    name="account-group"
-                    size={16}
-                    color={COLORS.textSecondary}
-                  />
-                  <Text style={styles.metaText}>
-                    {entriesCount} {entriesCount === 1 ? "entry" : "entries"}
-                  </Text>
-                </View>
-
-                {/* Expired banner shown when challenge end date has passed */}
-                {isExpired && (
-                  <View style={styles.expiredBanner}>
-                    <MaterialCommunityIcons
-                      name="information"
-                      size={16}
-                      color="#DC2626"
-                    />
-                    <Text style={styles.expiredText}>
-                      This challenge has ended
-                    </Text>
-                  </View>
-                )}
-              </View>
-
-              {/* Entry submission form — hidden when challenge is expired */}
-              {!isExpired && (
-                <View style={styles.submitSection}>
-                  <Text style={styles.sectionTitle}>
-                    {userEntry ? "Update Your Entry" : "Submit Your Entry"}
-                  </Text>
-
-                  {/* Multi-line text input for entry description */}
-                  <TextInput
-                    placeholder="Share your progress..."
-                    placeholderTextColor="#9CA3AF"
-                    value={entryContent}
-                    onChangeText={setEntryContent}
-                    multiline
-                    style={styles.textInput}
-                    maxLength={200}
-                  />
-
-                  {/* Image preview with remove button */}
-                  {entryImage && (
-                    <View style={styles.imagePreview}>
-                      <Image
-                        source={{ uri: entryImage }}
-                        style={styles.previewImage}
-                      />
-                      <Pressable
-                        onPress={() => setEntryImage(null)}
-                        style={styles.removeImageButton}
-                      >
-                        <MaterialCommunityIcons
-                          name="close"
-                          size={20}
-                          color="white"
-                        />
-                      </Pressable>
-                    </View>
-                  )}
-
-                  <View style={styles.submitActions}>
-                    {/* Photo picker button */}
-                    <Pressable onPress={pickImage} style={styles.imageButton}>
-                      <MaterialCommunityIcons
-                        name="image-plus"
-                        size={20}
-                        color={COLORS.primary}
-                      />
-                      <Text style={styles.imageButtonText}>Add Photo</Text>
-                    </Pressable>
-
-                    {/* Submit/Update button with loading spinner */}
-                    <Pressable
-                      onPress={handleSubmitEntry}
-                      disabled={
-                        submitMutation.isPending || updateMutation.isPending
-                      }
-                      style={styles.submitButton}
-                    >
-                      {submitMutation.isPending || updateMutation.isPending ? (
-                        <ActivityIndicator color="white" size="small" />
-                      ) : (
-                        <>
-                          <MaterialCommunityIcons
-                            name="send"
-                            size={18}
-                            color="white"
-                          />
-                          <Text style={styles.submitButtonText}>
-                            {userEntry ? "Update Entry" : "Submit Entry"}
-                          </Text>
-                        </>
-                      )}
-                    </Pressable>
-                  </View>
-                </View>
-              )}
-
-              {/* Entries list header showing participant count */}
-              <View style={styles.entriesHeader}>
-                <Text style={styles.entriesTitle}>Participant Entries</Text>
-                <Text style={styles.entriesCount}>{entriesCount}</Text>
-              </View>
-            </>
-          }
+          ListHeaderComponent={renderHeader}
           ListEmptyComponent={
             !entriesLoading ? (
               <View style={styles.emptyState}>
@@ -400,6 +464,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 12,
   },
+  iconContainerExpired: {
+    backgroundColor: "#F3F4F6",
+  },
   challengeTitle: {
     fontSize: 20,
     fontWeight: "700",
@@ -442,6 +509,139 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#DC2626",
   },
+  // ── Winner Banner ──────────────────────────────────────────────────────
+  winnerBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFBEB",
+    borderWidth: 1.5,
+    borderColor: "#F59E0B",
+    marginHorizontal: 15,
+    marginTop: 14,
+    borderRadius: 14,
+    padding: 14,
+    gap: 12,
+    overflow: "hidden",
+  },
+  winnerBannerGlow: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: "#F59E0B",
+  },
+  winnerTrophy: {
+    fontSize: 36,
+  },
+  winnerBannerContent: {
+    flex: 1,
+  },
+  winnerBannerTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#92400E",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginBottom: 6,
+  },
+  winnerBannerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  winnerBannerAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 2,
+    borderColor: "#F59E0B",
+  },
+  winnerBannerName: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+    flex: 1,
+  },
+  winnerVotePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEF3C7",
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    gap: 4,
+  },
+  winnerVoteText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#B8860B",
+  },
+  // ── Podium Leaderboard ─────────────────────────────────────────────────
+  podiumSection: {
+    backgroundColor: "white",
+    marginTop: 10,
+    marginHorizontal: 15,
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  podiumHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 16,
+  },
+  podiumTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+  },
+  podiumRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "center",
+    gap: 8,
+  },
+  podiumItem: {
+    flex: 1,
+    alignItems: "center",
+    gap: 4,
+  },
+  podiumAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginBottom: 2,
+  },
+  podiumAvatarWinner: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 2.5,
+    borderColor: "#F59E0B",
+  },
+  podiumMedal: {
+    fontSize: 18,
+  },
+  podiumName: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: COLORS.textPrimary,
+    textAlign: "center",
+  },
+  podiumVotes: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    marginBottom: 4,
+  },
+  podiumBar: {
+    width: "100%",
+    borderTopWidth: 3,
+    borderRadius: 6,
+  },
+  // ── Entry Submission ───────────────────────────────────────────────────
   submitSection: {
     backgroundColor: "white",
     padding: 15,

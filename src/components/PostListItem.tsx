@@ -186,7 +186,7 @@ function PostListItem({
 
             {streak > 0 && (
               <View style={styles.streakBadge}>
-                <MaterialCommunityIcons name="fire" size={14} color="#FF6A00" />
+                <MaterialCommunityIcons name="fire" size={16} color="#FF6A00" />
                 <Text style={styles.streakText}>{streak}</Text>
               </View>
             )}
@@ -328,7 +328,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     gap: 7,
     borderBottomColor: COLORS.border,
-    borderBottomWidth: 0.5,
+    borderBottomWidth: 0.8,
     backgroundColor: "white",
   },
   header: {
@@ -336,9 +336,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   groupImage: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     marginRight: 5,
   },
   headerInfo: {
@@ -351,7 +351,7 @@ const styles = StyleSheet.create({
   },
   groupName: {
     fontWeight: "bold",
-    fontSize: 13,
+    fontSize: 18,
     color: "#3A3B3C",
   },
   streakBadge: {
@@ -359,34 +359,34 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   streakText: {
-    fontSize: 12,
+    fontSize: 16,
     color: "#FF6A00",
     fontWeight: "600",
   },
   timeText: {
     color: "grey",
-    fontSize: 13,
+    fontSize: 14,
   },
   authorName: {
-    fontSize: 13,
+    fontSize: 15,
     color: COLORS.primary,
     marginTop: 2,
   },
   joinButton: {
     marginLeft: "auto",
     backgroundColor: COLORS.button,
-    borderRadius: 10,
-    paddingVertical: 2,
-    paddingHorizontal: 7,
+    borderRadius: 16,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
   },
   joinButtonText: {
     color: "white",
     fontWeight: "bold",
-    fontSize: 13,
+    fontSize: 15,
   },
   title: {
     fontWeight: "bold",
-    fontSize: 17,
+    fontSize: 18,
     letterSpacing: 0.5,
     color: COLORS.textPrimary,
   },
@@ -396,7 +396,7 @@ const styles = StyleSheet.create({
     borderRadius: 15,
   },
   description: {
-    fontSize: 15,
+    fontSize: 17,
     lineHeight: 21,
     color: COLORS.textPrimary,
   },
@@ -412,7 +412,7 @@ const styles = StyleSheet.create({
   voteContainer: {
     flexDirection: "row",
     alignItems: "center",
-    borderWidth: 0.5,
+    borderWidth: 2,
     borderColor: COLORS.border,
     paddingHorizontal: 10,
     paddingVertical: 5,
@@ -432,7 +432,7 @@ const styles = StyleSheet.create({
   actionButton: {
     flexDirection: "row",
     alignItems: "center",
-    borderWidth: 0.5,
+    borderWidth: 2,
     borderColor: COLORS.border,
     paddingHorizontal: 10,
     paddingVertical: 5,
@@ -448,7 +448,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   iconButton: {
-    borderWidth: 0.5,
+    borderWidth: 2,
     borderColor: COLORS.border,
     paddingHorizontal: 10,
     paddingVertical: 5,

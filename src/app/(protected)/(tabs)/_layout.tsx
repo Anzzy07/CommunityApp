@@ -38,7 +38,7 @@ export default function TabLayout() {
             ios: "System",
             android: "Roboto",
           }),
-          fontSize: 24,
+          fontSize: 28,
           fontWeight: "bold",
         },
         headerBackground: () => (
@@ -53,9 +53,9 @@ export default function TabLayout() {
             <Image
               source={{ uri: profileImageUrl }}
               style={{
-                width: 25,
-                height: 25,
-                borderRadius: 16,
+                width: 30,
+                height: 30,
+                borderRadius: 18,
                 borderWidth: 1,
                 borderColor: "#DFE6DA",
               }}

@@ -25,30 +25,56 @@ type ChallengeEntry = {
 
 type Props = {
   entry: ChallengeEntry;
-  // challengeId is required so the vote mutation can update the correct cache key
   challengeId: string;
   onDelete?: () => void;
+  // rank is 1-based position in the leaderboard (1 = winner, 2 = 2nd, 3 = 3rd)
+  // only passed when challenge has ended
+  rank?: number;
+  isWinner?: boolean;
+  isExpired?: boolean;
 };
+
+// Returns medal emoji and colour for rank 1/2/3
+function getRankStyle(rank: number): {
+  emoji: string;
+  color: string;
+  bg: string;
+} {
+  if (rank === 1) return { emoji: "🥇", color: "#B8860B", bg: "#FEF9E7" };
+  if (rank === 2) return { emoji: "🥈", color: "#6B7280", bg: "#F3F4F6" };
+  if (rank === 3) return { emoji: "🥉", color: "#92400E", bg: "#FEF3C7" };
+  return {
+    emoji: `#${rank}`,
+    color: COLORS.textSecondary,
+    bg: COLORS.background,
+  };
+}
 
 export default function ChallengeEntryCard({
   entry,
   challengeId,
   onDelete,
+  rank,
+  isWinner = false,
+  isExpired = false,
 }: Props) {
   const { user } = useUser();
   const voteMutation = useVoteChallengeEntry();
 
-  // Reads the current user's vote status for this entry from React Query cache
   const { data: currentVote } = useSupabaseChallengeEntryVote(
     entry.id,
     user?.id,
   );
 
   const isOwner = user?.id === entry.user_id;
+  const rankStyle = rank ? getRankStyle(rank) : null;
 
-  // Handles upvote or downvote — passes challengeId so the optimistic
-  // update in useVoteChallengeEntry can find the correct cache to update
   const handleVote = async (voteType: "up" | "down") => {
+    if (isExpired) {
+      Alert.alert("Voting ended", "This challenge has already ended");
+      return;
+    }
+
     if (!user?.id) {
       Alert.alert("Sign in required", "Please sign in to vote");
       return;
@@ -59,14 +85,13 @@ export default function ChallengeEntryCard({
         entryId: entry.id,
         userId: user.id,
         voteType,
-        challengeId, // required for optimistic cache update
+        challengeId,
       });
     } catch {
       Alert.alert("Error", "Failed to vote");
     }
   };
 
-  // Confirms before deleting — only shown to the entry owner
   const handleDelete = () => {
     if (!onDelete) return;
     Alert.alert("Delete Entry", "Are you sure you want to delete this entry?", [
@@ -76,23 +101,52 @@ export default function ChallengeEntryCard({
   };
 
   return (
-    <View style={styles.container}>
-      {/* Entry header: user avatar, name, timestamp and delete button for owner */}
+    <View
+      style={[
+        styles.container,
+        isWinner && styles.winnerContainer,
+        rankStyle && { backgroundColor: rankStyle.bg },
+      ]}
+    >
+      {/* Rank badge — shown when challenge has ended */}
+      {rank && rankStyle && (
+        <View style={[styles.rankBadge, { borderColor: rankStyle.color }]}>
+          <Text style={[styles.rankEmoji]}>{rankStyle.emoji}</Text>
+          <Text style={[styles.rankText, { color: rankStyle.color }]}>
+            {rank === 1
+              ? "Winner"
+              : rank === 2
+                ? "2nd Place"
+                : rank === 3
+                  ? "3rd Place"
+                  : `#${rank}`}
+          </Text>
+        </View>
+      )}
+
+      {/* Winner crown glow bar */}
+      {isWinner && <View style={styles.winnerBar} />}
+
+      {/* Entry header */}
       <View style={styles.header}>
         <Image
           source={{
             uri: entry.user.image || "https://via.placeholder.com/40",
           }}
-          style={styles.avatar}
+          style={[styles.avatar, isWinner && styles.winnerAvatar]}
         />
         <View style={styles.userInfo}>
-          <Text style={styles.userName}>{entry.user.name}</Text>
+          <View style={styles.nameRow}>
+            <Text style={styles.userName}>{entry.user.name}</Text>
+            {isWinner && (
+              <MaterialCommunityIcons name="crown" size={16} color="#F59E0B" />
+            )}
+          </View>
           <Text style={styles.timestamp}>
             {formatDistanceToNowStrict(new Date(entry.created_at))} ago
           </Text>
         </View>
 
-        {/* Delete button only visible to the entry's owner */}
         {isOwner && onDelete && (
           <Pressable onPress={handleDelete} hitSlop={10}>
             <MaterialCommunityIcons
@@ -104,18 +158,14 @@ export default function ChallengeEntryCard({
         )}
       </View>
 
-      {/* Entry text content */}
       {entry.content && <Text style={styles.content}>{entry.content}</Text>}
 
-      {/* Entry image loaded from Supabase Storage */}
       {entry.image_url && (
         <SupabaseImage path={entry.image_url} style={styles.image} />
       )}
 
-      {/* Vote buttons with current count — updates instantly via optimistic update */}
       <View style={styles.footer}>
         <View style={styles.voteContainer}>
-          {/* Upvote button — filled icon when user has upvoted */}
           <Pressable
             onPress={() => handleVote("up")}
             disabled={voteMutation.isPending}
@@ -132,10 +182,8 @@ export default function ChallengeEntryCard({
             />
           </Pressable>
 
-          {/* Fixed minWidth prevents layout jump when vote count digit count changes */}
           <Text style={styles.voteCount}>{entry.votes ?? 0}</Text>
 
-          {/* Downvote button — filled icon when user has downvoted */}
           <Pressable
             onPress={() => handleVote("down")}
             disabled={voteMutation.isPending}
@@ -152,6 +200,18 @@ export default function ChallengeEntryCard({
             />
           </Pressable>
         </View>
+
+        {/* Vote tally pill — shown when ranked */}
+        {rank && (
+          <View style={styles.votePill}>
+            <MaterialCommunityIcons
+              name="thumb-up"
+              size={13}
+              color={COLORS.primary}
+            />
+            <Text style={styles.votePillText}>{entry.votes ?? 0} votes</Text>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -169,6 +229,41 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,
+    overflow: "hidden",
+  },
+  winnerContainer: {
+    borderWidth: 2,
+    borderColor: "#F59E0B",
+    shadowColor: "#F59E0B",
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  winnerBar: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: "#F59E0B",
+  },
+  rankBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginBottom: 10,
+    gap: 5,
+  },
+  rankEmoji: {
+    fontSize: 15,
+  },
+  rankText: {
+    fontSize: 13,
+    fontWeight: "700",
   },
   header: {
     flexDirection: "row",
@@ -181,8 +276,17 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     marginRight: 12,
   },
+  winnerAvatar: {
+    borderWidth: 2,
+    borderColor: "#F59E0B",
+  },
   userInfo: {
     flex: 1,
+  },
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
   },
   userName: {
     fontSize: 15,
@@ -209,6 +313,7 @@ const styles = StyleSheet.create({
   footer: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
   },
   voteContainer: {
     flexDirection: "row",
@@ -226,5 +331,19 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     minWidth: 30,
     textAlign: "center",
+  },
+  votePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: COLORS.background,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+  votePillText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    fontWeight: "500",
   },
 });

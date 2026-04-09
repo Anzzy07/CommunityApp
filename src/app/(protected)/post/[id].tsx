@@ -325,7 +325,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   loadingText: {
-    marginTop: 16,
+    marginTop: 17,
     fontSize: 16,
     color: COLORS.textSecondary,
   },
@@ -390,7 +390,7 @@ const styles = StyleSheet.create({
   },
   replyText: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 16,
     color: COLORS.textSecondary,
   },
   replyUsername: {
@@ -408,7 +408,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
     padding: 12,
     borderRadius: 20,
-    fontSize: 15,
+    fontSize: 18,
     maxHeight: 100,
     color: COLORS.textPrimary,
   },
@@ -421,6 +421,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   sendButtonDisabled: {
-    opacity: 0.5,
+    opacity: 0.7,
+    backgroundColor: COLORS.secondary,
   },
 });

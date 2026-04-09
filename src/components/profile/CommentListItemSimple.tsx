@@ -74,26 +74,26 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     marginRight: 10,
   },
   userInfo: {
     flex: 1,
   },
   username: {
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: "600",
     color: COLORS.textPrimary,
   },
   timestamp: {
-    fontSize: 12,
+    fontSize: 14,
     color: COLORS.textSecondary,
     marginTop: 2,
   },
   commentText: {
-    fontSize: 14,
+    fontSize: 18,
     lineHeight: 20,
     color: COLORS.textPrimary,
   },
@@ -108,12 +108,12 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   voteCount: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: "500",
     color: COLORS.textPrimary,
   },
   viewPost: {
-    fontSize: 13,
+    fontSize: 17,
     color: COLORS.primary,
     fontWeight: "500",
   },

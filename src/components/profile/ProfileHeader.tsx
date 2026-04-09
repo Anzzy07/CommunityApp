@@ -107,9 +107,9 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 90,
+    height: 90,
+    borderRadius: 50,
     borderWidth: 3,
     borderColor: COLORS.primary,
   },
@@ -118,13 +118,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   name: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "bold",
     color: COLORS.textPrimary,
     marginBottom: 4,
   },
   username: {
-    fontSize: 15,
+    fontSize: 17,
     color: COLORS.textSecondary,
   },
   streakContainer: {
@@ -143,18 +143,18 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   streakNumber: {
-    fontSize: 24,
+    fontSize: 25,
     fontWeight: "bold",
     color: "#FF6A00",
     marginLeft: 4,
   },
   streakTitle: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: "bold",
     color: "#D84315",
   },
   streakSubtitle: {
-    fontSize: 13,
+    fontSize: 15,
     color: "#BF360C",
     marginTop: 2,
   },
@@ -171,12 +171,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   statNumber: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "bold",
     color: COLORS.textPrimary,
   },
   statLabel: {
-    fontSize: 13,
+    fontSize: 17,
     color: COLORS.textSecondary,
     marginTop: 4,
   },
@@ -204,6 +204,6 @@ const styles = StyleSheet.create({
   editButtonText: {
     color: COLORS.primary,
     fontWeight: "600",
-    fontSize: 15,
+    fontSize: 17,
   },
 });

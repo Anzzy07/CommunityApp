@@ -522,7 +522,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   statusText: {
-    fontSize: 14,
+    fontSize: 16,
     color: COLORS.textPrimary,
     fontWeight: "500",
   },
@@ -537,13 +537,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "700",
     color: COLORS.textPrimary,
     flex: 1,
   },
   challengeCount: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: "600",
     color: COLORS.textSecondary,
     backgroundColor: COLORS.surface,

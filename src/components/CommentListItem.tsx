@@ -249,7 +249,7 @@ const CommentListItem = ({
           >
             <MaterialCommunityIcons
               name={hasAwarded ? "trophy" : "trophy-outline"}
-              size={16}
+              size={20}
               color={hasAwarded ? "#F59E0B" : COLORS.textSecondary}
             />
           </Pressable>
@@ -262,7 +262,7 @@ const CommentListItem = ({
             >
               <Entypo
                 name="dots-three-horizontal"
-                size={14}
+                size={18}
                 color={COLORS.textSecondary}
               />
             </Pressable>
@@ -279,7 +279,7 @@ const CommentListItem = ({
               name={
                 currentVote === "up" ? "arrow-up-bold" : "arrow-up-bold-outline"
               }
-              size={18}
+              size={22}
               color={
                 currentVote === "up" ? COLORS.primary : COLORS.textSecondary
               }
@@ -299,7 +299,7 @@ const CommentListItem = ({
                   ? "arrow-down-bold"
                   : "arrow-down-bold-outline"
               }
-              size={18}
+              size={22}
               color={currentVote === "down" ? "#DC2626" : COLORS.textSecondary}
             />
           </Pressable>
@@ -373,15 +373,15 @@ const styles = StyleSheet.create({
   },
   username: {
     fontWeight: "600",
-    fontSize: 13,
+    fontSize: 17,
     color: COLORS.textPrimary,
   },
   timestamp: {
     color: "#A3A3A3",
-    fontSize: 12,
+    fontSize: 13,
   },
   commentText: {
-    fontSize: 14,
+    fontSize: 17,
     lineHeight: 20,
     color: "#262626",
   },
@@ -392,7 +392,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#F3F4F6",
     padding: 8,
     borderRadius: 8,
-    fontSize: 14,
+    fontSize: 15,
     minHeight: 60,
   },
   editButtons: {
@@ -441,7 +441,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   voteCount: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: "500",
     color: COLORS.textPrimary,
   },
@@ -462,12 +462,12 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   menuText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "500",
     color: COLORS.textPrimary,
   },
   repliesToggle: {
-    fontSize: 12,
+    fontSize: 15,
     fontWeight: "500",
     color: COLORS.primary,
     marginTop: 2,

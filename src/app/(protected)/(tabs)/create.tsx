@@ -6,6 +6,7 @@ import {
 } from "@/src/hooks/mutations/usePostMutations";
 import { useUser } from "@clerk/clerk-expo";
 import { AntDesign, Ionicons, MaterialIcons } from "@expo/vector-icons";
+import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import { Link, router } from "expo-router";
 import { useAtom } from "jotai";
@@ -36,6 +37,8 @@ interface PollOption {
 // Screen for creating a new post or poll — switches between modes via a toggle
 export default function CreateScreen() {
   const { user } = useUser();
+
+  const MAX_SIZE = 2 * 1024 * 1024; // 2MB size for image
 
   // Controls whether the user is creating a post or a poll
   const [mode, setMode] = useState<CreateMode>("post");
@@ -91,6 +94,7 @@ export default function CreateScreen() {
   // Opens the device image picker for selecting a post image
   const pickPostImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
     if (status !== "granted") {
       Alert.alert(
         "Permission needed",
@@ -102,12 +106,42 @@ export default function CreateScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: "images",
       allowsEditing: true,
-      aspect: [16, 9],
-      quality: 0.8,
+      aspect: [1, 1],
+      quality: 1.0,
     });
 
     if (!result.canceled) {
-      setPostImage(result.assets[0].uri);
+      const asset = result.assets[0];
+
+      //  Android check
+      if (asset.fileSize && asset.fileSize > MAX_SIZE) {
+        Alert.alert("Image too large", "Please select an image under 2MB.");
+        return;
+      }
+
+      // iOS or fallback check using FileSystem
+      try {
+        const fileInfo = await FileSystem.getInfoAsync(asset.uri);
+
+        if (!fileInfo.exists || typeof fileInfo.size !== "number") {
+          Alert.alert("Error", "Could not read image size.");
+          return;
+        }
+
+        if (fileInfo.size > MAX_SIZE) {
+          Alert.alert(
+            "Image too large",
+            "Please select an image with low size.",
+          );
+          return;
+        }
+      } catch (error) {
+        Alert.alert("Error", "Could not access file information.");
+        return;
+      }
+
+      // If all checks pass, set the image
+      setPostImage(asset.uri);
     }
   };
 
@@ -130,15 +164,23 @@ export default function CreateScreen() {
     });
 
     if (!result.canceled) {
-      // Update only the matching option, leave others unchanged
+      const asset = result.assets[0];
+
+      if (asset.fileSize && asset.fileSize > MAX_SIZE) {
+        Alert.alert(
+          "Image too large",
+          "Please select an image smaller than 5MB.",
+        );
+        return;
+      }
+
       setPollOptions((prev) =>
         prev.map((opt) =>
-          opt.id === optionId ? { ...opt, image: result.assets[0].uri } : opt,
+          opt.id === optionId ? { ...opt, image: asset.uri } : opt,
         ),
       );
     }
   };
-
   // Removes the image from a specific poll option
   const removePollOptionImage = (optionId: string) => {
     setPollOptions((prev) =>
@@ -177,6 +219,26 @@ export default function CreateScreen() {
     }
 
     try {
+      // ✅ Check post image size before submitting
+      if (mode === "post" && postImage) {
+        try {
+          const fileInfo = await FileSystem.getInfoAsync(postImage);
+
+          if (!fileInfo.exists || typeof fileInfo.size !== "number") {
+            Alert.alert("Error", "Could not read image size.");
+            return;
+          }
+
+          if (fileInfo.size > MAX_SIZE) {
+            Alert.alert("Image too large", "Please select an image under 2MB.");
+            return;
+          }
+        } catch (error) {
+          Alert.alert("Error", "Could not access image information.");
+          return;
+        }
+      }
+
       if (mode === "post") {
         // Create a regular post with title, optional body and optional image
         await createPostMutation.mutateAsync({
@@ -189,11 +251,10 @@ export default function CreateScreen() {
 
         Alert.alert("Success!", "Your post has been created! 🎉");
       } else {
-        // Find the number of hours matching the selected duration chip
+        // POLL: validate options and duration
         const durationHours =
           pollDurations.find((d) => d.value === pollDuration)?.hours || 24;
 
-        // Only include options that have text — filter out empty ones
         const validOptions = pollOptions
           .filter((opt) => opt.text.trim().length > 0)
           .map((opt) => ({
@@ -201,7 +262,6 @@ export default function CreateScreen() {
             imageUri: opt.image,
           }));
 
-        // Create a poll post with question, options and duration
         await createPollMutation.mutateAsync({
           groupId: group.id,
           userId: user.id,
@@ -213,13 +273,12 @@ export default function CreateScreen() {
         Alert.alert("Success!", "Your poll has been created! 📊");
       }
 
-      // Clear form and go back after successful creation
+      // Clear form and go back
       goBack();
     } catch {
       Alert.alert("Error", "Failed to create post. Please try again.");
     }
   };
-
   // Returns true only when the form has enough data to submit
   const canPost = () => {
     if (mode === "post") {

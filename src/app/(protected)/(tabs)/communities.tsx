@@ -345,14 +345,17 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     gap: 10,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 2,
   },
   searchInput: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 17,
     color: COLORS.textPrimary,
   },
   loadingContainer: {
@@ -374,12 +377,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "700",
     color: COLORS.textPrimary,
   },
   sectionCount: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: "600",
     color: COLORS.textSecondary,
     backgroundColor: COLORS.surface,
@@ -396,7 +399,10 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 16,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
     shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 2,
@@ -419,13 +425,13 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   name: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: "600",
     color: COLORS.textPrimary,
     flex: 1,
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 16,
     color: COLORS.textSecondary,
   },
   joinButton: {
@@ -451,7 +457,7 @@ const styles = StyleSheet.create({
   },
   joinText: {
     color: "white",
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: "600",
   },
   joinedText: {

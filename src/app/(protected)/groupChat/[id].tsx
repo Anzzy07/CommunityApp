@@ -342,7 +342,10 @@ export default function GroupChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -353,15 +356,20 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0.5,
     borderBottomColor: "#E5E7EB",
   },
-  backButton: { padding: 4 },
+  backButton: {
+    padding: 4,
+  },
   headerTitle: {
     flex: 1,
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "600",
     color: COLORS.textPrimary,
     marginHorizontal: 12,
   },
-  messagesList: { paddingVertical: 12, flexGrow: 1 },
+  messagesList: {
+    paddingVertical: 12,
+    flexGrow: 1,
+  },
   emptyMessages: {
     flex: 1,
     justifyContent: "center",
@@ -374,7 +382,11 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     marginTop: 12,
   },
-  emptySubtext: { fontSize: 14, color: COLORS.textSecondary, marginTop: 4 },
+  emptySubtext: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
+    marginTop: 4,
+  },
   replyPreview: {
     flexDirection: "row",
     alignItems: "center",
@@ -391,14 +403,19 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     marginRight: 12,
   },
-  replyContent: { flex: 1 },
+  replyContent: {
+    flex: 1,
+  },
   replyLabel: {
-    fontSize: 13,
+    fontSize: 16,
     fontWeight: "600",
     color: COLORS.primary,
     marginBottom: 2,
   },
-  replyMessage: { fontSize: 14, color: COLORS.textSecondary },
+  replyMessage: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
+  },
   imagePreviewContainer: {
     position: "relative",
     paddingHorizontal: 15,
@@ -407,7 +424,11 @@ const styles = StyleSheet.create({
     borderTopWidth: 0.5,
     borderTopColor: "#E5E7EB",
   },
-  imagePreview: { width: "100%", height: 150, borderRadius: 12 },
+  imagePreview: {
+    width: "100%",
+    height: 150,
+    borderRadius: 12,
+  },
   removeImageButton: {
     position: "absolute",
     top: 20,
@@ -422,8 +443,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingTop: 12,
   },
-  inputWrapper: { flexDirection: "row", alignItems: "flex-end", gap: 10 },
-  imageButton: { padding: 8, justifyContent: "center", alignItems: "center" },
+  inputWrapper: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 10,
+  },
+  imageButton: {
+    padding: 8,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   input: {
     flex: 1,
     backgroundColor: COLORS.background,
@@ -442,5 +471,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  sendButtonDisabled: { opacity: 0.5 },
+  sendButtonDisabled: {
+    opacity: 0.8,
+    backgroundColor: COLORS.secondary,
+  },
 });

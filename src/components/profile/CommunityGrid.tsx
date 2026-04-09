@@ -67,7 +67,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   communityName: {
-    fontSize: 12,
+    fontSize: 18,
     fontWeight: "600",
     color: COLORS.textPrimary,
     textAlign: "center",

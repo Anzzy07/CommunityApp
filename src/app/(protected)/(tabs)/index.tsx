@@ -6,7 +6,7 @@ import { useSupabasePosts } from "@/src/hooks/queries/useSupabasePosts";
 import { Post } from "@/src/types";
 import { useUser } from "@clerk/clerk-expo";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useMemo, useRef } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -18,6 +18,7 @@ import {
 
 export default function HomeScreen() {
   const { user } = useUser();
+  const flatListRef = useRef<FlatList>(null);
 
   const {
     data,
@@ -42,8 +43,6 @@ export default function HomeScreen() {
   const posts = useMemo(() => data?.pages.flat() ?? [], [data]);
 
   // renderItem is stable as long as joinedGroupIds and userId don't change.
-  // PostListItem/PollListItem are memo'd so they only re-render if their
-  // own post data changed — not because other posts in the list changed.
   const renderPost = useCallback(
     ({ item }: { item: Post }) => {
       const isJoined = joinedGroupIds.has(item.group.id);
@@ -61,8 +60,10 @@ export default function HomeScreen() {
     }
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  // Stable key extractor
-  const keyExtractor = useCallback((item: Post) => item.id, []);
+  // Stable key extractor - add fallback for safety
+  const keyExtractor = useCallback((item: Post) => {
+    return item.id || Math.random().toString();
+  }, []);
 
   const renderFooter = useCallback(() => {
     if (!isFetchingNextPage) return null;
@@ -92,6 +93,11 @@ export default function HomeScreen() {
     [],
   );
 
+  // Handle refresh
+  const onRefresh = useCallback(() => {
+    refetch();
+  }, [refetch]);
+
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -111,6 +117,11 @@ export default function HomeScreen() {
         />
         <Text style={styles.errorTitle}>Oops! Something went wrong</Text>
         <Text style={styles.errorText}>{error.message}</Text>
+        <View style={styles.retryButton}>
+          <Text style={styles.retryButtonText} onPress={() => refetch()}>
+            Try Again
+          </Text>
+        </View>
       </View>
     );
   }
@@ -118,6 +129,7 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       <FlatList
+        ref={flatListRef}
         data={posts}
         keyExtractor={keyExtractor}
         renderItem={renderPost}
@@ -126,7 +138,7 @@ export default function HomeScreen() {
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}
-            onRefresh={refetch}
+            onRefresh={onRefresh}
             tintColor={COLORS.primary}
             colors={[COLORS.primary]}
           />
@@ -135,12 +147,18 @@ export default function HomeScreen() {
         onEndReachedThreshold={0.5}
         ListFooterComponent={renderFooter}
         ListEmptyComponent={renderEmpty}
-        // Performance tuning
+        // Performance optimizations
         removeClippedSubviews={true}
         maxToRenderPerBatch={8}
         updateCellsBatchingPeriod={50}
         windowSize={8}
         initialNumToRender={10}
+        // For smoother scrolling
+        decelerationRate="fast"
+        // Keep items in memory
+        maintainVisibleContentPosition={{
+          minIndexForVisible: 0,
+        }}
       />
     </View>
   );
@@ -183,6 +201,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textSecondary,
     textAlign: "center",
+    marginBottom: 20,
+  },
+  retryButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: COLORS.primary,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: "white",
+    fontWeight: "bold",
+    fontSize: 16,
   },
   emptyContainer: {
     flex: 1,
@@ -199,6 +229,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   emptyTitle: {
     fontSize: 20,
