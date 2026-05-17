@@ -21,15 +21,21 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function CreateCommunityScreen() {
+  // Get the currently authenticated user from Clerk
   const { user } = useUser();
+
+  // Mutation hook for creating a new community in the database
   const createGroupMutation = useCreateGroup();
 
+  // Form state for the community name, description, and selected image
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [communityImage, setCommunityImage] = useState<string | null>(null);
+
+  // Tracks whether an image upload is in progress to show a loading overlay
   const [isUploading, setIsUploading] = useState(false);
 
-  // Opens image picker to select community icon
+  // Opens the device image library so the user can select a community icon
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
@@ -44,6 +50,7 @@ export default function CreateCommunityScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: "images",
       allowsEditing: true,
+      // Square crop enforced for consistent community icon display
       aspect: [1, 1],
       quality: 0.8,
     });
@@ -55,7 +62,7 @@ export default function CreateCommunityScreen() {
     }
   };
 
-  // Opens camera to take a photo for community icon
+  // Opens the device camera so the user can take a new photo for the community icon
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
 
@@ -80,7 +87,7 @@ export default function CreateCommunityScreen() {
     }
   };
 
-  // Shows options for picking image
+  // Presents an action sheet so the user can choose between camera and gallery
   const handleChangeImage = () => {
     Alert.alert("Community Icon", "Choose an option", [
       { text: "Take Photo", onPress: takePhoto },
@@ -89,7 +96,7 @@ export default function CreateCommunityScreen() {
     ]);
   };
 
-  // Creates new community and redirects to community details
+  // Validates the form, creates the community, and navigates to its detail screen
   const handleCreate = async () => {
     if (!name.trim()) {
       Alert.alert("Name Required", "Please enter a community name");
@@ -105,16 +112,17 @@ export default function CreateCommunityScreen() {
       const newGroup = await createGroupMutation.mutateAsync({
         name: name.trim(),
         description: description.trim() || undefined,
+        // Fall back to a placeholder if no image was selected
         imageUri: communityImage || "https://via.placeholder.com/80",
         userId: user.id,
       });
 
-      // Reset form
+      // Reset form fields after successful creation
       setName("");
       setDescription("");
       setCommunityImage(null);
 
-      // Navigate to the new community
+      // Navigate directly to the newly created community
       router.replace(`/community/${newGroup.id}`);
     } catch (error) {
       Alert.alert("Error", "Failed to create community. Please try again.");
@@ -123,6 +131,7 @@ export default function CreateCommunityScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Header with close button, screen title, and create action */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} hitSlop={10}>
           <AntDesign name="close" size={26} color="white" />
@@ -130,6 +139,7 @@ export default function CreateCommunityScreen() {
 
         <Text style={styles.headerTitle}>Create Community</Text>
 
+        {/* Create button — disabled until the name field has content */}
         <Pressable
           onPress={handleCreate}
           disabled={!name.trim() || createGroupMutation.isPending}
@@ -145,6 +155,7 @@ export default function CreateCommunityScreen() {
         </Pressable>
       </View>
 
+      {/* KeyboardAvoidingView shifts the form up on iOS when the keyboard opens */}
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1 }}
@@ -153,6 +164,7 @@ export default function CreateCommunityScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
+          {/* Community icon section — tap to pick from gallery or take a photo */}
           <View style={styles.imageSection}>
             <View style={styles.imageContainer}>
               {communityImage ? (
@@ -161,6 +173,7 @@ export default function CreateCommunityScreen() {
                   style={styles.communityImage}
                 />
               ) : (
+                // Placeholder shown when no image has been selected yet
                 <View style={styles.placeholderImage}>
                   <MaterialCommunityIcons
                     name="account-group"
@@ -170,6 +183,7 @@ export default function CreateCommunityScreen() {
                 </View>
               )}
 
+              {/* Loading overlay shown while the image is being processed */}
               {isUploading && (
                 <View style={styles.uploadingOverlay}>
                   <ActivityIndicator color="white" size="large" />
@@ -193,6 +207,7 @@ export default function CreateCommunityScreen() {
             </Pressable>
           </View>
 
+          {/* Community name input with character counter */}
           <View style={styles.inputWrapper}>
             <Text style={styles.label}>Community Name</Text>
             <TextInput
@@ -206,6 +221,7 @@ export default function CreateCommunityScreen() {
             <Text style={styles.charCount}>{name.length}/50</Text>
           </View>
 
+          {/* Optional description input with character counter */}
           <View style={styles.inputWrapper}>
             <Text style={styles.label}>Description (Optional)</Text>
             <TextInput
@@ -220,6 +236,7 @@ export default function CreateCommunityScreen() {
             <Text style={styles.charCount}>{description.length}/200</Text>
           </View>
 
+          {/* Info box reminding the user they will become leader of this community */}
           <View style={styles.infoBox}>
             <MaterialCommunityIcons
               name="information"
@@ -304,10 +321,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     gap: 8,
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
     elevation: 3,
@@ -323,10 +337,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,

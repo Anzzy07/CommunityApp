@@ -1,6 +1,7 @@
 import { supabase } from "@/src/lib/supabase";
 import { useMutation } from "@tanstack/react-query";
 
+// Syncs or creates a user record in Supabase when user logs in or updates their profile
 export function useSyncUserToSupabase() {
   return useMutation({
     mutationFn: async ({

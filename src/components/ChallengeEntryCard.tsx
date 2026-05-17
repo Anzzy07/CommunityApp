@@ -27,14 +27,13 @@ type Props = {
   entry: ChallengeEntry;
   challengeId: string;
   onDelete?: () => void;
-  // rank is 1-based position in the leaderboard (1 = winner, 2 = 2nd, 3 = 3rd)
-  // only passed when challenge has ended
+  // rank is 1-based position in the leaderboard — only passed after challenge ends
   rank?: number;
   isWinner?: boolean;
   isExpired?: boolean;
 };
 
-// Returns medal emoji and colour for rank 1/2/3
+// Returns medal emoji, text colour, and background colour based on leaderboard rank
 function getRankStyle(rank: number): {
   emoji: string;
   color: string;
@@ -43,6 +42,7 @@ function getRankStyle(rank: number): {
   if (rank === 1) return { emoji: "🥇", color: "#B8860B", bg: "#FEF9E7" };
   if (rank === 2) return { emoji: "🥈", color: "#6B7280", bg: "#F3F4F6" };
   if (rank === 3) return { emoji: "🥉", color: "#92400E", bg: "#FEF3C7" };
+  // Default style for entries ranked 4th and below
   return {
     emoji: `#${rank}`,
     color: COLORS.textSecondary,
@@ -58,17 +58,26 @@ export default function ChallengeEntryCard({
   isWinner = false,
   isExpired = false,
 }: Props) {
+  // Get the currently authenticated user from Clerk
   const { user } = useUser();
+
+  // Mutation hook for casting a vote on this entry
   const voteMutation = useVoteChallengeEntry();
 
+  // Fetch the current user's vote on this specific entry (up, down, or null)
   const { data: currentVote } = useSupabaseChallengeEntryVote(
     entry.id,
     user?.id,
   );
 
+  // Check if the current user owns this entry to show delete and edit controls
   const isOwner = user?.id === entry.user_id;
+
+  // Get rank styling if a rank has been provided (only on expired challenges)
   const rankStyle = rank ? getRankStyle(rank) : null;
 
+  // Handles upvote and downvote actions on this entry
+  // Voting is blocked once the challenge has ended
   const handleVote = async (voteType: "up" | "down") => {
     if (isExpired) {
       Alert.alert("Voting ended", "This challenge has already ended");
@@ -92,6 +101,7 @@ export default function ChallengeEntryCard({
     }
   };
 
+  // Shows a confirmation alert before triggering the delete callback
   const handleDelete = () => {
     if (!onDelete) return;
     Alert.alert("Delete Entry", "Are you sure you want to delete this entry?", [
@@ -104,11 +114,16 @@ export default function ChallengeEntryCard({
     <View
       style={[
         styles.container,
+        // Apply winner border and shadow when this entry won the challenge
         isWinner && styles.winnerContainer,
+        // Apply rank background colour based on leaderboard position
         rankStyle && { backgroundColor: rankStyle.bg },
       ]}
     >
-      {/* Rank badge — shown when challenge has ended */}
+      {/* Gold top bar decoration shown only on the winning entry */}
+      {isWinner && <View style={styles.winnerBar} />}
+
+      {/* Rank badge shown after challenge ends to indicate leaderboard position */}
       {rank && rankStyle && (
         <View style={[styles.rankBadge, { borderColor: rankStyle.color }]}>
           <Text style={[styles.rankEmoji]}>{rankStyle.emoji}</Text>
@@ -124,10 +139,7 @@ export default function ChallengeEntryCard({
         </View>
       )}
 
-      {/* Winner crown glow bar */}
-      {isWinner && <View style={styles.winnerBar} />}
-
-      {/* Entry header */}
+      {/* Entry header showing user avatar, name, timestamp, and delete button for owner */}
       <View style={styles.header}>
         <Image
           source={{
@@ -138,6 +150,7 @@ export default function ChallengeEntryCard({
         <View style={styles.userInfo}>
           <View style={styles.nameRow}>
             <Text style={styles.userName}>{entry.user.name}</Text>
+            {/* Crown icon displayed next to the winner's name */}
             {isWinner && (
               <MaterialCommunityIcons name="crown" size={16} color="#F59E0B" />
             )}
@@ -147,6 +160,7 @@ export default function ChallengeEntryCard({
           </Text>
         </View>
 
+        {/* Delete button only shown to the entry owner */}
         {isOwner && onDelete && (
           <Pressable onPress={handleDelete} hitSlop={10}>
             <MaterialCommunityIcons
@@ -158,14 +172,18 @@ export default function ChallengeEntryCard({
         )}
       </View>
 
+      {/* Entry text content — only rendered if the user wrote a caption */}
       {entry.content && <Text style={styles.content}>{entry.content}</Text>}
 
+      {/* Entry image loaded from Supabase Storage using the stored path */}
       {entry.image_url && (
         <SupabaseImage path={entry.image_url} style={styles.image} />
       )}
 
+      {/* Footer row with upvote/downvote controls and a vote count pill for ranked entries */}
       <View style={styles.footer}>
         <View style={styles.voteContainer}>
+          {/* Upvote button — filled icon shown when the user has upvoted */}
           <Pressable
             onPress={() => handleVote("up")}
             disabled={voteMutation.isPending}
@@ -182,8 +200,10 @@ export default function ChallengeEntryCard({
             />
           </Pressable>
 
+          {/* Total vote count displayed between the upvote and downvote buttons */}
           <Text style={styles.voteCount}>{entry.votes ?? 0}</Text>
 
+          {/* Downvote button — filled icon shown when the user has downvoted */}
           <Pressable
             onPress={() => handleVote("down")}
             disabled={voteMutation.isPending}
@@ -201,7 +221,7 @@ export default function ChallengeEntryCard({
           </Pressable>
         </View>
 
-        {/* Vote tally pill — shown when ranked */}
+        {/* Vote tally pill shown on ranked entries after the challenge ends */}
         {rank && (
           <View style={styles.votePill}>
             <MaterialCommunityIcons

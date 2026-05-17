@@ -25,31 +25,23 @@ import { SafeAreaView } from "react-native-safe-area-context";
 export default function GroupSelector() {
   const { user } = useUser();
   const [searchValue, setSearchValue] = useState("");
+
+  // Write to the atom so the selected group persists when navigating back to the create screen
   const setGroup = useSetAtom(selectedGroupAtom);
 
-  // Fetch groups and memberships from Supabase
   const { data: groups = [], isLoading: groupsLoading } = useSupabaseGroups();
   const { data: groupMembers = [], isLoading: membersLoading } =
     useSupabaseGroupMembers(user?.id || "");
 
   const isLoading = groupsLoading || membersLoading;
 
-  // Filter to only show groups the user has joined
+  // Only show groups the user has joined — they cannot post to communities they are not part of
   const userGroups = useMemo(() => {
     const userGroupIds = groupMembers.map((m) => m.group_id);
-    // console.log("- User group IDs:", userGroupIds);
-
-    const filtered = groups.filter((g) => userGroupIds.includes(g.id));
-    // console.log("- Filtered user groups:", filtered.length, "groups");
-    // console.log(
-    //   "- Group names:",
-    //   filtered.map((g) => g.name),
-    // );
-
-    return filtered;
+    return groups.filter((g) => userGroupIds.includes(g.id));
   }, [groups, groupMembers]);
 
-  // Filter by search query
+  // Apply the search query on top of the already-filtered joined groups
   const filterGroups = useMemo(
     () =>
       userGroups.filter((group) =>
@@ -58,6 +50,7 @@ export default function GroupSelector() {
     [searchValue, userGroups],
   );
 
+  // Store the chosen group in the Jotai atom and return to the create screen
   const onGroupSelected = (group: Group) => {
     setGroup(group);
     router.back();
@@ -73,7 +66,7 @@ export default function GroupSelector() {
       style={styles.container}
     >
       <SafeAreaView style={styles.safeArea}>
-        {/* HEADER */}
+        {/* Header with close button */}
         <View style={styles.header}>
           <Pressable
             onPress={() => router.back()}
@@ -82,13 +75,11 @@ export default function GroupSelector() {
           >
             <AntDesign name="close" size={26} color={COLORS.textPrimary} />
           </Pressable>
-
           <Text style={styles.headerTitle}>Select Community</Text>
-
           <View style={{ width: 26 }} />
         </View>
 
-        {/* SEARCH */}
+        {/* Search field to narrow down the list of joined communities */}
         <View style={styles.searchContainer}>
           <View style={styles.searchWrapper}>
             <Ionicons
@@ -97,7 +88,6 @@ export default function GroupSelector() {
               color={COLORS.textSecondary}
               style={styles.searchIcon}
             />
-
             <TextInput
               placeholder="Search communities..."
               placeholderTextColor={COLORS.textSecondary}
@@ -108,7 +98,6 @@ export default function GroupSelector() {
               autoCorrect={false}
               returnKeyType="search"
             />
-
             {searchValue.length > 0 && (
               <Pressable onPress={clearSearch} hitSlop={10}>
                 <Ionicons
@@ -121,7 +110,7 @@ export default function GroupSelector() {
           </View>
         </View>
 
-        {/* RESULTS COUNT */}
+        {/* Result count label — only shown while a search query is active */}
         {searchValue.length > 0 && (
           <View style={styles.resultsContainer}>
             <Text style={styles.resultsText}>
@@ -131,7 +120,6 @@ export default function GroupSelector() {
           </View>
         )}
 
-        {/* LOADING */}
         {isLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={COLORS.primary} />
@@ -139,6 +127,7 @@ export default function GroupSelector() {
         ) : filterGroups.length > 0 ? (
           <FlatList
             data={filterGroups}
+            // Tapping a row while the keyboard is open should still register the press
             keyboardShouldPersistTaps="handled"
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listContainer}
@@ -148,6 +137,7 @@ export default function GroupSelector() {
                 onPress={() => onGroupSelected(item)}
                 style={({ pressed }) => [
                   styles.groupItem,
+                  // Subtle background change gives immediate visual feedback on press
                   pressed && styles.groupItemPressed,
                 ]}
               >
@@ -157,13 +147,11 @@ export default function GroupSelector() {
                   }}
                   style={styles.groupImage}
                 />
-
                 <View style={styles.groupInfo}>
                   <Text style={styles.groupName} numberOfLines={1}>
                     {item.name}
                   </Text>
                 </View>
-
                 <Ionicons
                   name="chevron-forward"
                   size={20}
@@ -174,6 +162,7 @@ export default function GroupSelector() {
             ItemSeparatorComponent={() => <View style={styles.separator} />}
           />
         ) : (
+          // Empty state — message differs based on whether the user has joined any groups
           <View style={styles.emptyContainer}>
             <Ionicons
               name="search-outline"

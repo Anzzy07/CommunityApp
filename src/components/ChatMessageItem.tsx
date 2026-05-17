@@ -23,17 +23,19 @@ export default function ChatMessageItem({
   showUsername = true,
 }: Props) {
   return (
+    // Long-press opens the reply
     <Pressable
       onLongPress={() => isMember && onReply(item)}
       style={[styles.messageRow, isMe && styles.myMessageRow]}
     >
-      {/* USER AVATAR - Show for others on left */}
+      {/* Avatar for messages from other users */}
       {!isMe && (
         <View style={styles.avatarContainer}>
           {showAvatar ? (
             item.user.image ? (
               <Image source={{ uri: item.user.image }} style={styles.avatar} />
             ) : (
+              // Fallback avatar uses the first letter of the sender's name
               <View style={[styles.avatar, styles.defaultAvatar]}>
                 <Text style={styles.avatarText}>
                   {item.user.name.charAt(0).toUpperCase()}
@@ -46,11 +48,11 @@ export default function ChatMessageItem({
         </View>
       )}
 
-      {/* MESSAGE BUBBLE */}
+      {/* Message bubble */}
       <View
         style={[styles.bubble, isMe ? styles.myBubble : styles.otherBubble]}
       >
-        {/* REPLIED MESSAGE */}
+        {/* Quoted message preview shown when this message is a reply to another */}
         {item.reply_to && (
           <View
             style={[
@@ -70,24 +72,25 @@ export default function ChatMessageItem({
           </View>
         )}
 
-        {/* USERNAME (only for others and when showUsername is true) */}
+        {/* Sender name is shown only for other users' messages and only on the
+            first bubble in a consecutive run from the same sender */}
         {!isMe && showUsername && (
           <Text style={styles.username}>{item.user.name}</Text>
         )}
 
-        {/* MESSAGE TEXT */}
+        {/* Message text — conditionally rendered because the message may be image-only */}
         {item.message && (
           <Text style={[styles.messageText, isMe && styles.myMessageText]}>
             {item.message}
           </Text>
         )}
 
-        {/* MESSAGE IMAGE */}
+        {/* Attached image fetched from Supabase Storage via the shared SupabaseImage component */}
         {item.image_url && (
           <SupabaseImage path={item.image_url} style={styles.messageImage} />
         )}
 
-        {/* TIMESTAMP */}
+        {/* Relative timestamp shown at the bottom-right of every bubble */}
         <Text style={[styles.time, isMe && styles.myTime]}>
           {formatDistanceToNowStrict(new Date(item.created_at ?? Date.now()), {
             addSuffix: true,
@@ -95,7 +98,8 @@ export default function ChatMessageItem({
         </Text>
       </View>
 
-      {/* AVATAR FOR MY MESSAGES (on the right side) */}
+      {/* Avatar for the current user's messages — positioned on the right,
+          using the same grouping logic as the left-side avatar */}
       {isMe && (
         <View style={styles.avatarContainer}>
           {showAvatar ? (

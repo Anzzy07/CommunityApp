@@ -17,7 +17,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 const queryClient = new QueryClient();
 
-// Component that syncs Clerk user to Supabase
+// Runs on every mount to ensure the Clerk user record exists in Supabase.
 function UserSync() {
   const { user, isLoaded } = useUser();
 
@@ -30,14 +30,14 @@ function UserSync() {
   return null;
 }
 
-// Badge counter synced with Supabase
+// Keeps the iOS app icon badge count in sync with the number of unread notifications.
+// A real-time Supabase subscription ensures the badge updates even when the app is open.
 function BadgeSync() {
   const { user } = useUser();
 
   useEffect(() => {
     if (!user?.id) return;
 
-    // Fetch unread count from Supabase
     const fetchUnreadCount = async () => {
       const { count } = await supabase
         .from("notifications")
@@ -52,7 +52,8 @@ function BadgeSync() {
 
     fetchUnreadCount();
 
-    // Set up realtime subscription for badge updates
+    // Subscribe to any change on the notifications table for this user
+    // so the badge refreshes without requiring a manual pull-to-refresh
     const channel = supabase
       .channel("notifications-badge")
       .on(
@@ -77,7 +78,8 @@ function BadgeSync() {
   return null;
 }
 
-// Notification handler component
+// Manages push notification registration and handles notification events
+// both while the app is in the foreground and when the user taps a notification
 function NotificationHandler() {
   const { user } = useUser();
 
@@ -87,13 +89,12 @@ function NotificationHandler() {
   const responseListener = useRef<Notifications.EventSubscription | null>(null);
 
   useEffect(() => {
-    // Register for push notifications
     registerForPushNotificationsAsync();
 
-    // Clear badge when app opens
+    // Clear the badge when the app is opened fresh
     clearBadge();
 
-    // Listener for notifications received while app is foregrounded
+    // saves the notification to Supabase so it appears in the inbox
     notificationListener.current =
       Notifications.addNotificationReceivedListener(async (notification) => {
         console.log("Notification received:", notification);
@@ -104,7 +105,6 @@ function NotificationHandler() {
           referenceId?: string;
         };
 
-        // If notification should be added to Supabase
         if (data?.addToInbox && user?.id) {
           try {
             await supabase.from("notifications").insert({
@@ -120,7 +120,7 @@ function NotificationHandler() {
         }
       });
 
-    // Listener for when user taps notification
+    // marks the notification as read and deep-links to its detail screen
     responseListener.current =
       Notifications.addNotificationResponseReceivedListener(
         async (response) => {
@@ -132,7 +132,7 @@ function NotificationHandler() {
             referenceId?: string;
           };
 
-          // Mark as read in Supabase
+          // Mark the tapped notification as read so the badge count decreases
           if (data?.notificationId) {
             await supabase
               .from("notifications")
@@ -140,7 +140,7 @@ function NotificationHandler() {
               .eq("id", data.notificationId);
           }
 
-          // Navigate based on type
+          // Route to the appropriate screen based on the notification type
           if (data?.type && data?.referenceId) {
             switch (data.type) {
               case "comment":
@@ -178,6 +178,8 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <ClerkProvider tokenCache={tokenCache}>
+        {/* Helper components are rendered here so they have access to both
+            the React Query context and the Clerk user session */}
         <UserSync />
         <BadgeSync />
         <NotificationHandler />

@@ -2,7 +2,7 @@ import { supabase } from "@/src/lib/supabase";
 import { Group } from "@/src/types";
 import { useQuery } from "@tanstack/react-query";
 
-// Fetches all groups with member counts using React Query
+// Fetches all groups with member counts
 export function useSupabaseGroups() {
   return useQuery({
     queryKey: ["groups"],

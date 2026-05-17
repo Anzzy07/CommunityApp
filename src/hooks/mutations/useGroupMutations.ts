@@ -3,7 +3,7 @@ import { GroupMember } from "@/src/types";
 import { uploadImage } from "@/src/utils/supabaseImages";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-// Joins a community — optimistic update so the Join button flips instantly
+// Joins a community optimistic update so the Join button shows instantly
 export function useJoinGroup() {
   const queryClient = useQueryClient();
 
@@ -38,7 +38,7 @@ export function useJoinGroup() {
       ]);
 
       // Instantly add this group to the user's membership list in the cache
-      // This makes the Join button flip to "Joined" without waiting for the server
+      // This makes the Join button flip to Joined without waiting for the server
       queryClient.setQueryData(
         ["group-members", userId],
         (old: GroupMember[] | undefined) => [
@@ -78,7 +78,7 @@ export function useJoinGroup() {
   });
 }
 
-// Leaves a community — optimistic update so the button flips instantly
+// Leaves a community optimistic update so the button flips instantly
 export function useLeaveGroup() {
   const queryClient = useQueryClient();
 
@@ -112,7 +112,6 @@ export function useLeaveGroup() {
       ]);
 
       // Instantly remove this group from the user's membership list in the cache
-      // This makes the "Joined" button flip back to "Join" without waiting for the server
       queryClient.setQueryData(
         ["group-members", userId],
         (old: GroupMember[] | undefined) =>
@@ -145,7 +144,7 @@ export function useLeaveGroup() {
   });
 }
 
-// Creates a new community — uploads image, creates group, auto-joins creator
+// Creates a new community uploads image creates group auto joins creator
 export function useCreateGroup() {
   const queryClient = useQueryClient();
 
@@ -192,7 +191,7 @@ export function useCreateGroup() {
 
       if (groupError) throw groupError;
 
-      // Auto-join the creator as a member of their own community
+      // Auto join the creator as a member of their own community
       const { error: memberError } = await supabase
         .from("group_members")
         .insert({

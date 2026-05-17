@@ -26,19 +26,21 @@ export default function EditProfileScreen() {
   const router = useRouter();
   const syncUserMutation = useSyncUserToSupabase();
 
+  // Pre-populate fields with the user's existing Clerk data
   const [fullName, setFullName] = useState(user?.fullName || "");
   const [username, setUsername] = useState(user?.username || "");
   const [profileImage, setProfileImage] = useState(user?.imageUrl || "");
   const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Upload the chosen image to Clerk then mirror the change to Supabase
+  // so both systems stay in sync
   const uploadProfileImage = async (imageUri: string) => {
     setIsUploading(true);
     try {
       const blob = await imageUriToClerkFile(imageUri);
       await user?.setProfileImage({ file: blob });
 
-      // Sync to Supabase after upload
       if (user?.id && user?.emailAddresses[0]?.emailAddress) {
         await syncUserMutation.mutateAsync({
           userId: user.id,
@@ -59,6 +61,7 @@ export default function EditProfileScreen() {
     }
   };
 
+  // Request photo library access then open the picker for a new profile picture
   const handlePickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
@@ -82,6 +85,7 @@ export default function EditProfileScreen() {
     }
   };
 
+  // Request camera access then open the live camera for a new profile photo
   const handleTakePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
 
@@ -104,6 +108,7 @@ export default function EditProfileScreen() {
     }
   };
 
+  // Present a choice between camera and gallery for changing the profile picture
   const handleChangePhoto = () => {
     Alert.alert("Change Profile Picture", "Choose an option", [
       { text: "Take Photo", onPress: handleTakePhoto },
@@ -112,6 +117,8 @@ export default function EditProfileScreen() {
     ]);
   };
 
+  // Validate inputs, update the Clerk profile, then sync the changes to Supabase.
+  // Both systems must reflect the same data so posts and comments display correctly.
   const handleSave = async () => {
     if (!fullName.trim()) {
       Alert.alert("Error", "Full name cannot be empty");
@@ -126,14 +133,13 @@ export default function EditProfileScreen() {
     setIsSaving(true);
 
     try {
-      // Update Clerk
       await user?.update({
         firstName: fullName.split(" ")[0],
+        // Use the remainder of the string as the last name, or undefined if single-word name
         lastName: fullName.split(" ").slice(1).join(" ") || undefined,
         username: username,
       });
 
-      // Sync to Supabase
       if (user?.id && user?.emailAddresses[0]?.emailAddress) {
         await syncUserMutation.mutateAsync({
           userId: user.id,
@@ -153,6 +159,7 @@ export default function EditProfileScreen() {
     } catch (error: any) {
       console.error("Error updating profile:", error);
 
+      // Surface a specific message when Clerk rejects a duplicate username
       if (error.errors && error.errors[0]?.code === "form_identifier_exists") {
         Alert.alert("Error", "This username is already taken");
       } else {
@@ -165,7 +172,7 @@ export default function EditProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
+      {/* Header with close and save controls */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} hitSlop={10}>
           <AntDesign name="close" size={26} color="white" />
@@ -190,7 +197,7 @@ export default function EditProfileScreen() {
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >
-          {/* Profile Picture */}
+          {/* Avatar section — tapping the button presents camera / gallery options */}
           <View style={styles.avatarSection}>
             <View style={styles.avatarContainer}>
               <Image
@@ -199,6 +206,7 @@ export default function EditProfileScreen() {
                 }}
                 style={styles.avatar}
               />
+              {/* Overlay spinner shown while the image is being uploaded to Clerk */}
               {isUploading && (
                 <View style={styles.uploadingOverlay}>
                   <ActivityIndicator color="white" size="large" />
@@ -220,7 +228,7 @@ export default function EditProfileScreen() {
             </Pressable>
           </View>
 
-          {/* Full Name */}
+          {/* Full name input */}
           <View style={styles.inputSection}>
             <Text style={styles.label}>Full Name</Text>
             <View style={styles.inputContainer}>
@@ -239,7 +247,7 @@ export default function EditProfileScreen() {
             </View>
           </View>
 
-          {/* Username */}
+          {/* Username input — publicly visible across the app */}
           <View style={styles.inputSection}>
             <Text style={styles.label}>Username</Text>
             <View style={styles.inputContainer}>
@@ -262,7 +270,7 @@ export default function EditProfileScreen() {
             </Text>
           </View>
 
-          {/* Email (Read-only) */}
+          {/* Email field is read-only — address changes are handled in account settings */}
           <View style={styles.inputSection}>
             <Text style={styles.label}>Email</Text>
             <View style={[styles.inputContainer, styles.disabledContainer]}>
@@ -280,7 +288,7 @@ export default function EditProfileScreen() {
             </Text>
           </View>
 
-          {/* Info Box */}
+          {/* Informational note reminding the user that profile changes are global */}
           <View style={styles.infoBox}>
             <MaterialCommunityIcons
               name="information"

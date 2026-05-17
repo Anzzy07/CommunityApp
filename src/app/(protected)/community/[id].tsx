@@ -32,44 +32,45 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function CommunityDetailsScreen() {
+  // Extract the community ID from the route parameters
   const { id } = useLocalSearchParams<{ id: string }>();
+
+  // Get the currently authenticated user from Clerk
   const { user } = useUser();
+
+  // Jotai setter used to pre-select this community when navigating to the Create Post screen
   const setSelectedGroup = useSetAtom(selectedGroupAtom);
 
-  // Fetch data from Supabase
+  // Fetch all groups, user memberships, posts, challenges, and member count from Supabase
   const { data: groups = [], isLoading: groupsLoading } = useSupabaseGroups();
   const { data: groupMembers = [], isLoading: membersLoading } =
     useSupabaseGroupMembers(user?.id || "");
 
-  // useSupabasePosts now returns an infinite query — data.pages is an array of pages
-  // We flatten all pages into a single array before filtering
+  // Posts use an infinite query — data.pages is an array of pages each containing an array of posts
   const { data: postsData } = useSupabasePosts();
-
   const { data: challenges = [] } = useSupabaseChallenges(id);
   const { data: memberCount = 0 } = useSupabaseGroupMemberCount(id);
 
-  // Mutations
+  // Mutation hooks for joining and leaving this community
   const joinMutation = useJoinGroup();
   const leaveMutation = useLeaveGroup();
 
-  // Find current group from the groups list
+  // Find the current community from the groups list using the route ID
   const group = groups.find((g) => g.id === id);
 
-  // Check if current user has joined this community
+  // Check if the current user is a member of this community
   const isJoined = groupMembers.some((m) => m.group_id === id);
 
-  // Check if current user is the community leader
+  // Check if the current user is the community leader
   const isLeader = group?.leader_id === user?.id;
 
-  // Flatten infinite query pages into a single array, then filter to this group.
-  // postsData.pages is an array of pages, each page is an array of Post objects.
-  // We use flatMap to merge all pages, then filter by group id.
+  // Flatten all paginated post pages into a single array and filter to this community
   const groupPosts = useMemo(() => {
     if (!postsData?.pages) return [];
     return postsData.pages.flat().filter((p: Post) => p.group?.id === id);
   }, [postsData?.pages, id]);
 
-  // Handles joining this community
+  // Handles joining this community and shows an error if the request fails
   const handleJoin = async () => {
     if (!user?.id) {
       Alert.alert("Sign in required", "Please sign in to join communities");
@@ -82,7 +83,8 @@ export default function CommunityDetailsScreen() {
     }
   };
 
-  // Handles leaving this community — leaders cannot leave
+  // Handles leaving this community
+  // Leaders cannot leave
   const handleLeave = () => {
     if (!user?.id) return;
 
@@ -94,6 +96,7 @@ export default function CommunityDetailsScreen() {
       return;
     }
 
+    // Ask for confirmation before removing the user from the community
     Alert.alert(
       "Leave Community",
       "Are you sure you want to leave this community?",
@@ -117,9 +120,10 @@ export default function CommunityDetailsScreen() {
     );
   };
 
-  // Stable renderItem — useCallback prevents FlatList re-rendering all cards
+  // Stable renderItem using useCallback to prevent FlatList from re-rendering all post cards unnecessarily
   const renderPost = useCallback(
     ({ item }: { item: Post }) => (
+      // Join button hidden on community page since user is already viewing the community
       <PostListItem post={item} showJoinButton={false} isJoined={isJoined} />
     ),
     [isJoined],
@@ -127,7 +131,7 @@ export default function CommunityDetailsScreen() {
 
   const keyExtractor = useCallback((item: Post) => item.id, []);
 
-  // Loading state while fetching groups and members
+  // Show a loading spinner while groups and member data are being fetched
   if (groupsLoading || membersLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -137,7 +141,7 @@ export default function CommunityDetailsScreen() {
     );
   }
 
-  // Community not found state
+  // Show a not found state if the community ID does not match any group
   if (!group) {
     return (
       <View style={styles.notFound}>
@@ -151,15 +155,16 @@ export default function CommunityDetailsScreen() {
     );
   }
 
-  // Header rendered above the posts list — includes hero, actions, challenges
+  // Header rendered above the post list — contains the hero, action buttons, challenges, and posts label
   const renderHeader = () => (
     <>
-      {/* Hero section with cover image, group avatar, name and member count */}
+      {/* Hero section with blurred cover image, community avatar, name, and member count */}
       <View style={styles.heroSection}>
         <Image
           source={{ uri: group.image || "https://via.placeholder.com/80" }}
           style={styles.heroCover}
         />
+        {/* Dark overlay to make text readable over the cover image */}
         <View style={styles.heroOverlay} />
         <View style={styles.heroContent}>
           <Image
@@ -169,7 +174,7 @@ export default function CommunityDetailsScreen() {
           <View style={styles.heroInfo}>
             <View style={styles.nameRow}>
               <Text style={styles.heroName}>{group.name}</Text>
-              {/* Crown icon shown next to leader's community name */}
+              {/* Crown icon shown next to the name when the current user is the leader */}
               {isLeader && (
                 <MaterialCommunityIcons
                   name="crown"
@@ -192,11 +197,11 @@ export default function CommunityDetailsScreen() {
         </View>
       </View>
 
-      {/* Action buttons — shown when joined: Post, Chat, Challenge (leader only) */}
+      {/* Action buttons row — changes depending on membership status */}
       <View style={styles.actionsContainer}>
         {isJoined ? (
           <>
-            {/* Create Post — pre-selects this community via Jotai atom */}
+            {/* Create Post button — sets the selected group atom so the Create screen pre-selects this community */}
             <Pressable
               style={[styles.actionButton, styles.primaryAction]}
               onPress={() => {
@@ -213,7 +218,7 @@ export default function CommunityDetailsScreen() {
               <Text style={styles.primaryActionText}>Create Post</Text>
             </Pressable>
 
-            {/* Open group chat */}
+            {/* Chat button — navigates to the group chat screen for this community */}
             <Pressable
               style={[styles.actionButton, styles.secondaryAction]}
               onPress={() => {
@@ -231,7 +236,7 @@ export default function CommunityDetailsScreen() {
               <Text style={styles.secondaryActionText}>Chat</Text>
             </Pressable>
 
-            {/* Create Challenge — only visible to community leader */}
+            {/* Challenge button — only visible to the community leader */}
             {isLeader && (
               <Pressable
                 style={[styles.actionButton, styles.challengeAction]}
@@ -252,7 +257,7 @@ export default function CommunityDetailsScreen() {
             )}
           </>
         ) : (
-          /* Join button shown to non-members */
+          // Join button shown to users who are not yet members
           <Pressable
             style={[styles.actionButton, styles.joinAction]}
             onPress={handleJoin}
@@ -293,7 +298,7 @@ export default function CommunityDetailsScreen() {
         )}
       </View>
 
-      {/* Membership status banner */}
+      {/* Membership status banner — shows different text for leaders and regular members */}
       {isJoined && (
         <View style={styles.statusBanner}>
           <MaterialCommunityIcons
@@ -311,7 +316,7 @@ export default function CommunityDetailsScreen() {
         </View>
       )}
 
-      {/* Active challenges section — only shown if challenges exist */}
+      {/* Active challenges section — only rendered when at least one challenge exists */}
       {challenges.length > 0 && (
         <>
           <View style={styles.sectionHeader}>
@@ -329,7 +334,7 @@ export default function CommunityDetailsScreen() {
         </>
       )}
 
-      {/* Posts section header with count */}
+      {/* Posts section label with total post count for this community */}
       <View style={styles.postsHeader}>
         <Text style={styles.postsTitle}>Community Posts</Text>
         <Text style={styles.postsCount}>{groupPosts.length}</Text>
@@ -343,7 +348,9 @@ export default function CommunityDetailsScreen() {
         data={groupPosts}
         keyExtractor={keyExtractor}
         renderItem={renderPost}
+        // Header contains the hero, actions, challenges, and posts label
         ListHeaderComponent={renderHeader}
+        // Empty state message varies based on whether the user is a member
         ListEmptyComponent={
           <View style={styles.emptyPosts}>
             <MaterialCommunityIcons
@@ -359,7 +366,7 @@ export default function CommunityDetailsScreen() {
             </Text>
           </View>
         }
-        // Performance optimisations
+        // Performance optimisations for larger community feeds
         removeClippedSubviews={true}
         maxToRenderPerBatch={8}
         windowSize={8}
@@ -370,30 +377,21 @@ export default function CommunityDetailsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
+  container: { flex: 1, backgroundColor: COLORS.background },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     gap: 12,
   },
-  loadingText: {
-    fontSize: 15,
-    color: COLORS.textSecondary,
-  },
+  loadingText: { fontSize: 15, color: COLORS.textSecondary },
   notFound: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     gap: 12,
   },
-  notFoundText: {
-    fontSize: 16,
-    color: COLORS.textSecondary,
-  },
+  notFoundText: { fontSize: 16, color: COLORS.textSecondary },
   heroSection: {
     height: 200,
     position: "relative",
@@ -422,11 +420,7 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: "white",
   },
-  heroInfo: {
-    flex: 1,
-    marginLeft: 16,
-    justifyContent: "flex-end",
-  },
+  heroInfo: { flex: 1, marginLeft: 16, justifyContent: "flex-end" },
   nameRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -441,16 +435,8 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
-  metaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  metaText: {
-    fontSize: 14,
-    color: "rgba(255,255,255,0.9)",
-    fontWeight: "500",
-  },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  metaText: { fontSize: 14, color: "rgba(255,255,255,0.9)", fontWeight: "500" },
   actionsContainer: {
     flexDirection: "row",
     paddingHorizontal: 15,
@@ -469,15 +455,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: 8,
   },
-  primaryAction: {
-    flex: 1,
-    backgroundColor: COLORS.primary,
-  },
-  primaryActionText: {
-    color: "white",
-    fontWeight: "600",
-    fontSize: 15,
-  },
+  primaryAction: { flex: 1, backgroundColor: COLORS.primary },
+  primaryActionText: { color: "white", fontWeight: "600", fontSize: 15 },
   secondaryAction: {
     flex: 1,
     backgroundColor: COLORS.background,
@@ -495,24 +474,10 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: "#0369A1",
   },
-  challengeActionText: {
-    color: "#0369A1",
-    fontWeight: "600",
-    fontSize: 14,
-  },
-  joinAction: {
-    flex: 1,
-    backgroundColor: COLORS.primary,
-  },
-  joinActionText: {
-    color: "white",
-    fontWeight: "700",
-    fontSize: 16,
-  },
-  leaveAction: {
-    paddingHorizontal: 12,
-    backgroundColor: "#FEE2E2",
-  },
+  challengeActionText: { color: "#0369A1", fontWeight: "600", fontSize: 14 },
+  joinAction: { flex: 1, backgroundColor: COLORS.primary },
+  joinActionText: { color: "white", fontWeight: "700", fontSize: 16 },
+  leaveAction: { paddingHorizontal: 12, backgroundColor: "#FEE2E2" },
   statusBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -521,14 +486,8 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     gap: 8,
   },
-  statusText: {
-    fontSize: 16,
-    color: COLORS.textPrimary,
-    fontWeight: "500",
-  },
-  leaderStatusText: {
-    color: "#D97706",
-  },
+  statusText: { fontSize: 16, color: COLORS.textPrimary, fontWeight: "500" },
+  leaderStatusText: { color: "#D97706" },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -561,16 +520,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#E5E7EB",
   },
-  postsTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-  },
-  postsCount: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: COLORS.textSecondary,
-  },
+  postsTitle: { fontSize: 18, fontWeight: "700", color: COLORS.textPrimary },
+  postsCount: { fontSize: 14, fontWeight: "600", color: COLORS.textSecondary },
   emptyPosts: {
     paddingVertical: 80,
     alignItems: "center",

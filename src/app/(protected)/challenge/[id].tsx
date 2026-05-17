@@ -33,45 +33,56 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function ChallengeDetailsScreen() {
+  // Extract the challenge ID from the route parameters
   const { id } = useLocalSearchParams<{ id: string }>();
+
+  // Get the currently authenticated user from Clerk
   const { user } = useUser();
 
+  // Local state for the entry submission form
   const [entryContent, setEntryContent] = useState("");
   const [entryImage, setEntryImage] = useState<string | null>(null);
 
+  // Fetch challenges, entries, total entry count, and the current user's entry from Supabase
   const { data: challenges = [] } = useSupabaseChallenges();
   const { data: entries = [], isLoading: entriesLoading } =
     useSupabaseChallengeEntries(id);
   const { data: entriesCount = 0 } = useSupabaseChallengeEntriesCount(id);
   const { data: userEntry } = useSupabaseUserChallengeEntry(id, user?.id);
 
+  // Mutation hooks for submitting, updating, and deleting challenge entries
   const submitMutation = useSubmitChallengeEntry();
   const updateMutation = useUpdateChallengeEntry();
   const deleteMutation = useDeleteChallengeEntry();
 
+  // Find the current challenge from the list using the route ID
   const challenge = challenges.find((c) => c.id === id);
+
+  // Check if the challenge end date has already passed
   const isExpired = challenge ? isPast(new Date(challenge.end_date)) : false;
 
+  // Human-readable time remaining label for display in the challenge info card
   const timeRemaining = challenge
     ? formatDistanceToNowStrict(new Date(challenge.end_date), {
         addSuffix: false,
       })
     : "";
 
-  // Sort entries by votes descending — used for leaderboard when expired
-  // useMemo so we don't re-sort on every render
+  // Sort entries by vote count descending when the challenge has ended for leaderboard display
+  // Kept in original order while the challenge is still active
   const sortedEntries = useMemo(() => {
     if (!isExpired) return entries;
     return [...entries].sort((a, b) => (b.votes ?? 0) - (a.votes ?? 0));
   }, [entries, isExpired]);
 
-  // The winner is the first entry after sorting (highest votes)
+  // The winner is the first entry after sorting — only relevant when the challenge has ended
   const winner =
     isExpired && sortedEntries.length > 0 ? sortedEntries[0] : null;
 
-  // For a non-expired challenge keep original order; expired = sorted by rank
+  // Use sorted entries for display on expired challenges, original order otherwise
   const displayEntries = isExpired ? sortedEntries : entries;
 
+  // Opens the device image library for the user to select a photo for their entry
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
@@ -89,6 +100,8 @@ export default function ChallengeDetailsScreen() {
     }
   };
 
+  // Handles both submitting a new entry and updating an existing one
+  // Uses updateMutation if the user already has an entry, otherwise submitMutation
   const handleSubmitEntry = async () => {
     if (!user?.id) {
       Alert.alert("Sign in required", "Please sign in to submit an entry");
@@ -100,6 +113,7 @@ export default function ChallengeDetailsScreen() {
     }
     try {
       if (userEntry) {
+        // Update the existing entry rather than creating a duplicate
         await updateMutation.mutateAsync({
           entryId: userEntry.id,
           challengeId: id,
@@ -117,6 +131,7 @@ export default function ChallengeDetailsScreen() {
         });
         Alert.alert("Success!", "Your entry has been submitted! 🎉");
       }
+      // Clear the form after a successful submission or update
       setEntryContent("");
       setEntryImage(null);
     } catch {
@@ -124,6 +139,7 @@ export default function ChallengeDetailsScreen() {
     }
   };
 
+  // Handles deleting a specific entry by ID — only owners can trigger this
   const handleDeleteEntry = useCallback(
     async (entryId: string) => {
       if (!user?.id) return;
@@ -140,17 +156,22 @@ export default function ChallengeDetailsScreen() {
     [user?.id, id, deleteMutation],
   );
 
+  // Renders each challenge entry card with rank and winner status when challenge has ended
   const renderItem = useCallback(
     ({ item, index }: { item: any; index: number }) => {
       const isOwner = item.user_id === user?.id;
-      // rank is 1-based — only passed after challenge ends
+
+      // Rank is 1-based — only provided after the challenge ends for leaderboard ordering
       const rank = isExpired ? index + 1 : undefined;
+
+      // Winner is the first entry in the sorted list with at least one vote
       const isWinner = isExpired && index === 0 && (item.votes ?? 0) > 0;
 
       return (
         <ChallengeEntryCard
           entry={item}
           challengeId={id}
+          // Only pass the delete handler to the entry owner
           onDelete={isOwner ? () => handleDeleteEntry(item.id) : undefined}
           rank={rank}
           isWinner={isWinner}
@@ -163,6 +184,7 @@ export default function ChallengeDetailsScreen() {
 
   const keyExtractor = useCallback((item: any) => item.id, []);
 
+  // Show a loading spinner while the challenge data is being fetched
   if (!challenge) {
     return (
       <View style={styles.loadingContainer}>
@@ -172,7 +194,7 @@ export default function ChallengeDetailsScreen() {
     );
   }
 
-  // Winner banner shown at the top of entries section when challenge has ended
+  // Winner banner shown at the top of entries when the challenge has ended and entries exist
   const WinnerBanner = winner ? (
     <View style={styles.winnerBanner}>
       <View style={styles.winnerBannerGlow} />
@@ -196,7 +218,7 @@ export default function ChallengeDetailsScreen() {
     </View>
   ) : null;
 
-  // Podium leaderboard — top 3 entries shown as medal positions
+  // Podium leaderboard showing the top 3 entries with medal positions
   const LeaderboardPodium =
     isExpired && sortedEntries.length >= 2 ? (
       <View style={styles.podiumSection}>
@@ -210,6 +232,7 @@ export default function ChallengeDetailsScreen() {
         </View>
         <View style={styles.podiumRow}>
           {sortedEntries.slice(0, 3).map((entry, idx) => {
+            // Medal emoji, bar height, and colours correspond to rank position
             const medals = ["🥇", "🥈", "🥉"];
             const heights = [72, 56, 44];
             const bgColors = ["#FEF9E7", "#F3F4F6", "#FEF3C7"];
@@ -222,6 +245,7 @@ export default function ChallengeDetailsScreen() {
                   }}
                   style={[
                     styles.podiumAvatar,
+                    // Winner gets a larger avatar with a gold border
                     idx === 0 && styles.podiumAvatarWinner,
                   ]}
                 />
@@ -247,13 +271,15 @@ export default function ChallengeDetailsScreen() {
       </View>
     ) : null;
 
+  // Header rendered above the entries list — contains challenge info, winner, podium, and submission form
   const renderHeader = () => (
     <>
-      {/* Challenge info card */}
+      {/* Challenge info card showing title, description, time remaining, and entry count */}
       <View style={styles.challengeInfo}>
         <View
           style={[
             styles.iconContainer,
+            // Grey out the trophy icon when the challenge has ended
             isExpired && styles.iconContainerExpired,
           ]}
         >
@@ -289,6 +315,7 @@ export default function ChallengeDetailsScreen() {
           </Text>
         </View>
 
+        {/* Expired banner shown when the challenge end date has passed */}
         {isExpired && (
           <View style={styles.expiredBanner}>
             <MaterialCommunityIcons
@@ -301,13 +328,13 @@ export default function ChallengeDetailsScreen() {
         )}
       </View>
 
-      {/* Winner banner — only after challenge ends and entries exist */}
+      {/* Winner banner — only rendered after the challenge ends and at least one entry has votes */}
       {isExpired && WinnerBanner}
 
-      {/* Podium leaderboard — only after challenge ends with 2+ entries */}
+      {/* Podium leaderboard — only rendered after the challenge ends with 2 or more entries */}
       {isExpired && LeaderboardPodium}
 
-      {/* Entry submission form — hidden when expired */}
+      {/* Entry submission form — hidden once the challenge has ended */}
       {!isExpired && (
         <View style={styles.submitSection}>
           <Text style={styles.sectionTitle}>
@@ -324,6 +351,7 @@ export default function ChallengeDetailsScreen() {
             maxLength={200}
           />
 
+          {/* Image preview with a remove button shown when an image has been selected */}
           {entryImage && (
             <View style={styles.imagePreview}>
               <Image source={{ uri: entryImage }} style={styles.previewImage} />
@@ -337,6 +365,7 @@ export default function ChallengeDetailsScreen() {
           )}
 
           <View style={styles.submitActions}>
+            {/* Image picker button */}
             <Pressable onPress={pickImage} style={styles.imageButton}>
               <MaterialCommunityIcons
                 name="image-plus"
@@ -346,6 +375,7 @@ export default function ChallengeDetailsScreen() {
               <Text style={styles.imageButtonText}>Add Photo</Text>
             </Pressable>
 
+            {/* Submit or update button — disabled while mutation is in progress */}
             <Pressable
               onPress={handleSubmitEntry}
               disabled={submitMutation.isPending || updateMutation.isPending}
@@ -366,7 +396,7 @@ export default function ChallengeDetailsScreen() {
         </View>
       )}
 
-      {/* Entries section header */}
+      {/* Entries section header with label and count */}
       <View style={styles.entriesHeader}>
         <Text style={styles.entriesTitle}>
           {isExpired ? "All Entries" : "Participant Entries"}
@@ -378,14 +408,17 @@ export default function ChallengeDetailsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Screen header with back button and title */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} hitSlop={10}>
           <MaterialCommunityIcons name="arrow-left" size={24} color="white" />
         </Pressable>
         <Text style={styles.headerTitle}>Challenge</Text>
+        {/* Spacer view to keep the title centred */}
         <View style={{ width: 24 }} />
       </View>
 
+      {/* KeyboardAvoidingView ensures the entry form stays visible when keyboard opens */}
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1 }}
@@ -395,6 +428,7 @@ export default function ChallengeDetailsScreen() {
           keyExtractor={keyExtractor}
           renderItem={renderItem}
           ListHeaderComponent={renderHeader}
+          // Empty state shown only after loading completes with no entries
           ListEmptyComponent={
             !entriesLoading ? (
               <View style={styles.emptyState}>
@@ -411,6 +445,7 @@ export default function ChallengeDetailsScreen() {
             ) : null
           }
           contentContainerStyle={styles.listContent}
+          // Performance optimisations for challenges with many entries
           removeClippedSubviews={true}
           maxToRenderPerBatch={8}
           windowSize={8}
@@ -509,7 +544,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#DC2626",
   },
-  // ── Winner Banner ──────────────────────────────────────────────────────
   winnerBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -577,7 +611,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#B8860B",
   },
-  // ── Podium Leaderboard ─────────────────────────────────────────────────
   podiumSection: {
     backgroundColor: "white",
     marginTop: 10,
@@ -641,7 +674,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 3,
     borderRadius: 6,
   },
-  // ── Entry Submission ───────────────────────────────────────────────────
   submitSection: {
     backgroundColor: "white",
     padding: 15,

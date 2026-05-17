@@ -18,7 +18,9 @@ type Props = {
   onDelete?: () => void;
 };
 
-// Returns icon configuration based on notification type
+// Maps a notification type to its icon name, component, background colour and icon colour.
+// Centralising this logic here keeps the render function clean and makes it easy
+// to add new notification types in one place.
 const getNotificationIcon = (type: NotificationType) => {
   switch (type) {
     case "comment":
@@ -56,6 +58,7 @@ const getNotificationIcon = (type: NotificationType) => {
         backgroundColor: "#ECFDF5",
         iconColor: "#059669",
       };
+    // Unknown types fall back to a generic bell icon
     default:
       return {
         name: "bell-outline" as const,
@@ -66,7 +69,6 @@ const getNotificationIcon = (type: NotificationType) => {
   }
 };
 
-// Individual notification item with swipe-to-delete functionality
 export default function NotificationListItem({
   notification,
   onPress,
@@ -76,6 +78,7 @@ export default function NotificationListItem({
   const iconConfig = getNotificationIcon(notification.type);
   const { IconComponent, name, backgroundColor, iconColor } = iconConfig;
 
+  // Delete the notification from the database then call the optional onDelete callback
   const handleDelete = async () => {
     try {
       await deleteMutation.mutateAsync(notification.id);
@@ -85,7 +88,8 @@ export default function NotificationListItem({
     }
   };
 
-  // Renders the delete action when swiping left
+  // Renders the red delete action that appears when the user swipes the row to the left.
+  // The animated translateX slides the action panel in from the right as the swipe progresses.
   const renderRightActions = (
     progress: SharedValue<number>,
     _drag: SharedValue<number>,
@@ -121,17 +125,21 @@ export default function NotificationListItem({
           style={[
             styles.container,
             {
+              // Unread notifications have a tinted background and a coloured left border
+              // so they are immediately distinguishable from read ones
               backgroundColor: notification.is_read ? "white" : "#F0FDF4",
               borderLeftWidth: notification.is_read ? 0 : 3,
               borderLeftColor: COLORS.primary,
             },
           ]}
         >
+          {/* Coloured icon circle whose appearance is determined by the notification type */}
           <View style={[styles.iconContainer, { backgroundColor }]}>
             <IconComponent name={name} size={24} color={iconColor} />
           </View>
 
           <View style={styles.contentContainer}>
+            {/* Unread notifications are rendered in bold to draw the user's attention */}
             <Text
               style={[
                 styles.message,
@@ -142,6 +150,7 @@ export default function NotificationListItem({
               {notification.message}
             </Text>
 
+            {/* Relative timestamp shown below the message text */}
             <View style={styles.metaContainer}>
               <Feather
                 name="clock"
@@ -157,6 +166,7 @@ export default function NotificationListItem({
             </View>
           </View>
 
+          {/* Small green dot on the right edge to indicate an unread notification */}
           {!notification.is_read && (
             <View style={styles.unreadIndicator}>
               <View style={styles.unreadDot} />

@@ -26,6 +26,8 @@ type FilterType = "all" | "unread";
 
 export default function InboxScreen() {
   const { user } = useUser();
+
+  // Controls which tab is active: all notifications or unread only
   const [filter, setFilter] = useState<FilterType>("all");
 
   const {
@@ -37,14 +39,15 @@ export default function InboxScreen() {
   const markReadMutation = useMarkNotificationRead();
   const markAllReadMutation = useMarkAllNotificationsRead();
 
-  // Clears the app badge when the notifications screen is focused
+  // Clear the app icon badge every time the user opens this screen,
+  // since they have visually acknowledged that new notifications exist
   useFocusEffect(
     useCallback(() => {
       clearBadge();
     }, []),
   );
 
-  // Keeps the iOS badge count in sync with actual unread count
+  // Keep the iOS badge count in sync with the true number of unread notifications
   useEffect(() => {
     const unreadCount = notifications.filter((n) => !n.is_read).length;
     if (Platform.OS === "ios") {
@@ -52,7 +55,7 @@ export default function InboxScreen() {
     }
   }, [notifications]);
 
-  // Filters notifications based on selected tab (all / unread)
+  // Apply the active filter tab to produce the visible subset of notifications
   const filteredNotifications = useMemo(() => {
     if (filter === "unread") {
       return notifications.filter((n) => !n.is_read);
@@ -60,7 +63,8 @@ export default function InboxScreen() {
     return notifications;
   }, [notifications, filter]);
 
-  // Separates filtered notifications into today and earlier sections
+  // Split filtered notifications into "Today" and "Earlier" sections
+  // so the user can quickly identify recent activity
   const { todayNotifications, earlierNotifications } = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -81,7 +85,8 @@ export default function InboxScreen() {
     return { todayNotifications: todayList, earlierNotifications: earlierList };
   }, [filteredNotifications]);
 
-  // Combines section headers and notifications into a single flat list for FlatList
+  // Flatten sections and their headers into a single array so FlatList
+  // can render everything in one scrollable list without nesting
   const sectionsData = useMemo(() => {
     const data: Array<Notification | { type: "header"; title: string }> = [];
 
@@ -97,18 +102,19 @@ export default function InboxScreen() {
     return data;
   }, [todayNotifications, earlierNotifications]);
 
+  // Derived count used both for the badge chip and the "Mark all read" button visibility
   const unreadCount = useMemo(
     () => notifications.filter((n) => !n.is_read).length,
     [notifications],
   );
 
-  // Marks notification as read optimistically then navigates to relevant content
+  // Mark a single notification as read immediately, then navigate to the related content.
+  // The optimistic update removes the unread indicator before the network round-trip completes.
   const handlePress = useCallback(
     async (id: string, type: string, ref: string) => {
-      // Optimistic update runs instantly — unread dot disappears before navigation
       await markReadMutation.mutateAsync(id);
 
-      // Navigate to the relevant screen based on notification type
+      // Route to the appropriate screen based on what generated the notification
       if (type === "comment" || type === "post" || type === "poll") {
         router.push(`/post/${ref}`);
       }
@@ -122,14 +128,14 @@ export default function InboxScreen() {
     [markReadMutation],
   );
 
-  // Marks all notifications as read and clears the app badge
+  // Mark every notification as read in one request and clear the app badge
   const handleMarkAllRead = useCallback(async () => {
     if (!user?.id) return;
     await markAllReadMutation.mutateAsync(user.id);
     clearBadge();
   }, [user?.id, markAllReadMutation]);
 
-  // Stable keyExtractor — section headers use their title, notifications use id
+  // Section header rows use their title as a key; notification rows use their database id
   const keyExtractor = useCallback(
     (item: Notification | { type: "header"; title: string }, index: number) => {
       if ("type" in item && item.type === "header") {
@@ -140,10 +146,9 @@ export default function InboxScreen() {
     [],
   );
 
-  // Renders either a section header divider or a swipeable notification card
+  // Render either a decorative section divider or a swipeable notification card
   const renderItem = useCallback(
     ({ item }: { item: Notification | { type: "header"; title: string } }) => {
-      // Section header divider
       if ("type" in item && item.type === "header") {
         return (
           <View style={styles.sectionHeader}>
@@ -154,7 +159,6 @@ export default function InboxScreen() {
         );
       }
 
-      // Notification card with swipe-to-delete
       const notification = item as Notification;
       return (
         <NotificationListItem
@@ -173,7 +177,8 @@ export default function InboxScreen() {
     [handlePress],
   );
 
-  // Filter tabs and mark all read button shown above the list
+  // Header rendered above the list — contains the All/Unread filter tabs
+  // and the "Mark all read" button when there are unread notifications
   const renderHeader = useCallback(
     () => (
       <View style={styles.header}>
@@ -244,7 +249,7 @@ export default function InboxScreen() {
             </View>
           </Pressable>
 
-          {/* Mark all read button — only shown when there are unread notifications */}
+          {/* Only render this button when there is something left to mark as read */}
           {unreadCount > 0 && (
             <Pressable
               onPress={handleMarkAllRead}
@@ -271,7 +276,8 @@ export default function InboxScreen() {
     ],
   );
 
-  // Empty state — shows loading spinner or empty message based on state
+  // Empty state doubles as the loading state — spinner shown while fetching,
+  // contextual message shown when the filtered list is genuinely empty
   const renderEmpty = useCallback(() => {
     if (isLoading) {
       return (
@@ -291,6 +297,7 @@ export default function InboxScreen() {
             color={COLORS.textSecondary}
           />
         </View>
+        {/* Message differs depending on whether the user has read everything or has no notifications at all */}
         <Text style={styles.emptyTitle}>
           {filter === "unread" ? "All caught up!" : "No notifications yet"}
         </Text>
@@ -313,9 +320,9 @@ export default function InboxScreen() {
         ListEmptyComponent={renderEmpty}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
+        // Pull-to-refresh reuses the same isLoading flag from the query
         onRefresh={refetch}
         refreshing={isLoading}
-        // Performance
         removeClippedSubviews={true}
         maxToRenderPerBatch={15}
         windowSize={8}

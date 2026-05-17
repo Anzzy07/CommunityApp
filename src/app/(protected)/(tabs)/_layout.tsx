@@ -17,7 +17,10 @@ export default function TabLayout() {
   const { signOut } = useAuth();
   const { user } = useUser();
 
+  // Subscribe to real-time notification events so the badge updates instantly
   useNotificationsRealtime(user?.id);
+
+  // Unread count drives the red badge on the Inbox tab icon
   const { data: unreadCount = 0 } = useSupabaseUnreadNotificationsCount(
     user?.id || "",
   );
@@ -45,6 +48,7 @@ export default function TabLayout() {
           <View style={{ flex: 1, backgroundColor: COLORS.headerMain }} />
         ),
 
+        // Tapping the avatar navigates to the profile screen
         headerLeft: () => (
           <TouchableOpacity
             onPress={() => router.push("/profile")}
@@ -63,6 +67,7 @@ export default function TabLayout() {
           </TouchableOpacity>
         ),
 
+        // For all screens sign-out button placed in the header
         headerRight: () => (
           <TouchableOpacity
             onPress={() => signOut()}
@@ -91,7 +96,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => (
             <Feather name="users" size={24} color={color} />
           ),
-
+          // "Create community" shortcut
           headerRight: () => (
             <TouchableOpacity
               onPress={() => router.push("/createCommunity")}
@@ -108,6 +113,8 @@ export default function TabLayout() {
         options={{
           title: "Create",
           headerTitle: "Create Post",
+          // The create screen manages its own header and hides the tab bar
+          // so it feels like a modal rather than a standard tab
           headerShown: false,
           tabBarStyle: { display: "none" },
           tabBarIcon: ({ color }) => (
@@ -140,7 +147,7 @@ export default function TabLayout() {
                 size={size}
                 color={color}
               />
-
+              {/* Red badge overlaid on the bell icon when there are unread notifications */}
               {unreadCount > 0 && (
                 <View
                   style={{

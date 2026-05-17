@@ -2,7 +2,7 @@ import { supabase } from "@/src/lib/supabase";
 import { Notification } from "@/src/types";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-// Mark a single notification as read — optimistic so dot disappears instantly
+// Mark a single notification as read optimistic so dot disappears instantly
 export function useMarkNotificationRead() {
   const queryClient = useQueryClient();
 
@@ -23,7 +23,7 @@ export function useMarkNotificationRead() {
       // Snapshot for rollback
       const previousNotifications = queryClient.getQueryData(["notifications"]);
 
-      // Instantly mark as read in cache — unread dot disappears immediately
+      // Instantly mark as read in cache unread dot disappears immediately
       queryClient.setQueriesData(
         { queryKey: ["notifications"] },
         (old: Notification[] | undefined) => {
@@ -63,7 +63,7 @@ export function useMarkNotificationRead() {
   });
 }
 
-// Mark all notifications as read — optimistic bulk update
+// Mark all notifications as read optimistic bulk update
 export function useMarkAllNotificationsRead() {
   const queryClient = useQueryClient();
 
@@ -119,7 +119,7 @@ export function useMarkAllNotificationsRead() {
   });
 }
 
-// Delete a notification — optimistic removal so it disappears instantly
+// Delete a notification optimistic removal so it disappears instantly
 export function useDeleteNotification() {
   const queryClient = useQueryClient();
 
@@ -138,7 +138,7 @@ export function useDeleteNotification() {
 
       const previousNotifications = queryClient.getQueryData(["notifications"]);
 
-      // Remove from list instantly — swipe delete feels immediate
+      // Remove from list instantly swipe delete feels immediate
       queryClient.setQueriesData(
         { queryKey: ["notifications"] },
         (old: Notification[] | undefined) => {

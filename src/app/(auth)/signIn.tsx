@@ -15,27 +15,42 @@ import {
   View,
 } from "react-native";
 
+// This screen allows users to sign in using email and password
+// It also supports remember me and forgot password features
 export default function Page() {
+  // Clerk hook for authentication
   const { signIn, setActive, isLoaded } = useSignIn();
+
+  // Router for navigation
   const router = useRouter();
 
+  // State for storing email input
   const [emailAddress, setEmailAddress] = React.useState("");
+
+  // State for storing password input
   const [password, setPassword] = React.useState("");
+
+  // State to track remember me checkbox
   const [rememberMe, setRememberMe] = React.useState(false);
+
+  // State to toggle password visibility
   const [showPassword, setShowPassword] = React.useState(false);
+
+  // State for loading indicator
   const [isLoading, setIsLoading] = React.useState(false);
 
-  // Load saved credentials on mount
+  // Runs when screen loads to get saved email if user selected remember me before
   React.useEffect(() => {
     loadSavedCredentials();
   }, []);
 
-  // Load saved email if remember me was checked
+  // Loads saved email and remember me status from secure storage
   const loadSavedCredentials = async () => {
     try {
       const savedEmail = await SecureStore.getItemAsync("savedEmail");
       const wasRemembered = await SecureStore.getItemAsync("rememberMe");
 
+      // If user had selected remember me, fill the email automatically
       if (savedEmail && wasRemembered === "true") {
         setEmailAddress(savedEmail);
         setRememberMe(true);
@@ -45,13 +60,15 @@ export default function Page() {
     }
   };
 
-  // Save or clear credentials based on remember me
+  // Saves or removes email from secure storage based on remember me selection
   const handleRememberMe = async (shouldRemember: boolean) => {
     try {
       if (shouldRemember && emailAddress) {
+        // Save email and flag
         await SecureStore.setItemAsync("savedEmail", emailAddress);
         await SecureStore.setItemAsync("rememberMe", "true");
       } else {
+        // Remove saved data
         await SecureStore.deleteItemAsync("savedEmail");
         await SecureStore.deleteItemAsync("rememberMe");
       }
@@ -60,37 +77,50 @@ export default function Page() {
     }
   };
 
+  // Handles sign in when user presses login button
   const onSignInPress = React.useCallback(async () => {
+    // Stop if Clerk is not ready
     if (!isLoaded || !signIn) return;
 
     setIsLoading(true);
+
     try {
+      // Attempt to sign in with email and password
       const signInAttempt = await signIn.create({
         identifier: emailAddress,
         password,
       });
 
+      // If login is successful
       if (signInAttempt.status === "complete") {
-        // Save credentials if remember me is checked
+        // Save email if remember me is checked
         await handleRememberMe(rememberMe);
 
+        // Activate session
         await setActive({ session: signInAttempt.createdSessionId });
+
+        // Redirect to home screen
         router.replace("/");
       }
     } catch (err: any) {
+      // Show error if login fails
       console.error(JSON.stringify(err, null, 2));
       Alert.alert(
         "Sign In Failed",
         err.errors?.[0]?.message || "Invalid email or password",
       );
     } finally {
+      // Stop loading
       setIsLoading(false);
     }
   }, [isLoaded, signIn, emailAddress, password, rememberMe]);
 
+  // Handles forgot password flow
   const onForgotPasswordPress = async () => {
+    // Stop if Clerk is not ready
     if (!isLoaded || !signIn) return;
 
+    // Check if email is entered
     if (!emailAddress) {
       Alert.alert(
         "Email Required",
@@ -100,12 +130,13 @@ export default function Page() {
     }
 
     try {
-      // Start the password reset flow with Clerk
+      // Send reset code to user's email
       await signIn.create({
         strategy: "reset_password_email_code",
         identifier: emailAddress,
       });
 
+      // Show message and go to reset screen
       Alert.alert(
         "Reset Email Sent",
         "Check your email for a password reset code",
@@ -117,6 +148,7 @@ export default function Page() {
         ],
       );
     } catch (err: any) {
+      // Show error if request fails
       console.error(JSON.stringify(err, null, 2));
       Alert.alert(
         "Error",
@@ -127,14 +159,18 @@ export default function Page() {
 
   return (
     <View style={styles.container}>
+      {/* Background design */}
       <View style={styles.waveBackground} />
 
+      {/* Prevent keyboard from covering inputs */}
       <KeyboardAvoidingView
         style={styles.formContainer}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
+        {/* Title */}
         <Text style={styles.title}>Sign in</Text>
 
+        {/* Email input */}
         <Text style={styles.label}>Email</Text>
         <View style={styles.inputWrapper}>
           <Ionicons
@@ -155,6 +191,7 @@ export default function Page() {
           />
         </View>
 
+        {/* Password input */}
         <Text style={styles.label}>Password</Text>
         <View style={styles.inputWrapper}>
           <Ionicons
@@ -172,7 +209,8 @@ export default function Page() {
             onChangeText={setPassword}
             autoComplete="password"
           />
-          {/* Password visibility toggle button */}
+
+          {/* Toggle password visibility */}
           <TouchableOpacity
             onPress={() => setShowPassword(!showPassword)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -185,11 +223,13 @@ export default function Page() {
           </TouchableOpacity>
         </View>
 
+        {/* Remember me and forgot password row */}
         <View style={styles.row}>
           <TouchableOpacity
             style={styles.checkboxRow}
             onPress={() => setRememberMe(!rememberMe)}
           >
+            {/* Custom checkbox */}
             <View
               style={[styles.checkbox, rememberMe && styles.checkboxFilled]}
             >
@@ -198,11 +238,13 @@ export default function Page() {
             <Text style={styles.checkboxText}>Remember Me</Text>
           </TouchableOpacity>
 
+          {/* Forgot password button */}
           <TouchableOpacity onPress={onForgotPasswordPress}>
             <Text style={styles.forgot}>Forgot Password?</Text>
           </TouchableOpacity>
         </View>
 
+        {/* Login button */}
         <TouchableOpacity
           style={[styles.button, isLoading && styles.buttonDisabled]}
           onPress={onSignInPress}
@@ -213,6 +255,7 @@ export default function Page() {
           </Text>
         </TouchableOpacity>
 
+        {/* Sign up navigation */}
         <View style={styles.signupRow}>
           <Text style={styles.signupText}>Don't have an Account? </Text>
           <Link href="/signUp" asChild>

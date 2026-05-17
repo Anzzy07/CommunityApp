@@ -1,13 +1,16 @@
 import { supabase } from "@/src/lib/supabase";
 import type { UserResource } from "@clerk/types";
 
-// Syncs Clerk user data to Supabase users table
+// Write the Clerk user's current data to the Supabase users table.
+// An upsert is used so this function is safe to call on every app launch —
+// it creates the row on first sign-in and updates it whenever profile data changes.
 export async function syncClerkUserToSupabase(clerkUser: UserResource) {
   try {
     const { id, emailAddresses, username, firstName, lastName, imageUrl } =
       clerkUser;
 
-    // Prepare user data
+    // Build the row that will be written to Supabase.
+    // Username falls back to the local part of the email address when not explicitly set.
     const userData = {
       id: id,
       email: emailAddresses[0]?.emailAddress || "",
@@ -16,7 +19,8 @@ export async function syncClerkUserToSupabase(clerkUser: UserResource) {
       image_url: imageUrl || null,
     };
 
-    // Use upsert to insert or update
+    // onConflict: "id" means an existing row for this user is updated in place
+    // rather than causing a duplicate key error
     const { error } = await supabase
       .from("users")
       .upsert(userData, { onConflict: "id" });
@@ -34,18 +38,17 @@ export async function syncClerkUserToSupabase(clerkUser: UserResource) {
   }
 }
 
-// Checks if user exists in Supabase, creates if not
-
+// Check whether the user already exists in Supabase and create them if not.
 export async function ensureUserExistsInSupabase(clerkUser: UserResource) {
   try {
-    // Check if user exists
+    // Select only the id column to minimise data transferred over the network
     const { data: existingUser } = await supabase
       .from("users")
       .select("id")
       .eq("id", clerkUser.id)
       .single();
 
-    // If doesn't exist, sync
+    // User is not yet in the database — perform a full sync to create the row
     if (!existingUser) {
       return await syncClerkUserToSupabase(clerkUser);
     }

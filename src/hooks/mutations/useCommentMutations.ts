@@ -2,7 +2,7 @@ import { supabase } from "@/src/lib/supabase";
 import { Comment, Post } from "@/src/types";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-// Helper: update a comment's upvote count inside the nested comment tree
+// Update a comment's upvote count inside the nested comment tree
 function patchCommentInTree(
   comments: Comment[],
   commentId: string,
@@ -20,7 +20,7 @@ function patchCommentInTree(
   });
 }
 
-// Helper: patch nr_of_comments for a post inside the infinite feed pages
+// Patch nr_of_comments for a post inside the infinite feed pages
 function patchCommentCount(old: any, postId: string, delta: number): any {
   if (!old?.pages) return old;
   return {
@@ -38,7 +38,7 @@ function patchCommentCount(old: any, postId: string, delta: number): any {
   };
 }
 
-// Vote on a comment — optimistic update on vote status + count
+// Vote on a comment optimistic update on vote status and count
 export function useCommentVote() {
   const queryClient = useQueryClient();
 
@@ -104,7 +104,7 @@ export function useCommentVote() {
 
       const prevPost = queryClient.getQueryData(["post", postId]);
 
-      // Upvote delta only (downvotes don't affect displayed count)
+      // Upvote delta only downvotes don't affect displayed count
       let delta = 0;
       if (voteType === "up") {
         delta = prevVote === "up" ? -1 : 1;
@@ -152,7 +152,7 @@ export function useCommentVote() {
   });
 }
 
-// Award a comment — optimistic
+// Award a comment optimistic update
 export function useCommentAward() {
   const queryClient = useQueryClient();
 
@@ -217,7 +217,7 @@ export function useCommentAward() {
   });
 }
 
-// Create a comment — instantly updates comment count in feed
+// Create a comment instantly updates comment count in feed
 export function useCreateComment() {
   const queryClient = useQueryClient();
 
@@ -252,7 +252,7 @@ export function useCreateComment() {
       await queryClient.cancelQueries({ queryKey: ["posts"] });
       const prevPosts = queryClient.getQueryData(["posts"]);
 
-      // Instantly +1 on the feed comment count
+      // Instantly plus one on the feed comment count
       queryClient.setQueryData(["posts"], (old: any) =>
         patchCommentCount(old, postId, +1),
       );
@@ -308,7 +308,7 @@ export function useEditComment() {
   });
 }
 
-// Delete a comment — instantly updates comment count in feed
+// Delete a comment instantly updates comment count in feed
 export function useDeleteComment() {
   const queryClient = useQueryClient();
 
@@ -333,7 +333,7 @@ export function useDeleteComment() {
       await queryClient.cancelQueries({ queryKey: ["posts"] });
       const prevPosts = queryClient.getQueryData(["posts"]);
 
-      // Instantly -1 on the feed comment count
+      // Instantly minus one on the feed comment count
       queryClient.setQueryData(["posts"], (old: any) =>
         patchCommentCount(old, postId, -1),
       );

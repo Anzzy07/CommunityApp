@@ -2,6 +2,7 @@ import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { COLORS } from "../colors";
 
+// Displays a prompt asking users to join a community before they can view or participate in the chat
 export default function JoinGroupView() {
   return (
     <View style={joinStyles.container}>

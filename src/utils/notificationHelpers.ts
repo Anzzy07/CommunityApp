@@ -1,7 +1,8 @@
 import { Notification } from "@/src/types";
 import { scheduleNotification } from "./notificationService";
 
-// Create a notification object for the state
+// Build an in-memory Notification object with a temporary random id.
+// This is used for optimistic UI updates before the real database record is created.
 export const createNotification = (
   type: Notification["type"],
   message: string,
@@ -19,7 +20,8 @@ export const createNotification = (
   };
 };
 
-// Send a push notification AND add to state
+// Create a notification object, optionally add it to local state for immediate display,
+// then fire the corresponding push notification through the device notification system.
 export const sendNotification = async (
   type: Notification["type"],
   title: string,
@@ -28,15 +30,15 @@ export const sendNotification = async (
   referenceId: string,
   addToState?: (notification: Notification) => void,
 ) => {
-  // Create notification object
   const notification = createNotification(type, message, userId, referenceId);
 
-  // Add to state if callback provided
+  // Update the UI immediately without waiting for a database round-trip
   if (addToState) {
     addToState(notification);
   }
 
-  // Send push notification
+  // Deliver the push notification — addToInbox: true tells the foreground
+  // listener in _layout.tsx to persist this notification to Supabase
   await scheduleNotification(title, message, {
     type,
     referenceId,
@@ -47,8 +49,7 @@ export const sendNotification = async (
   return notification;
 };
 
-// Helper functions for common notification types
-
+// Notify the post author that someone has left a comment on their post
 export const notifyNewComment = async (
   commenterName: string,
   postId: string,
@@ -65,6 +66,7 @@ export const notifyNewComment = async (
   );
 };
 
+// Notify community members that a new post has been published in their community
 export const notifyNewPost = async (
   communityName: string,
   postId: string,
@@ -81,6 +83,7 @@ export const notifyNewPost = async (
   );
 };
 
+// Notify community members that a new poll is available for them to vote on
 export const notifyNewPoll = async (
   pollQuestion: string,
   pollId: string,
@@ -97,6 +100,7 @@ export const notifyNewPoll = async (
   );
 };
 
+// Notify community members that a new challenge has been posted
 export const notifyNewChallenge = async (
   challengeTitle: string,
   challengeId: string,
@@ -113,6 +117,7 @@ export const notifyNewChallenge = async (
   );
 };
 
+// Notify the recipient that they have received a new message in a group chat
 export const notifyNewMessage = async (
   senderName: string,
   groupId: string,

@@ -2,7 +2,7 @@ import { supabase } from "@/src/lib/supabase";
 import { uploadImage } from "@/src/utils/supabaseImages";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-// Submits a new entry for a challenge — uploads image first if provided
+// Submits a new entry for a challenge uploads image first if provided
 export function useSubmitChallengeEntry() {
   const queryClient = useQueryClient();
 
@@ -63,7 +63,7 @@ export function useSubmitChallengeEntry() {
   });
 }
 
-// Updates an existing challenge entry — replaces content and image
+// Updates an existing challenge entry replaces content and image
 export function useUpdateChallengeEntry() {
   const queryClient = useQueryClient();
 
@@ -119,7 +119,7 @@ export function useUpdateChallengeEntry() {
   });
 }
 
-// Deletes a challenge entry — verifies ownership before deleting
+// Deletes a challenge entry verifies ownership before deleting
 export function useDeleteChallengeEntry() {
   const queryClient = useQueryClient();
 
@@ -170,7 +170,7 @@ export function useDeleteChallengeEntry() {
         challengeId,
       ]);
 
-      // Remove the entry from the list instantly — delete feels immediate
+      // Remove the entry from the list instantly delete feels immediate
       queryClient.setQueryData(
         ["challenge-entries", challengeId],
         (old: any[]) => (old ?? []).filter((e) => e.id !== entryId),
@@ -201,7 +201,7 @@ export function useDeleteChallengeEntry() {
   });
 }
 
-// Votes on a challenge entry — optimistic update, no setTimeout delay
+// Votes on a challenge entry optimistic update no setTimeout delay
 export function useVoteChallengeEntry() {
   const queryClient = useQueryClient();
 
@@ -227,7 +227,7 @@ export function useVoteChallengeEntry() {
 
       if (existingVote) {
         if (existingVote.vote_type === voteType) {
-          // Same vote type — remove the vote (un-vote)
+          // Same vote type remove the vote un vote
           const { error } = await supabase
             .from("challenge_entry_votes")
             .delete()
@@ -236,7 +236,7 @@ export function useVoteChallengeEntry() {
           if (error) throw error;
           return { action: "removed", voteType: null };
         } else {
-          // Different vote — switch from one type to the other
+          // Different vote switch from one type to the other
           const { error } = await supabase
             .from("challenge_entry_votes")
             .update({ vote_type: voteType })
@@ -246,7 +246,7 @@ export function useVoteChallengeEntry() {
           return { action: "updated", voteType };
         }
       } else {
-        // No existing vote — create a new one
+        // No existing vote create a new one
         const { error } = await supabase
           .from("challenge_entry_votes")
           .insert({ entry_id: entryId, user_id: userId, vote_type: voteType });
@@ -282,13 +282,13 @@ export function useVoteChallengeEntry() {
       const newVote: "up" | "down" | null =
         prevVote === voteType ? null : voteType;
 
-      // Update vote status immediately in cache — icon changes instantly
+      // Update vote status immediately in cache icon changes instantly
       queryClient.setQueryData(
         ["challenge-entry-vote", entryId, userId],
         newVote,
       );
 
-      // Update vote count in the entries list instantly — no delay needed
+      // Update vote count in the entries list instantly no delay needed
       queryClient.setQueryData(
         ["challenge-entries", challengeId],
         (old: any[]) =>
@@ -319,7 +319,7 @@ export function useVoteChallengeEntry() {
     },
 
     onSettled: (_data, _err, variables) => {
-      // Sync with real DB data in background — no setTimeout needed
+      // Sync with real DB data in background no setTimeout needed
       queryClient.invalidateQueries({
         queryKey: ["challenge-entries", variables.challengeId],
       });

@@ -1,7 +1,7 @@
 import { supabase } from "@/src/lib/supabase";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-// Creates a new challenge for a community — only leaders can do this
+// Creates a new challenge for a community only leaders can do this
 export function useCreateChallenge() {
   const queryClient = useQueryClient();
 
@@ -16,7 +16,7 @@ export function useCreateChallenge() {
       groupId: string;
       title: string;
       description?: string;
-      duration: number; // number of days the challenge runs
+      duration: number;
       userId: string;
     }) => {
       const startDate = new Date();

@@ -2,7 +2,7 @@ import { supabase } from "@/src/lib/supabase";
 import { Comment, PollOption, Post } from "@/src/types";
 import { useQuery } from "@tanstack/react-query";
 
-// Returns false if user missed a day (streak should show 0)
+// Returns false if user missed a day streak shows 0 if stale
 function isStreakAlive(lastActiveDateStr: string | null): boolean {
   if (!lastActiveDateStr) return false;
   const lastActive = new Date(lastActiveDateStr);
@@ -57,11 +57,12 @@ function buildCommentTree(comments: any[]): Comment[] {
   return rootComments;
 }
 
+// Fetches a single post with its poll and nested comments for the detail screen
 export function useSupabasePostDetails(postId: string) {
   return useQuery({
     queryKey: ["post", postId],
     queryFn: async () => {
-      // Fetch post, poll, comments, and streak in parallel
+      // Fetch post poll and comments in parallel single round trip
       const [postResult, pollResult, commentsResult] = await Promise.all([
         supabase
           .from("posts_with_details")
@@ -69,6 +70,7 @@ export function useSupabasePostDetails(postId: string) {
           .eq("id", postId)
           .single(),
 
+        // select duration and ends_at so detail screen can show end time
         supabase
           .from("polls")
           .select(
@@ -77,6 +79,8 @@ export function useSupabasePostDetails(postId: string) {
             post_id,
             question,
             created_at,
+            duration,
+            ends_at,
             poll_options (
               id,
               poll_id,
@@ -87,7 +91,7 @@ export function useSupabasePostDetails(postId: string) {
           `,
           )
           .eq("post_id", postId)
-          .single(),
+          .maybeSingle(),
 
         supabase
           .from("comments")
@@ -117,7 +121,7 @@ export function useSupabasePostDetails(postId: string) {
       if (commentsResult.error) throw commentsResult.error;
 
       const postData = postResult.data;
-      const pollData = postResult.error ? null : pollResult.data;
+      const pollData = pollResult.data ?? null;
 
       // Fetch streak for the post author
       const { data: streakData } = await supabase
@@ -133,13 +137,15 @@ export function useSupabasePostDetails(postId: string) {
         ? ((streakData?.current_streak as number | null) ?? 0)
         : 0;
 
-      // Transform poll
+      // Transform poll include duration and ends_at for pollEnded check
       const pollTransformed = pollData
         ? {
             id: pollData.id,
             post_id: pollData.post_id,
             question: pollData.question,
             created_at: pollData.created_at,
+            duration: (pollData.duration as string | null) ?? null,
+            ends_at: (pollData.ends_at as string | null) ?? null,
             options: ((pollData.poll_options as any[]) || []).map(
               (opt): PollOption => ({
                 id: opt.id,
@@ -152,7 +158,7 @@ export function useSupabasePostDetails(postId: string) {
           }
         : null;
 
-      // Transform post — streak now included
+      // Transform post
       const post: Post = {
         id: (postData.id as string) ?? "",
         title: (postData.title as string) ?? "Untitled",

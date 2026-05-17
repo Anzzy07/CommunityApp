@@ -1,6 +1,7 @@
 import { useAuth } from "@clerk/clerk-expo";
 import { Redirect, Stack } from "expo-router";
 
+// Redirects signed in users to the main app and shows auth screens for guests
 export default function AuthLayout() {
   const { isSignedIn } = useAuth();
 

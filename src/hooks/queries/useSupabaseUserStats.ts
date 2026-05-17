@@ -1,8 +1,8 @@
 import { supabase } from "@/src/lib/supabase";
 import { useQuery } from "@tanstack/react-query";
 
-// Fetches total posts, upvotes and comments for a user's profile stats bar.
-// Runs all three counts in parallel via Promise.all — was 3 sequential queries before.
+// Fetches total posts upvotes and comments for a user's profile stats bar
+// Runs all three counts in parallel via Promise.all was 3 sequential queries before
 export function useSupabaseUserStats(userId: string) {
   return useQuery({
     queryKey: ["user-stats", userId],
@@ -11,7 +11,7 @@ export function useSupabaseUserStats(userId: string) {
         return { totalPosts: 0, totalUpvotes: 0, totalComments: 0 };
       }
 
-      // Run all three DB calls at the same time — faster than sequential
+      // Run all three DB calls at the same time faster than sequential
       const [postsCountResult, upvotesResult, commentsCountResult] =
         await Promise.all([
           // Count total posts by this user
@@ -44,6 +44,6 @@ export function useSupabaseUserStats(userId: string) {
       };
     },
     enabled: !!userId,
-    staleTime: 1000 * 60 * 5, // 5 minutes — stats don't change every second
+    staleTime: 1000 * 60 * 5, // 5 minutes stats don't change every second
   });
 }

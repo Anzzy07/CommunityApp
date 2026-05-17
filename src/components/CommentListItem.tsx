@@ -42,7 +42,7 @@ const CommentListItem = ({
 }: CommentListItemProps) => {
   const { user } = useUser();
 
-  // Source of truth from React Query cache
+  // Vote and award status are read from the React Query cache
   const { data: voteStatus } = useUserCommentVote(comment.id, user?.id);
   const { data: userHasAwarded } = useUserCommentAward(comment.id, user?.id);
 
@@ -51,7 +51,7 @@ const CommentListItem = ({
   const editMutation = useEditComment();
   const deleteMutation = useDeleteComment();
 
-  // Only UI state lives locally
+  // All remaining state is local UI state that does not need to be shared
   const [showReplies, setShowReplies] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(comment.comment);
@@ -59,11 +59,13 @@ const CommentListItem = ({
 
   const currentVote = voteStatus ?? null;
   const hasAwarded = userHasAwarded ?? false;
-  // Upvotes come from the comment prop which is driven by the cache
+  // Upvote count is sourced from the comment prop which reflects the latest cache value
   const upvotes = comment.upvotes ?? 0;
 
+  // Only the comment author can see the edit and delete options
   const isOwner = user?.id === comment.user_id;
 
+  // Toggle an upvote — casting the same vote a second time removes it
   const handleUpvote = async () => {
     if (!user?.id) {
       Alert.alert("Sign in required", "Please sign in to vote");
@@ -81,6 +83,7 @@ const CommentListItem = ({
     }
   };
 
+  // Toggle a downvote — same toggle behaviour as upvote
   const handleDownvote = async () => {
     if (!user?.id) {
       Alert.alert("Sign in required", "Please sign in to vote");
@@ -98,6 +101,7 @@ const CommentListItem = ({
     }
   };
 
+  // Toggle an award on the comment — passing remove: true withdraws a previously given award
   const handleAward = async () => {
     if (!user?.id) {
       Alert.alert("Sign in required", "Please sign in to give awards");
@@ -117,11 +121,13 @@ const CommentListItem = ({
     }
   };
 
+  // Close the overflow menu and switch the comment body to edit mode
   const handleEdit = () => {
     setShowMenu(false);
     setIsEditing(true);
   };
 
+  // Persist the edited text to Supabase and exit edit mode on success
   const handleSaveEdit = async () => {
     if (!editText.trim()) return;
     try {
@@ -132,17 +138,19 @@ const CommentListItem = ({
       });
       setIsEditing(false);
     } catch (error: any) {
-      // Log full error so you can see exactly what Supabase says
+      // Log the full Supabase error object for easier debugging
       console.error("Edit error:", JSON.stringify(error));
       Alert.alert("Error", error?.message || "Failed to edit comment");
     }
   };
 
+  // Discard any unsaved changes and return to the read-only comment view
   const handleCancelEdit = () => {
     setEditText(comment.comment);
     setIsEditing(false);
   };
 
+  // Ask for confirmation before permanently deleting the comment
   const handleDelete = () => {
     setShowMenu(false);
     Alert.alert(
@@ -159,7 +167,7 @@ const CommentListItem = ({
                 commentId: comment.id,
                 postId: comment.post_id,
               });
-              // No alert needed, comment disappears immediately from the list
+              // The comment disappears from the list immediately via the cache update — no alert needed
             } catch (error: any) {
               console.error("Delete error:", JSON.stringify(error));
               Alert.alert(
@@ -178,12 +186,15 @@ const CommentListItem = ({
       style={[
         styles.container,
         {
+          // Top-level comments have a white background; nested replies use a slightly off-white
+          // to give a visual hierarchy without requiring additional components
           backgroundColor: depth === 0 ? "#FFFFFF" : "#FAFAFA",
           marginLeft: Math.min(depth, MAX_DEPTH) * INDENT,
           borderLeftWidth: depth > 0 ? 2 : 0,
         },
       ]}
     >
+      {/* Comment author row with avatar and relative timestamp */}
       <View style={styles.userInfo}>
         <Image
           source={{ uri: comment.user.image || DEFAULT_AVATAR }}
@@ -200,6 +211,8 @@ const CommentListItem = ({
         </View>
       </View>
 
+      {/* Show an editable text input when the author has tapped Edit,
+          otherwise render the comment as plain text */}
       {isEditing ? (
         <View style={styles.editContainer}>
           <TextInput
@@ -217,6 +230,7 @@ const CommentListItem = ({
               onPress={handleSaveEdit}
               style={[
                 styles.saveButton,
+                // Dim the button while the mutation is in flight to prevent double-submission
                 editMutation.isPending && { opacity: 0.6 },
               ]}
               disabled={editMutation.isPending}
@@ -231,6 +245,7 @@ const CommentListItem = ({
         <Text style={styles.commentText}>{comment.comment}</Text>
       )}
 
+      {/* Action bar: reply, award, overflow menu on the left; voting controls on the right */}
       <View style={styles.actionBar}>
         <View style={styles.leftActions}>
           <Pressable
@@ -241,6 +256,7 @@ const CommentListItem = ({
             <Octicons name="reply" size={16} color={COLORS.textSecondary} />
           </Pressable>
 
+          {/* Trophy icon is filled and gold when the current user has already awarded this comment */}
           <Pressable
             hitSlop={10}
             onPress={handleAward}
@@ -254,6 +270,7 @@ const CommentListItem = ({
             />
           </Pressable>
 
+          {/* Overflow menu button is only rendered for the comment's author */}
           {isOwner && (
             <Pressable
               hitSlop={10}
@@ -269,6 +286,7 @@ const CommentListItem = ({
           )}
         </View>
 
+        {/* Upvote / count / downvote — arrows are filled when the user has already voted */}
         <View style={styles.votingContainer}>
           <Pressable
             hitSlop={10}
@@ -306,6 +324,7 @@ const CommentListItem = ({
         </View>
       </View>
 
+      {/* Inline overflow menu */}
       {showMenu && isOwner && (
         <View style={styles.menu}>
           <Pressable onPress={handleEdit} style={styles.menuItem}>
@@ -323,6 +342,7 @@ const CommentListItem = ({
         </View>
       )}
 
+      {/* Replies toggle */}
       {comment.replies.length > 0 && depth < MAX_DEPTH && (
         <Pressable onPress={() => setShowReplies((v) => !v)}>
           <Text style={styles.repliesToggle}>
@@ -335,6 +355,7 @@ const CommentListItem = ({
         </Pressable>
       )}
 
+      {/* Recursively render each reply as a nested CommentListItem */}
       {showReplies &&
         comment.replies.map((reply) => (
           <CommentListItem

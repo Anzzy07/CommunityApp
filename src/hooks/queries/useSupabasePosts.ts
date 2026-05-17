@@ -5,7 +5,7 @@ import { useEffect } from "react";
 
 const PAGE_SIZE = 20;
 
-// Returns false if user missed a day (streak should show 0)
+// Returns false if user missed a day streak shows 0 if stale
 function isStreakAlive(lastActiveDateStr: string | null): boolean {
   if (!lastActiveDateStr) return false;
   const lastActive = new Date(lastActiveDateStr);
@@ -25,6 +25,9 @@ function transformPost(post: any, pollMap: Map<string, any>): Post {
         post_id: pollData.post_id as string,
         question: pollData.question as string,
         created_at: (pollData.created_at as string | null) ?? null,
+        // include duration and ends_at so PollListItem can check if poll has ended
+        duration: (pollData.duration as string | null) ?? null,
+        ends_at: (pollData.ends_at as string | null) ?? null,
         options: ((pollData.poll_options as any[]) || []).map(
           (opt): PollOption => ({
             id: opt.id as string,
@@ -45,7 +48,6 @@ function transformPost(post: any, pollMap: Map<string, any>): Post {
     upvotes: (post.upvotes as number | null) ?? 0,
     nr_of_comments: (post.comment_count as number | null) ?? 0,
     created_at: (post.created_at as string | null) ?? null,
-    // Streak: validate client-side so stale streaks show 0 immediately
     streak: isStreakAlive(post.last_active_date as string | null)
       ? ((post.current_streak as number | null) ?? 0)
       : 0,
@@ -66,10 +68,12 @@ function transformPost(post: any, pollMap: Map<string, any>): Post {
   };
 }
 
+// Fetches an infinite scrolling feed of posts with polls and streaks included
+// Real time new and deleted posts appear without pull to refresh
 export function useSupabasePosts() {
   const queryClient = useQueryClient();
 
-  // Real-time: new/deleted posts appear without pull-to-refresh
+  // Real time new and deleted posts appear without pull to refresh
   useEffect(() => {
     const channel = supabase
       .channel("posts-realtime")
@@ -93,7 +97,7 @@ export function useSupabasePosts() {
   return useInfiniteQuery({
     queryKey: ["posts"],
     queryFn: async ({ pageParam = 0 }) => {
-      // 1. Fetch one page of posts + streak data via left join
+      // Fetch one page of posts via the view
       const { data: postsData, error: postsError } = await supabase
         .from("posts_with_details")
         .select("*")
@@ -103,12 +107,10 @@ export function useSupabasePosts() {
       if (postsError) throw postsError;
       if (!postsData || postsData.length === 0) return [] as Post[];
 
-      // 2. Collect all post IDs — filter nulls so .in() doesn't error
       const postIds = postsData
         .map((p) => p.id)
         .filter((id): id is string => typeof id === "string");
 
-      // Fetch streak data for all unique user IDs in one query
       const userIds = [
         ...new Set(
           postsData
@@ -118,7 +120,7 @@ export function useSupabasePosts() {
       ];
 
       const [pollsResult, streaksResult] = await Promise.all([
-        // 3a. ONE query for all polls on this page (was: 1 per post = N+1)
+        // ONE query for all polls on this page N+1 eliminated
         supabase
           .from("polls")
           .select(
@@ -127,6 +129,8 @@ export function useSupabasePosts() {
             post_id,
             question,
             created_at,
+            duration,
+            ends_at,
             poll_options (
               id,
               poll_id,
@@ -138,14 +142,14 @@ export function useSupabasePosts() {
           )
           .in("post_id", postIds),
 
-        // 3b. ONE query for all streaks on this page (was: 1 per PostListItem)
+        // ONE query for all streaks on this page
         supabase
           .from("user_streaks")
           .select("user_id, current_streak, last_active_date")
           .in("user_id", userIds),
       ]);
 
-      // 4. Build O(1) lookup maps
+      // Build O(1) lookup maps
       const pollMap = new Map<string, any>(
         (pollsResult.data || []).map((poll) => [poll.post_id as string, poll]),
       );
@@ -154,7 +158,7 @@ export function useSupabasePosts() {
         (streaksResult.data || []).map((s) => [s.user_id as string, s]),
       );
 
-      // 5. Transform everything in one pass
+      // Transform everything in one pass
       return postsData.map((post) => {
         const streak = streakMap.get(post.user_id as string);
         return transformPost(

@@ -1,7 +1,7 @@
 import { supabase } from "@/src/lib/supabase";
 import { useQuery } from "@tanstack/react-query";
 
-// Check if user has voted on a post
+// Check if user has voted on a post returns up down or null
 export function useUserPostVote(postId: string, userId: string | undefined) {
   return useQuery({
     queryKey: ["post-vote", postId, userId],
@@ -22,7 +22,7 @@ export function useUserPostVote(postId: string, userId: string | undefined) {
   });
 }
 
-// Check if user has awarded a post
+// Check if user has awarded a post returns true or false
 export function useUserPostAward(postId: string, userId: string | undefined) {
   return useQuery({
     queryKey: ["post-award", postId, userId],
@@ -43,7 +43,7 @@ export function useUserPostAward(postId: string, userId: string | undefined) {
   });
 }
 
-// Check if user has voted on a comment
+// Check if user has voted on a comment returns up down or null
 export function useUserCommentVote(
   commentId: string,
   userId: string | undefined,
@@ -67,7 +67,7 @@ export function useUserCommentVote(
   });
 }
 
-// Check if user has awarded a comment
+// Check if user has awarded a comment returns true or false
 export function useUserCommentAward(
   commentId: string,
   userId: string | undefined,

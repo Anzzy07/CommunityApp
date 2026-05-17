@@ -21,44 +21,48 @@ export default function ChatGroupsList() {
   const { user } = useUser();
   const router = useRouter();
 
-  // Fetch all groups and the current user's memberships
+  // Fetch all available groups and the current user's group memberships in parallel
   const { data: groups = [], isLoading: groupsLoading } = useSupabaseGroups();
   const { data: groupMembers = [], isLoading: membersLoading } =
     useSupabaseGroupMembers(user?.id || "");
 
-  // Filter to only groups the user has joined
+  // Keep only groups the user has actually joined — others should not appear in the chat list
   const userGroups = useMemo(() => {
     const memberGroupIds = new Set(groupMembers.map((m) => m.group_id));
     return groups.filter((g) => memberGroupIds.has(g.id));
   }, [groups, groupMembers]);
 
-  // Get IDs of user's groups for the last messages query
+  // Extract group IDs so the last-messages query knows which groups to fetch for
   const groupIds = useMemo(() => userGroups.map((g) => g.id), [userGroups]);
 
-  // Fetch last message and unread count for each group in one batch query.
-  // Pass currentUserId so unread counts correctly exclude the user's own messages.
+  // Fetch the most recent message and unread count for every joined group in one batch.
+  // Passing currentUserId ensures the unread count excludes messages sent by the user themselves.
   const { data: lastMessages = [], isLoading: messagesLoading } =
     useSupabaseGroupLastMessages(groupIds, user?.id);
 
+  // Combined loading state — the list is not ready until all three queries have resolved
   const isLoading = groupsLoading || membersLoading || messagesLoading;
 
-  // Sort groups by most recent message — groups with newer messages appear first
+  // Sort joined groups so the one with the most recent message appears at the top,
+  // matching the behaviour users expect from messaging apps
   const sortedGroups = useMemo(() => {
     return [...userGroups].sort((a, b) => {
       const aMsg = lastMessages.find((m) => m?.groupId === a.id);
       const bMsg = lastMessages.find((m) => m?.groupId === b.id);
 
+      // Groups with no messages at all are pushed to the bottom
       if (!aMsg?.timestamp && !bMsg?.timestamp) return 0;
       if (!aMsg?.timestamp) return 1;
       if (!bMsg?.timestamp) return -1;
 
+      // Descending order: newer timestamp wins
       return (
         new Date(bMsg.timestamp).getTime() - new Date(aMsg.timestamp).getTime()
       );
     });
   }, [userGroups, lastMessages]);
 
-  // Navigates to the group chat screen for the selected group
+  // Navigate to the group chat screen when the user taps a group row
   const handleGroupPress = useCallback(
     (group: Group) => {
       router.push({
@@ -69,8 +73,7 @@ export default function ChatGroupsList() {
     [router],
   );
 
-  // Stable renderItem — useCallback prevents re-rendering all group cards
-  // when unrelated state changes
+  // Stable renderItem callback which prevents every group card from re-rendering
   const renderItem = useCallback(
     ({ item }: { item: Group }) => {
       const msgData = lastMessages.find((m) => m?.groupId === item.id);
@@ -86,7 +89,7 @@ export default function ChatGroupsList() {
                 }
               : undefined
           }
-          // Real unread count — how many messages the user hasn't read yet
+          // Pass the real unread count so the badge reflects unseen messages only
           unreadCount={msgData?.unreadCount ?? 0}
           onPress={() => handleGroupPress(item)}
         />
@@ -97,6 +100,7 @@ export default function ChatGroupsList() {
 
   const keyExtractor = useCallback((item: Group) => item.id, []);
 
+  // Empty state shown when the user has not joined any groups yet
   const renderEmpty = useCallback(
     () => (
       <View style={styles.emptyContainer}>
@@ -116,6 +120,7 @@ export default function ChatGroupsList() {
     [],
   );
 
+  // Show a full-screen spinner while data is still loading on first mount
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container} edges={["bottom"]}>
@@ -134,7 +139,9 @@ export default function ChatGroupsList() {
         keyExtractor={keyExtractor}
         renderItem={renderItem}
         ListEmptyComponent={renderEmpty}
+        // Allow the empty state view to fill the screen height
         contentContainerStyle={sortedGroups.length === 0 && { flex: 1 }}
+        // Performance tuning: unmount off-screen rows and limit batch size
         removeClippedSubviews={true}
         maxToRenderPerBatch={15}
         windowSize={8}

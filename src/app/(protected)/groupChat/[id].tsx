@@ -20,7 +20,7 @@ import {
   MaterialCommunityIcons,
 } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -37,61 +37,91 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function GroupChatScreen() {
-  const { id: groupId, name: groupName } = useLocalSearchParams<{
-    id: string;
-    name: string;
-  }>();
+  const params = useLocalSearchParams<{ id: string; name: string }>();
   const { user } = useUser();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+
+  // KEY FIX: useLocalSearchParams can return string | string[] for dynamic routes.
+  // Always coerce to a plain string so the React Query cache key is always identical
+  // to what useSupabaseGroupMessages and useGroupMessagesSubscription use.
+  // If it were ever an array, cache keys would never match and setQueryData
+  // from the real-time subscription would update a different cache entry.
+  const groupId = Array.isArray(params.id) ? params.id[0] : params.id;
+  const groupName = Array.isArray(params.name) ? params.name[0] : params.name;
+
+  // Ref to the FlatList so we can programmatically scroll to the bottom
   const flatListRef = useRef<FlatList>(null);
 
+  // Local composer state
   const [replyTo, setReplyTo] = useState<GroupMessage | null>(null);
   const [text, setText] = useState("");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
-  // Fetch messages and user's group memberships
-  const { data: messages = [], isLoading: messagesLoading } =
-    useSupabaseGroupMessages(groupId);
+  // Fetch all messages for this group.
+  // staleTime is 0 and refetchInterval is 3s (set in the hook) so:
+  // - navigating in always loads fresh data immediately
+  // - polling every 3s catches any messages the real-time subscription missed
+  const {
+    data: messages = [],
+    isLoading: messagesLoading,
+    refetch: refetchMessages,
+  } = useSupabaseGroupMessages(groupId);
+
+  // Fetch current user's group memberships to check if they can send messages
   const { data: groupMembers = [] } = useSupabaseGroupMembers(user?.id || "");
 
   const sendMessageMutation = useSendMessage();
   const markAsReadMutation = useMarkMessagesAsRead();
   const leaveMutation = useLeaveGroup();
 
-  // Check if current user is a member of this group
+  // Check membership using the coerced string groupId — consistent with all other checks
   const isMember = groupMembers.some((m) => m.group_id === groupId);
 
-  // Callback to scroll to bottom — passed to the real-time subscription
-  // so it fires when any new message arrives on any device
-  const scrollToBottom = useCallback(() => {
+  // Scroll to the bottom of the message list.
+  // animated=true for new messages, animated=false for initial load.
+  const scrollToBottom = useCallback((animated = true) => {
     setTimeout(() => {
-      flatListRef.current?.scrollToEnd({ animated: true });
+      flatListRef.current?.scrollToEnd({ animated });
     }, 100);
   }, []);
 
-  // Subscribe to real-time messages — works for ALL devices including sender's
-  // The subscription appends new messages to cache and calls scrollToBottom
-  useGroupMessagesSubscription(groupId, scrollToBottom);
+  // Real-time subscription — listens for INSERT events on group_messages.
+  // Uses the coerced string groupId to ensure it subscribes to the correct
+  // Supabase channel and updates the correct React Query cache entry.
+  useGroupMessagesSubscription(groupId, () => scrollToBottom(true));
 
-  // Mark all unread messages as read when the user opens this chat
+  // useFocusEffect fires every time this screen comes into focus.
+  // This covers the case where Device 2 already has the screen mounted
+  // but navigates away and comes back — it will refetch on return.
+  // Combined with refetchInterval:3000 in the hook, new messages
+  // always appear within 3 seconds at most even if real-time is slow.
+  useFocusEffect(
+    useCallback(() => {
+      if (groupId) {
+        refetchMessages();
+      }
+    }, [groupId, refetchMessages]),
+  );
+
+  // Mark all unread messages as read as soon as the chat opens.
+  // This clears the unread badge on the chat list for this group.
   useEffect(() => {
-    if (isMember && user?.id) {
+    if (isMember && user?.id && groupId) {
       markAsReadMutation.mutate({ groupId, userId: user.id });
     }
   }, [groupId, isMember, user?.id]);
 
-  // Scroll to bottom when messages first load
+  // Scroll to the bottom on initial data load so most recent messages are visible
   useEffect(() => {
     if (messages.length > 0) {
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: false });
-      }, 150);
+      scrollToBottom(false);
     }
   }, [messages.length]);
 
-  // Groups consecutive messages from the same sender — last shows avatar,
-  // first shows username (like WhatsApp/Slack)
+  // Determines avatar and username visibility for consecutive messages.
+  // Groups messages from the same sender — only the last shows the avatar
+  // and only the first shows the username, matching WhatsApp and Slack behaviour.
   const getMessageDisplay = useCallback(
     (index: number) => {
       const current = messages[index];
@@ -99,13 +129,16 @@ export default function GroupChatScreen() {
       const prev = messages[index - 1];
       const isMe = current.user.id === user?.id;
       return {
+        // Show avatar on the last message in a consecutive group from the same sender
         showAvatar: !next || next.user.id !== current.user.id,
+        // Show username on the first message from a new sender (not shown for own messages)
         showUsername: !isMe && (!prev || prev.user.id !== current.user.id),
       };
     },
     [messages, user?.id],
   );
 
+  // Opens the device photo library so the user can pick an image to attach
   const pickImage = useCallback(async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
@@ -123,15 +156,16 @@ export default function GroupChatScreen() {
     }
   }, []);
 
-  // Sends a message — optimistic update makes it appear instantly for the sender.
-  // Real-time subscription delivers it to all other devices.
+  // Sends a message — clears the input immediately so the user can keep typing.
+  // An optimistic placeholder appears instantly in the list (useSendMessage).
+  // The real-time subscription and 3s polling both ensure other devices see it.
   const handleSend = useCallback(async () => {
     if ((!text.trim() && !selectedImage) || !isMember || !user?.id) return;
 
     const messageText = text.trim();
     const imageToSend = selectedImage;
 
-    // Clear input immediately so user can keep typing
+    // Clear composer immediately — don't wait for the network request to complete
     setText("");
     setReplyTo(null);
     setSelectedImage(null);
@@ -144,9 +178,10 @@ export default function GroupChatScreen() {
         imageUrl: imageToSend || undefined,
         replyToId: replyTo?.id,
       });
-      scrollToBottom();
+      // Scroll after successful send so sender sees their own message at the bottom
+      scrollToBottom(true);
     } catch {
-      Alert.alert("Error", "Failed to send message");
+      Alert.alert("Error", "Failed to send message. Please try again.");
     }
   }, [
     text,
@@ -159,6 +194,7 @@ export default function GroupChatScreen() {
     scrollToBottom,
   ]);
 
+  // Confirmation alert before leaving — this is a destructive action
   const handleLeaveChat = useCallback(() => {
     if (!user?.id) return;
     Alert.alert("Leave Chat", `Leave ${groupName}?`, [
@@ -178,6 +214,7 @@ export default function GroupChatScreen() {
     ]);
   }, [user?.id, groupName, groupId, leaveMutation, router]);
 
+  // Overflow action sheet shown when the user taps the three-dot header icon
   const handleOptions = useCallback(() => {
     Alert.alert("Chat Options", "", [
       { text: "Leave Chat", onPress: handleLeaveChat, style: "destructive" },
@@ -185,7 +222,8 @@ export default function GroupChatScreen() {
     ]);
   }, [handleLeaveChat]);
 
-  // Stable renderItem — useCallback prevents re-rendering all messages on each keystroke
+  // Stable renderItem — wrapped in useCallback so the FlatList doesn't
+  // re-render all message bubbles when the text input value changes
   const renderItem = useCallback(
     ({ item, index }: { item: GroupMessage; index: number }) => {
       const { showAvatar, showUsername } = getMessageDisplay(index);
@@ -203,8 +241,10 @@ export default function GroupChatScreen() {
     [getMessageDisplay, user?.id, isMember],
   );
 
+  // Stable key extractor — uses the real message id or the "optimistic-" temp id
   const keyExtractor = useCallback((item: GroupMessage) => item.id, []);
 
+  // Non-members see the header and a join prompt — no message list shown
   if (!isMember) {
     return (
       <View style={styles.container}>
@@ -230,7 +270,7 @@ export default function GroupChatScreen() {
       style={styles.container}
       keyboardVerticalOffset={insets.top}
     >
-      {/* Header */}
+      {/* Header: back button, group name, overflow menu */}
       <View style={[styles.header, { paddingTop: insets.top }]}>
         <Pressable
           onPress={() => router.back()}
@@ -247,16 +287,16 @@ export default function GroupChatScreen() {
         </Pressable>
       </View>
 
-      {/* Messages list */}
+      {/* Scrollable message list — oldest at top, newest at bottom */}
       <FlatList
         ref={flatListRef}
         data={messages}
         keyExtractor={keyExtractor}
         renderItem={renderItem}
         contentContainerStyle={styles.messagesList}
-        onContentSizeChange={() =>
-          flatListRef.current?.scrollToEnd({ animated: false })
-        }
+        // Scroll to bottom whenever the content height changes —
+        // handles both new messages arriving and the keyboard appearing
+        onContentSizeChange={() => scrollToBottom(false)}
         ListEmptyComponent={
           !messagesLoading ? (
             <View style={styles.emptyMessages}>
@@ -270,14 +310,16 @@ export default function GroupChatScreen() {
             </View>
           ) : null
         }
+        // Performance: unmount off-screen rows and limit render batch size
         removeClippedSubviews={true}
         maxToRenderPerBatch={20}
         windowSize={10}
         initialNumToRender={20}
+        // Prevents the list from jumping when the keyboard opens on Android
         maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
       />
 
-      {/* Reply preview */}
+      {/* Reply preview bar — appears when user long-presses a message to reply */}
       {replyTo && (
         <View style={styles.replyPreview}>
           <View style={styles.replyIndicator} />
@@ -295,7 +337,7 @@ export default function GroupChatScreen() {
         </View>
       )}
 
-      {/* Image preview */}
+      {/* Image attachment preview — shown after user picks a photo */}
       {selectedImage && (
         <View style={styles.imagePreviewContainer}>
           <Image source={{ uri: selectedImage }} style={styles.imagePreview} />
@@ -308,12 +350,15 @@ export default function GroupChatScreen() {
         </View>
       )}
 
-      {/* Input bar */}
+      {/* Message composer: image picker, text input, send button */}
       <View style={[styles.inputContainer, { paddingBottom: insets.bottom }]}>
         <View style={styles.inputWrapper}>
+          {/* Attach image button */}
           <Pressable onPress={pickImage} style={styles.imageButton}>
             <Ionicons name="image-outline" size={24} color={COLORS.primary} />
           </Pressable>
+
+          {/* Multi-line text input — grows up to maxHeight then scrolls */}
           <TextInput
             placeholder="Type a message..."
             placeholderTextColor="#9CA3AF"
@@ -323,6 +368,8 @@ export default function GroupChatScreen() {
             multiline
             maxLength={1000}
           />
+
+          {/* Send button — disabled when there is nothing to send */}
           <Pressable
             onPress={handleSend}
             disabled={

@@ -5,7 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as Clipboard from "expo-clipboard";
 import { Alert, Share } from "react-native";
 
-// Helper: update a single post inside infinite query pages
+// Update a single post inside infinite query pages
 function patchPost(
   old: any,
   postId: string,
@@ -20,7 +20,7 @@ function patchPost(
   };
 }
 
-// Helper: remove a post from infinite query pages
+// Remove a post from infinite query pages
 function removePost(old: any, postId: string): any {
   if (!old?.pages) return old;
   return {
@@ -31,7 +31,7 @@ function removePost(old: any, postId: string): any {
   };
 }
 
-// Vote on a post — fully optimistic, UI updates instantly
+// Vote on a post fully optimistic UI updates instantly
 export function usePostVote() {
   const queryClient = useQueryClient();
 
@@ -54,7 +54,7 @@ export function usePostVote() {
 
       if (existingVote) {
         if (existingVote.vote_type === voteType) {
-          // Same vote → remove (un-vote)
+          // Same vote remove un vote
           const { error } = await supabase
             .from("post_votes")
             .delete()
@@ -63,7 +63,7 @@ export function usePostVote() {
           if (error) throw error;
           return { action: "removed", voteType: null };
         } else {
-          // Different vote → switch
+          // Different vote switch
           const { error } = await supabase
             .from("post_votes")
             .update({ vote_type: voteType })
@@ -101,13 +101,13 @@ export function usePostVote() {
         if (prevVote === "up")
           delta = -1; // removing upvote
         else if (prevVote === "down")
-          delta = 2; // switching down → up
+          delta = 2; // switching down to up
         else delta = 1; // new upvote
       } else {
         if (prevVote === "down")
           delta = 1; // removing downvote
         else if (prevVote === "up")
-          delta = -2; // switching up → down
+          delta = -2; // switching up to down
         else delta = -1; // new downvote
       }
 
@@ -163,7 +163,7 @@ export function usePostVote() {
   });
 }
 
-// Award a post — optimistic
+// Award a post optimistic update
 export function usePostAward() {
   const queryClient = useQueryClient();
 
@@ -224,6 +224,7 @@ export function usePostAward() {
   });
 }
 
+// Creates a new post uploads image if provided
 export function useCreatePost() {
   const queryClient = useQueryClient();
 
@@ -262,12 +263,13 @@ export function useCreatePost() {
       return data;
     },
     onSuccess: () => {
-      // Real-time subscription handles this, but invalidate as a safety net
+      // Real time subscription handles this but invalidate as a safety net
       queryClient.invalidateQueries({ queryKey: ["posts"] });
     },
   });
 }
 
+// Deletes a post verifies ownership before deleting
 export function useDeletePost() {
   const queryClient = useQueryClient();
 
@@ -321,6 +323,118 @@ export function useDeletePost() {
   });
 }
 
+// Edits an existing post updates title description and image
+export function useEditPost() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      postId,
+      userId,
+      title,
+      description,
+      imageUri,
+      deleteImage = false,
+    }: {
+      postId: string;
+      userId: string;
+      title: string;
+      description?: string;
+      imageUri?: string | null;
+      deleteImage?: boolean;
+    }) => {
+      // Verify ownership
+      const { data: post, error: checkError } = await supabase
+        .from("posts")
+        .select("user_id, image_url")
+        .eq("id", postId)
+        .single();
+
+      if (checkError || !post || post.user_id !== userId) {
+        throw new Error("You don't have permission to edit this post");
+      }
+
+      let storagePath: string | null = post.image_url;
+
+      // Handle image changes
+      if (deleteImage) {
+        if (post.image_url) {
+          await supabase.storage.from("post-images").remove([post.image_url]);
+        }
+        storagePath = null;
+      } else if (imageUri && imageUri !== post.image_url) {
+        storagePath = await uploadImage(imageUri);
+        if (post.image_url) {
+          await supabase.storage.from("post-images").remove([post.image_url]);
+        }
+      }
+
+      // Update the post
+      const { data: updatedPost, error } = await supabase
+        .from("posts")
+        .update({
+          title,
+          description: description || null,
+          image_url: storagePath,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", postId)
+        .eq("user_id", userId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return updatedPost;
+    },
+
+    onMutate: async ({ postId, title, description, imageUri, deleteImage }) => {
+      await queryClient.cancelQueries({ queryKey: ["posts"] });
+      await queryClient.cancelQueries({ queryKey: ["post", postId] });
+
+      const prevPosts = queryClient.getQueryData(["posts"]);
+      const prevPost = queryClient.getQueryData(["post", postId]);
+
+      // Optimistic update
+      queryClient.setQueryData(["posts"], (old: any) =>
+        patchPost(old, postId, (post) => ({
+          ...post,
+          title,
+          description: description ?? post.description,
+          image: deleteImage ? null : (imageUri ?? post.image),
+        })),
+      );
+
+      queryClient.setQueryData(["post", postId], (old: any) => {
+        if (!old?.post) return old;
+        return {
+          ...old,
+          post: {
+            ...old.post,
+            title,
+            description: description ?? old.post.description,
+            image: deleteImage ? null : (imageUri ?? old.post.image),
+          },
+        };
+      });
+
+      return { prevPosts, prevPost };
+    },
+
+    onError: (_err, variables, context) => {
+      if (context?.prevPosts)
+        queryClient.setQueryData(["posts"], context.prevPosts);
+      if (context?.prevPost)
+        queryClient.setQueryData(["post", variables.postId], context.prevPost);
+    },
+
+    onSettled: (_data, _err, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["posts"] });
+      queryClient.invalidateQueries({ queryKey: ["post", variables.postId] });
+    },
+  });
+}
+
+// Creates a new poll attached to a post with options and duration
 export function useCreatePoll() {
   const queryClient = useQueryClient();
 
@@ -385,6 +499,7 @@ export function useCreatePoll() {
   });
 }
 
+// Deletes a poll verifies ownership before deleting
 export function useDeletePoll() {
   const queryClient = useQueryClient();
 
@@ -437,6 +552,7 @@ export function useDeletePoll() {
   });
 }
 
+// Shares a post via native share dialog or copies link to clipboard
 export function usePostShare() {
   return useMutation({
     mutationFn: async ({
@@ -446,7 +562,7 @@ export function usePostShare() {
       postId: string;
       postTitle: string;
     }) => {
-      const shareUrl = `https://yourapp.com/post/${postId}`;
+      const shareUrl = `https://kommuna/post/${postId}`;
       const shareMessage = `Check out this post: ${postTitle}\n\n${shareUrl}`;
       try {
         const result = await Share.share({

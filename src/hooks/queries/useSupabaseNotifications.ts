@@ -3,9 +3,9 @@ import { Notification } from "@/src/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 
-// Single shared real-time hook — call this ONCE at the app root level
-// (e.g. in your tab layout) so the subscription stays alive across screens.
-// It updates BOTH the notification list and the badge count in one place.
+// Single shared real time hook call this ONCE at the app root level
+// for example in your tab layout so the subscription stays alive across screens
+// It updates BOTH the notification list and the badge count in one place
 export function useNotificationsRealtime(userId: string | undefined) {
   const queryClient = useQueryClient();
 
@@ -17,7 +17,7 @@ export function useNotificationsRealtime(userId: string | undefined) {
       .on(
         "postgres_changes",
         {
-          event: "*", // INSERT, UPDATE, DELETE
+          event: "*", // INSERT UPDATE DELETE
           schema: "public",
           table: "notifications",
           filter: `user_id=eq.${userId}`,
@@ -40,7 +40,7 @@ export function useNotificationsRealtime(userId: string | undefined) {
   }, [userId, queryClient]);
 }
 
-// Fetches all notifications for a user — no real-time here, handled above
+// Fetches all notifications for a user no real time here handled above
 export function useSupabaseNotifications(userId: string) {
   return useQuery({
     queryKey: ["notifications", userId],
@@ -72,7 +72,7 @@ export function useSupabaseNotifications(userId: string) {
   });
 }
 
-// Fetches just the unread count — used for the tab badge icon
+// Fetches just the unread count used for the tab badge icon
 export function useSupabaseUnreadNotificationsCount(userId: string) {
   return useQuery({
     queryKey: ["notifications-unread-count", userId],

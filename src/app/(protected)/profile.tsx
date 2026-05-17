@@ -26,21 +26,20 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function ProfileScreen() {
-  // userId param is present when viewing someone else's profile
+  // userId is present when viewing another user's profile; absent for the current user's own
   const { userId } = useLocalSearchParams<{ userId?: string }>();
   const { user } = useUser();
   const { signOut } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  // Active tab controls which data is shown in the FlatList
+  // Tracks which tab (posts / comments / communities) is currently selected
   const [activeTab, setActiveTab] = useState<TabType>("posts");
 
-  // Determine if this is the current user's own profile or another user's
   const isOwnProfile = !userId || userId === user?.id;
   const profileUserId = userId || user?.id || "";
 
-  // Fetch all profile data from Supabase using React Query
+  // Fetch all profile data in parallel — React Query deduplicates and caches each request
   const { data: userPosts = [], isLoading: postsLoading } =
     useSupabaseUserPosts(profileUserId);
   const { data: userComments = [], isLoading: commentsLoading } =
@@ -59,8 +58,8 @@ export default function ProfileScreen() {
     streakLoading ||
     communitiesLoading;
 
-  // Memoised tab data — only recalculates when the tab or underlying data changes.
-  // Avoids creating a new array reference on every render which would cause FlatList flicker.
+  // Return the correct data array for the active tab.
+  // Communities are rendered in the list footer, so this returns an empty array for that tab.
   const tabData = useMemo((): (Post | Comment)[] => {
     switch (activeTab) {
       case "posts":
@@ -68,13 +67,13 @@ export default function ProfileScreen() {
       case "comments":
         return userComments;
       case "communities":
-        return []; // Communities are shown in the footer, not the list
+        return [];
       default:
         return [];
     }
   }, [activeTab, userPosts, userComments]);
 
-  // Shows a sign out confirmation alert then clears the session
+  // Confirm sign-out before clearing the session and redirecting to the sign-in screen
   const handleSignOut = useCallback(() => {
     Alert.alert("Sign Out", "Are you sure you want to sign out?", [
       { text: "Cancel", style: "cancel" },
@@ -89,13 +88,12 @@ export default function ProfileScreen() {
     ]);
   }, [signOut, router]);
 
-  // Navigates to the edit profile screen
   const handleEditProfile = useCallback(() => {
     router.push("/editProfile");
   }, [router]);
 
-  // Renders the profile header and tab selector above the list
-  // useCallback prevents this from recreating on every render
+  // Renders the profile card and tab selector above the scrollable list.
+  // Wrapped in useCallback to prevent unnecessary re-renders of the list header.
   const renderListHeader = useCallback(
     () => (
       <>
@@ -128,7 +126,7 @@ export default function ProfileScreen() {
     ],
   );
 
-  // Renders the communities grid below the list when communities tab is active
+  // Renders the communities grid below the list when the communities tab is active.
   const renderListFooter = useCallback(() => {
     if (activeTab === "communities") {
       return <CommunitiesGrid communities={joinedCommunities.slice(0, 6)} />;
@@ -136,9 +134,8 @@ export default function ProfileScreen() {
     return null;
   }, [activeTab, joinedCommunities]);
 
-  // Renders the empty state for posts and comments tabs
+  // Empty state for posts and comments tabs.
   const renderEmptyComponent = useCallback(() => {
-    // Communities tab uses the footer grid instead of an empty message
     if (activeTab === "communities") return null;
 
     if (isLoading) {
@@ -164,23 +161,20 @@ export default function ProfileScreen() {
     );
   }, [activeTab, isLoading]);
 
-  // Renders either a PostListItem or CommentListItemSimple based on item type.
-  // "title" in item is a quick way to distinguish Post from Comment at runtime.
+  // Distinguish between Post and Comment at runtime using the "title" property,
+  // which only exists on Post objects
   const renderItem = useCallback(({ item }: { item: Post | Comment }) => {
     if ("title" in item) {
-      // Item is a Post — show full post card without join button
       return <PostListItem post={item as Post} showJoinButton={false} />;
     }
-    // Item is a Comment — show simplified comment card that links to the post
     return <CommentListItemSimple comment={item as Comment} />;
   }, []);
 
-  // Stable key extractor — uses item id for both Post and Comment
   const keyExtractor = useCallback((item: Post | Comment) => item.id, []);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Top navigation header with back button and sign out */}
+      {/* Navigation header */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} hitSlop={10}>
           <AntDesign name="left" size={24} color="white" />
@@ -188,19 +182,17 @@ export default function ProfileScreen() {
 
         <Text style={styles.headerTitle}>Profile</Text>
 
-        {/* Sign out button only shown on own profile */}
         {isOwnProfile && (
           <Pressable onPress={handleSignOut} hitSlop={10}>
             <Feather name="log-out" size={22} color="white" />
           </Pressable>
         )}
 
-        {/* Spacer to keep title centred on other users' profiles */}
+        {/* Placeholder keeps the title visually centred on other users' profiles */}
         {!isOwnProfile && <View style={{ width: 22 }} />}
       </View>
 
-      {/* Main scrollable list — header contains profile info and tabs,
-          footer contains the communities grid when that tab is active */}
+      {/* Single FlatList with a header (profile + tabs) */}
       <FlatList
         data={tabData}
         keyExtractor={keyExtractor}

@@ -72,6 +72,8 @@ export type Poll = {
   post_id: string;
   question: string;
   created_at: string | null;
+  duration: string | null;
+  ends_at: string | null;
   options: PollOption[];
 };
 
@@ -112,9 +114,12 @@ export type ChallengeEntry = {
   id: string;
   challenge_id: string;
   user_id: string;
+
   content: string;
+  image_url?: string | null;
   created_at: string | null;
   votes: number | null;
+  user?: User | null;
 };
 
 // NOTIFICATIONS

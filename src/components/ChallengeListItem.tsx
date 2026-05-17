@@ -10,23 +10,30 @@ type Props = {
 };
 
 export default function ChallengeListItem({ challenge }: Props) {
+  // Parse the end date from the challenge record
   const endDate = new Date(challenge.end_date);
+
+  // Check if the challenge end date has already passed
   const isExpired = isPast(endDate);
+
+  // Human-readable label showing how much time is left on an active challenge
   const timeRemaining = formatDistanceToNowStrict(endDate, {
     addSuffix: false,
   });
 
   return (
+    // Tapping the card navigates to the challenge detail screen
     <Pressable
       onPress={() => router.push(`/challenge/${challenge.id}`)}
       style={[styles.container, isExpired && styles.expiredContainer]}
     >
-      {/* Icon & Title */}
+      {/* Icon and title row — icon and text colour change when challenge has ended */}
       <View style={styles.header}>
         <View style={[styles.iconContainer, isExpired && styles.expiredIcon]}>
           <MaterialCommunityIcons
             name={isExpired ? "trophy" : "trophy-outline"}
             size={20}
+            // Grey icon for expired challenges, blue for active ones
             color={isExpired ? "#9CA3AF" : "#0369A1"}
           />
         </View>
@@ -38,7 +45,7 @@ export default function ChallengeListItem({ challenge }: Props) {
         </Text>
       </View>
 
-      {/* Description */}
+      {/* Optional description — only rendered when provided */}
       {challenge.description && (
         <Text
           style={[styles.description, isExpired && styles.expiredDescription]}
@@ -48,7 +55,7 @@ export default function ChallengeListItem({ challenge }: Props) {
         </Text>
       )}
 
-      {/* Footer */}
+      {/* Footer showing time remaining or ended label, and active status badge */}
       <View style={styles.footer}>
         <View style={styles.timeContainer}>
           <MaterialCommunityIcons
@@ -61,8 +68,10 @@ export default function ChallengeListItem({ challenge }: Props) {
           </Text>
         </View>
 
+        {/* Active badge — only shown on challenges that have not yet ended */}
         {!isExpired && (
           <View style={styles.statusBadge}>
+            {/* Green dot indicates the challenge is currently running */}
             <View style={styles.statusDot} />
             <Text style={styles.statusText}>Active</Text>
           </View>

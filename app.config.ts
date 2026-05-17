@@ -17,14 +17,14 @@ const getUniqueIdentifier = () => {
 
 const getAppName = () => {
   if (IS_DEV) {
-    return "CommunityApp (Dev)";
+    return "Kommuna (Dev)";
   }
 
   if (IS_PREVIEW) {
-    return "CommunityApp (Preview)";
+    return "Kommuna";
   }
 
-  return "CommunityApp";
+  return "Kommuna";
 };
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
@@ -36,7 +36,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   icon: "./assets/images/icon.png",
   scheme: "communityapp",
   userInterfaceStyle: "automatic",
-  newArchEnabled: true,
   ios: {
     supportsTablet: true,
     bundleIdentifier: getUniqueIdentifier(),
@@ -46,13 +45,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   android: {
     adaptiveIcon: {
-      backgroundColor: "#E6F4FE",
-      foregroundImage: "./assets/images/android-icon-foreground.png",
-      backgroundImage: "./assets/images/android-icon-background.png",
-      monochromeImage: "./assets/images/android-icon-monochrome.png",
+      foregroundImage: "./assets/images/icon.png",
+      backgroundColor: "#A8B5A2",
     },
+
     package: getUniqueIdentifier(),
-    edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
   },
   web: {
@@ -62,10 +59,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   plugins: [
     "expo-router",
+    "expo-font",
+    "expo-image",
+    "expo-web-browser",
     [
       "expo-splash-screen",
       {
-        image: "./assets/images/splash-icon.png",
+        image: "./assets/images/splash.png",
         imageWidth: 200,
         resizeMode: "contain",
         backgroundColor: "#ffffff",

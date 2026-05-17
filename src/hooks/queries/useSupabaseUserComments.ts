@@ -2,8 +2,8 @@ import { supabase } from "@/src/lib/supabase";
 import { Comment } from "@/src/types";
 import { useQuery } from "@tanstack/react-query";
 
-// Fetches all comments made by a specific user for the profile comments tab.
-// Uses the comments_with_details view which already joins user info.
+// Fetches all comments made by a specific user for the profile comments tab
+// Uses the comments_with_details view which already joins user info
 export function useSupabaseUserComments(userId: string) {
   return useQuery({
     queryKey: ["user-comments", userId],
@@ -32,7 +32,7 @@ export function useSupabaseUserComments(userId: string) {
           name: c.full_name || c.username || "Unknown",
           image: c.user_image || null,
         },
-        // Nested replies not shown on profile screen — empty array is fine
+        // Nested replies not shown on profile screen empty array is fine
         replies: [],
       }));
 

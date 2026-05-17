@@ -2,7 +2,7 @@ import { supabase } from "@/src/lib/supabase";
 import { Post } from "@/src/types";
 import { useQuery } from "@tanstack/react-query";
 
-// Returns false if the user missed a day — streak should display as 0
+// Returns false if the user missed a day streak should display as 0
 function isStreakAlive(lastActiveDateStr: string | null): boolean {
   if (!lastActiveDateStr) return false;
   const lastActive = new Date(lastActiveDateStr);
@@ -13,13 +13,15 @@ function isStreakAlive(lastActiveDateStr: string | null): boolean {
   return lastActive >= yesterday;
 }
 
+// Fetches all posts made by a specific user for the profile posts tab
+// Includes streak data so each post card shows the user's current streak badge
 export function useSupabaseUserPosts(userId: string) {
   return useQuery({
     queryKey: ["user-posts", userId],
     queryFn: async () => {
       if (!userId) return [];
 
-      // Fetch posts and the user's streak in parallel — single round trip
+      // Fetch posts and the user's streak in parallel single round trip
       const [postsResult, streakResult] = await Promise.all([
         supabase
           .from("posts_with_details")
@@ -27,7 +29,7 @@ export function useSupabaseUserPosts(userId: string) {
           .eq("user_id", userId)
           .order("created_at", { ascending: false }),
 
-        // One streak fetch for the whole profile — reused across all post cards
+        // One streak fetch for the whole profile reused across all post cards
         supabase
           .from("user_streaks")
           .select("current_streak, last_active_date")
@@ -37,7 +39,7 @@ export function useSupabaseUserPosts(userId: string) {
 
       if (postsResult.error) throw postsResult.error;
 
-      // Validate streak client-side so stale streaks show 0
+      // Validate streak client side so stale streaks show 0
       const streakData = streakResult.data;
       const alive = isStreakAlive(
         (streakData?.last_active_date as string | null) ?? null,
@@ -46,7 +48,7 @@ export function useSupabaseUserPosts(userId: string) {
         ? ((streakData?.current_streak as number | null) ?? 0)
         : 0;
 
-      // Transform posts — streak is the same value for all posts by this user
+      // Transform posts streak is the same value for all posts by this user
       const posts: Post[] = (postsResult.data || []).map((post: any) => ({
         id: post.id,
         title: post.title,

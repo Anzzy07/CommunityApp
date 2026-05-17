@@ -1,9 +1,9 @@
 import { supabase } from "@/src/lib/supabase";
 import { useQuery } from "@tanstack/react-query";
 
-// Fetches challenges from Supabase.
-// If groupId is provided, fetches only that community's challenges.
-// If no groupId, fetches all challenges (used on the challenge detail screen).
+// Fetches challenges from Supabase
+// If groupId is provided fetches only that community's challenges
+// If no groupId fetches all challenges used on the challenge detail screen
 export function useSupabaseChallenges(groupId?: string) {
   return useQuery({
     queryKey: groupId ? ["challenges", groupId] : ["challenges"],
@@ -22,6 +22,6 @@ export function useSupabaseChallenges(groupId?: string) {
       if (error) throw error;
       return data || [];
     },
-    staleTime: 1000 * 60 * 5, // 5 minutes — challenges don't change often
+    staleTime: 1000 * 60 * 5, // 5 minutes challenges don't change often
   });
 }

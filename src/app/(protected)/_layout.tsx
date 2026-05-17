@@ -43,6 +43,14 @@ export default function AppLayout() {
       />
 
       <Stack.Screen
+        name="edit-post/[id]"
+        options={{
+          headerShown: false,
+          animation: "slide_from_right",
+        }}
+      />
+
+      <Stack.Screen
         name="challenge/[id]"
         options={{
           headerShown: false,

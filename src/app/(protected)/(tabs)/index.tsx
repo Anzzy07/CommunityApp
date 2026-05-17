@@ -17,9 +17,13 @@ import {
 } from "react-native";
 
 export default function HomeScreen() {
+  // Get the currently authenticated user from Clerk
   const { user } = useUser();
+
+  // Ref used to programmatically scroll the list if needed
   const flatListRef = useRef<FlatList>(null);
 
+  // Fetch paginated posts from Supabase using infinite query
   const {
     data,
     isLoading,
@@ -31,20 +35,24 @@ export default function HomeScreen() {
     isFetchingNextPage,
   } = useSupabasePosts();
 
+  // Fetch the list of communities the current user has joined
   const { data: groupMembers = [] } = useSupabaseGroupMembers(user?.id || "");
 
-  // Stable Set of joined group IDs — only rebuilds when groupMembers changes
+  // Build a Set of joined group IDs for fast membership lookup
+  // Only recalculates when groupMembers changes to avoid unnecessary work
   const joinedGroupIds = useMemo(
     () => new Set(groupMembers.map((m) => m.group_id)),
     [groupMembers],
   );
 
-  // Flatten pages — only rebuilds when data changes
+  // Paginated data into a single array of posts
   const posts = useMemo(() => data?.pages.flat() ?? [], [data]);
 
-  // renderItem is stable as long as joinedGroupIds and userId don't change.
+  // Render each post as  a PollListItem or PostListItem
+  // useCallback keeps this function stable to prevent unnecessary FlatList re-renders
   const renderPost = useCallback(
     ({ item }: { item: Post }) => {
+      // Check if the user has joined the community this post belongs to
       const isJoined = joinedGroupIds.has(item.group.id);
       if (item.poll) {
         return <PollListItem post={item} isJoined={isJoined} />;
@@ -54,17 +62,19 @@ export default function HomeScreen() {
     [joinedGroupIds],
   );
 
+  // Fetches the next page of posts if one is available
   const handleEndReached = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) {
       fetchNextPage();
     }
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  // Stable key extractor - add fallback for safety
+  // Stable key extractor using the post ID with a random fallback for safety
   const keyExtractor = useCallback((item: Post) => {
     return item.id || Math.random().toString();
   }, []);
 
+  // Renders a loading spinner at the bottom of the list while the next page loads
   const renderFooter = useCallback(() => {
     if (!isFetchingNextPage) return null;
     return (
@@ -74,6 +84,7 @@ export default function HomeScreen() {
     );
   }, [isFetchingNextPage]);
 
+  // Renders an empty state when no posts are available
   const renderEmpty = useCallback(
     () => (
       <View style={styles.emptyContainer}>
@@ -93,11 +104,12 @@ export default function HomeScreen() {
     [],
   );
 
-  // Handle refresh
+  // Triggers a data refresh when the user pulls down on the feed
   const onRefresh = useCallback(() => {
     refetch();
   }, [refetch]);
 
+  // Show a full-screen loading spinner while the initial data is being fetched
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -107,6 +119,7 @@ export default function HomeScreen() {
     );
   }
 
+  // Show an error screen if the data fetch failed
   if (error) {
     return (
       <View style={styles.errorContainer}>
@@ -135,6 +148,7 @@ export default function HomeScreen() {
         renderItem={renderPost}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
+        // Pull-to-refresh control using the refetch function
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}
@@ -143,19 +157,19 @@ export default function HomeScreen() {
             colors={[COLORS.primary]}
           />
         }
+        // Load more posts when the user reaches the bottom
         onEndReached={handleEndReached}
         onEndReachedThreshold={0.5}
         ListFooterComponent={renderFooter}
         ListEmptyComponent={renderEmpty}
-        // Performance optimizations
+        // Performance optimisations to reduce memory usage and improve scroll smoothness
         removeClippedSubviews={true}
         maxToRenderPerBatch={8}
         updateCellsBatchingPeriod={50}
         windowSize={8}
         initialNumToRender={10}
-        // For smoother scrolling
         decelerationRate="fast"
-        // Keep items in memory
+        // Prevents the list from jumping when new items are added above the visible area
         maintainVisibleContentPosition={{
           minIndexForVisible: 0,
         }}

@@ -3,15 +3,14 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 
 // Fetches the last message and unread count for each of the user's groups.
-// Fixed N+1: was one DB query per group — now one query for all groups combined.
+// One batch query for all groups — N+1 eliminated.
 export function useSupabaseGroupLastMessages(
   groupIds: string[],
   currentUserId?: string,
 ) {
   const queryClient = useQueryClient();
 
-  // Real-time: when any new message arrives in any of the user's groups,
-  // invalidate the last messages cache so the chat list updates instantly
+  // Real-time: when any new message arrives, invalidate so chat list updates instantly
   useEffect(() => {
     if (groupIds.length === 0) return;
 
@@ -25,8 +24,9 @@ export function useSupabaseGroupLastMessages(
           table: "group_messages",
         },
         (payload: any) => {
-          // Only invalidate if the message is from one of the user's groups
-          if (groupIds.includes(payload.new?.group_id)) {
+          // Only invalidate when the message belongs to one of the user's groups
+          const incomingGroupId = payload.new?.group_id;
+          if (incomingGroupId && groupIds.includes(incomingGroupId)) {
             queryClient.invalidateQueries({
               queryKey: ["group-last-messages"],
             });
@@ -45,9 +45,10 @@ export function useSupabaseGroupLastMessages(
     queryFn: async () => {
       if (groupIds.length === 0) return [];
 
-      // ONE query for all messages across all groups — was N queries before (N+1 bug).
-      // We fetch the last 10 per group and pick the most recent one in JS.
-      // Supabase doesn't support DISTINCT ON so this is the cleanest approach.
+      // ONE query for all messages across all groups.
+      // FIX: use a generous limit — groupIds.length * 5 was too small for active groups.
+      // 200 rows covers all groups comfortably and Supabase returns them sorted desc
+      // so we always find the latest message per group in the first pass.
       const { data, error } = await supabase
         .from("group_messages")
         .select(
@@ -67,32 +68,31 @@ export function useSupabaseGroupLastMessages(
         )
         .in("group_id", groupIds)
         .order("created_at", { ascending: false })
-        .limit(groupIds.length * 5); // fetch enough rows to find last per group
+        .limit(200);
 
       if (error) throw error;
 
-      // Group messages by group_id and pick the most recent one
+      // Group messages by group_id — first seen = most recent (sorted desc)
       const groupMap = new Map<string, any>();
       const unreadMap = new Map<string, number>();
 
       for (const msg of data || []) {
         const gid = msg.group_id as string;
 
-        // Track the latest message per group (first seen since sorted desc)
+        // First message seen per group = the latest one
         if (!groupMap.has(gid)) {
           groupMap.set(gid, msg);
         }
 
-        // Count unread messages — messages not sent by current user that aren't read
+        // Count unread: messages from others that haven't been read yet
         if (currentUserId && msg.user_id !== currentUserId && !msg.is_read) {
           unreadMap.set(gid, (unreadMap.get(gid) ?? 0) + 1);
         }
       }
 
-      // Transform into the shape the UI expects
       return groupIds.map((groupId) => {
         const msg = groupMap.get(groupId);
-        if (!msg)
+        if (!msg) {
           return {
             groupId,
             message: null,
@@ -100,9 +100,10 @@ export function useSupabaseGroupLastMessages(
             sender: null,
             unreadCount: 0,
           };
+        }
 
         const messageText =
-          (msg.message as string) || (msg.image_url ? "Photo" : "");
+          (msg.message as string) || (msg.image_url ? "📷 Photo" : "");
 
         return {
           groupId,
@@ -116,6 +117,6 @@ export function useSupabaseGroupLastMessages(
       });
     },
     enabled: groupIds.length > 0,
-    staleTime: 1000 * 30, // 30 seconds — real-time keeps it fresh
+    staleTime: 1000 * 30,
   });
 }

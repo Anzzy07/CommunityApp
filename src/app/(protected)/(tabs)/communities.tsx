@@ -25,10 +25,13 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function CommunitiesScreen() {
+  // Get the currently authenticated user from Clerk
   const { user } = useUser();
+
+  // Local state for the search input value
   const [searchValue, setSearchValue] = useState("");
 
-  // Fetch all communities and current user's memberships from Supabase
+  // Fetch all available communities and the current user's memberships from Supabase
   const {
     data: groups = [],
     isLoading: groupsLoading,
@@ -45,24 +48,24 @@ export default function CommunitiesScreen() {
   const joinMutation = useJoinGroup();
   const leaveMutation = useLeaveGroup();
 
+  // Combined loading state — true until both groups and members have loaded
   const isLoading = groupsLoading || membersLoading;
 
-  // Build a Set of joined group IDs for O(1) lookup
-  // Much faster than calling .some() on every render for every card
+  // Build a Set of joined group IDs for O(1) membership lookup
+  // Much faster than calling .some() on every card render
   const joinedGroupIds = useMemo(
     () => new Set(groupMembers.map((m) => m.group_id)),
     [groupMembers],
   );
 
-  // Check if the current user is a member of a specific group
+  // Returns true if the current user is a member of the given group
   const isJoined = useCallback(
     (groupId: string) => joinedGroupIds.has(groupId),
     [joinedGroupIds],
   );
 
-  // Handles both join and leave depending on current membership status.
-  // Optimistic updates in useJoinGroup/useLeaveGroup make the button
-  // flip instantly without waiting for the server response.
+  // Handles both join and leave actions depending on the user's current membership status
+  // Leaders cannot leave their own community
   const handleJoinToggle = useCallback(
     async (group: Group, joined: boolean) => {
       if (!user?.id) {
@@ -71,7 +74,7 @@ export default function CommunitiesScreen() {
       }
 
       if (joined) {
-        // Leaders cannot leave their own community
+        // Prevent leaders from leaving the community they created
         const isLeader = group.leader_id === user.id;
         if (isLeader) {
           Alert.alert(
@@ -82,7 +85,7 @@ export default function CommunitiesScreen() {
           return;
         }
 
-        // Confirm before leaving
+        // Ask the user to confirm before removing them from the community
         Alert.alert(
           "Leave Community",
           `Are you sure you want to leave ${group.name}?`,
@@ -108,7 +111,7 @@ export default function CommunitiesScreen() {
           ],
         );
       } else {
-        // Join immediately — optimistic update shows result instantly
+        // Join the community immediately
         try {
           await joinMutation.mutateAsync({
             groupId: group.id,
@@ -122,8 +125,8 @@ export default function CommunitiesScreen() {
     [user?.id, joinMutation, leaveMutation],
   );
 
-  // Splits communities into "My Communities" (joined) and "Discover" (not joined)
-  // Also filters by search text. Recalculates only when groups, members or search changes.
+  // Splits all communities into joined and discover sections
+  // Also applies the search filter
   const { joinedGroups, discoverGroups } = useMemo(() => {
     const filtered = groups.filter((group) =>
       group.name.toLowerCase().includes(searchValue.toLowerCase()),
@@ -135,10 +138,12 @@ export default function CommunitiesScreen() {
     };
   }, [groups, joinedGroupIds, searchValue, isJoined]);
 
-  // Renders a single community card with image, name, and join/leave button
+  // Renders a single community card with avatar, name, status, and join/leave button
   const renderCommunity = useCallback(
     ({ item }: { item: Group }) => {
       const joined = isJoined(item.id);
+
+      // Check if the current user is the leader of this community
       const isLeader = joined && item.leader_id === user?.id;
 
       return (
@@ -153,13 +158,13 @@ export default function CommunitiesScreen() {
               style={styles.image}
             />
 
-            {/* Community name and membership status */}
+            {/* Community name and membership status label */}
             <View style={styles.content}>
               <View style={styles.nameRow}>
                 <Text style={styles.name} numberOfLines={1}>
                   {item.name}
                 </Text>
-                {/* Crown icon shown next to communities where user is the leader */}
+                {/* Crown icon indicates the current user is the leader of this community */}
                 {isLeader && (
                   <MaterialCommunityIcons
                     name="crown"
@@ -177,7 +182,7 @@ export default function CommunitiesScreen() {
               </Text>
             </View>
 
-            {/* Join/Leave button — stopPropagation prevents card navigation when tapping button */}
+            {/* Join/Leave button — stopPropagation prevents the card Link from firing when tapping the button */}
             <Pressable
               onPress={(e) => {
                 e.stopPropagation();
@@ -201,6 +206,7 @@ export default function CommunitiesScreen() {
                     <MaterialCommunityIcons
                       name="check-circle"
                       size={18}
+                      // Use gold colour for leader badge, primary colour for regular members
                       color={isLeader ? "#F59E0B" : COLORS.primary}
                     />
                   ) : (
@@ -235,20 +241,20 @@ export default function CommunitiesScreen() {
     ],
   );
 
-  // Renders a section (My Communities or Discover) with a header and its list of cards
+  // Renders a section with a header and a non-scrollable inner list of community cards
   const renderSection = useCallback(
     ({ item }: any) => (
       <>
-        {/* Section header showing title and count */}
+        {/* Section header showing the title and the number of communities in that section */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>{item.title}</Text>
           <Text style={styles.sectionCount}>{item.data.length}</Text>
         </View>
-        {/* Nested FlatList is scrollDisabled so the outer FlatList handles scrolling */}
         <FlatList
           data={item.data}
           keyExtractor={(g) => g.id}
           renderItem={renderCommunity}
+          // Disabled so the parent FlatList handles all scroll events
           scrollEnabled={false}
         />
       </>
@@ -256,7 +262,7 @@ export default function CommunitiesScreen() {
     [renderCommunity],
   );
 
-  // Refreshes both groups and members when user pulls down to refresh
+  // Refreshes both the groups list and the user's memberships simultaneously
   const handleRefresh = useCallback(async () => {
     await Promise.all([refetchGroups(), refetchMembers()]);
   }, [refetchGroups, refetchMembers]);
@@ -273,7 +279,7 @@ export default function CommunitiesScreen() {
           value={searchValue}
           onChangeText={setSearchValue}
         />
-        {/* Clear button only shown when search has text */}
+        {/* Clear button only appears when the search field contains text */}
         {searchValue.length > 0 && (
           <Pressable onPress={() => setSearchValue("")} hitSlop={10}>
             <AntDesign name="close-circle" size={18} color="#9CA3AF" />
@@ -281,21 +287,20 @@ export default function CommunitiesScreen() {
         )}
       </View>
 
-      {/* Loading spinner shown on first load */}
+      {/* Full screen loading spinner shown while data is being fetched for the first time */}
       {isLoading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
           <Text style={styles.loadingText}>Loading communities...</Text>
         </View>
       ) : (
-        // Main list — sections are "My Communities" and "Discover"
         <FlatList
           data={[
-            // Only show "My Communities" section if user has joined at least one
+            // Only include My Communities section if the user has joined at least one
             ...(joinedGroups.length > 0
               ? [{ id: "joined", title: "My Communities", data: joinedGroups }]
               : []),
-            // Only show "Discover" section if there are communities to join
+            // Only include Discover section if there are communities available to join
             ...(discoverGroups.length > 0
               ? [{ id: "discover", title: "Discover", data: discoverGroups }]
               : []),
@@ -310,7 +315,7 @@ export default function CommunitiesScreen() {
               tintColor={COLORS.primary}
             />
           }
-          // Empty state when search returns no results
+          // Empty state shown when search returns no matching communities
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <View style={styles.emptyIconContainer}>
@@ -345,10 +350,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     gap: 10,
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 2,
@@ -399,10 +401,7 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 16,
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 2,

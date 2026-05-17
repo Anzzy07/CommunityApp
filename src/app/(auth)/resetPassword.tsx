@@ -14,23 +14,38 @@ import {
   View,
 } from "react-native";
 
+// This screen lets users reset their password using a code sent to email
 export default function ResetPasswordScreen() {
+  // Clerk hook to handle sign-in related actions
   const { isLoaded, signIn, setActive } = useSignIn();
+
+  // Router for navigation between screens
   const router = useRouter();
 
+  // State to store reset code input
   const [code, setCode] = React.useState("");
+
+  // State to store new password input
   const [newPassword, setNewPassword] = React.useState("");
+
+  // State to toggle password visibility
   const [showPassword, setShowPassword] = React.useState(false);
+
+  // State to show loading when request is processing
   const [isLoading, setIsLoading] = React.useState(false);
 
+  // Function to handle password reset when button is pressed
   const onResetPasswordPress = async () => {
+    // Stop if Clerk is not ready
     if (!isLoaded || !signIn) return;
 
+    // Check if code is valid
     if (!code || code.length < 6) {
       Alert.alert("Invalid Code", "Please enter the 6-digit reset code");
       return;
     }
 
+    // Check if password is strong enough
     if (!newPassword || newPassword.length < 8) {
       Alert.alert(
         "Weak Password",
@@ -39,17 +54,23 @@ export default function ResetPasswordScreen() {
       return;
     }
 
+    // Start loading
     setIsLoading(true);
+
     try {
-      // Attempt to reset the password using the code and new password
+      // Attempt password reset using Clerk
       const resetAttempt = await signIn.attemptFirstFactor({
         strategy: "reset_password_email_code",
         code,
         password: newPassword,
       });
 
+      // If reset is successful
       if (resetAttempt.status === "complete") {
+        // Activate the new session
         await setActive({ session: resetAttempt.createdSessionId });
+
+        // Show success message and redirect to home
         Alert.alert("Success", "Your password has been reset successfully", [
           {
             text: "OK",
@@ -58,6 +79,7 @@ export default function ResetPasswordScreen() {
         ]);
       }
     } catch (err: any) {
+      // Show error message if reset fails
       console.error(JSON.stringify(err, null, 2));
       Alert.alert(
         "Reset Failed",
@@ -65,24 +87,33 @@ export default function ResetPasswordScreen() {
           "Unable to reset password. Please try again.",
       );
     } finally {
+      // Stop loading
       setIsLoading(false);
     }
   };
 
   return (
     <View style={styles.container}>
+      {/* Background design element */}
       <View style={styles.waveBackground} />
 
+      {/* Prevent keyboard from covering inputs */}
       <KeyboardAvoidingView
         style={styles.formContainer}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
+        {/* Screen title */}
         <Text style={styles.title}>Reset Password</Text>
+
+        {/* Short instruction for user */}
         <Text style={styles.subtitle}>
           Enter the code sent to your email and create a new password
         </Text>
 
+        {/* Input label for reset code */}
         <Text style={styles.label}>Reset Code</Text>
+
+        {/* Input field with icon for code */}
         <View style={styles.inputWrapper}>
           <Ionicons
             name="mail-outline"
@@ -101,7 +132,10 @@ export default function ResetPasswordScreen() {
           />
         </View>
 
+        {/* Input label for new password */}
         <Text style={styles.label}>New Password</Text>
+
+        {/* Password input with show/hide toggle */}
         <View style={styles.inputWrapper}>
           <Ionicons
             name="lock-closed-outline"
@@ -117,6 +151,8 @@ export default function ResetPasswordScreen() {
             secureTextEntry={!showPassword}
             onChangeText={setNewPassword}
           />
+
+          {/* Button to toggle password visibility */}
           <TouchableOpacity
             onPress={() => setShowPassword(!showPassword)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -129,6 +165,7 @@ export default function ResetPasswordScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Reset button */}
         <TouchableOpacity
           style={[styles.button, isLoading && styles.buttonDisabled]}
           onPress={onResetPasswordPress}
@@ -139,6 +176,7 @@ export default function ResetPasswordScreen() {
           </Text>
         </TouchableOpacity>
 
+        {/* Back navigation button */}
         <TouchableOpacity
           onPress={() => router.back()}
           style={styles.backButton}

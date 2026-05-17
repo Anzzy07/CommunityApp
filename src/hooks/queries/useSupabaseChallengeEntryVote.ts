@@ -1,6 +1,7 @@
 import { supabase } from "@/src/lib/supabase";
 import { useQuery } from "@tanstack/react-query";
 
+// Fetches the current user's vote on a challenge entry returns up down or null
 export function useSupabaseChallengeEntryVote(
   entryId: string,
   userId?: string,

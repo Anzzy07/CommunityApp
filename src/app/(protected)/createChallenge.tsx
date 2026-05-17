@@ -18,19 +18,25 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-// Screen for community leaders to create a new challenge
+// Screen accessible only to community leaders for creating a new challenge
 export default function CreateChallengeScreen() {
-  // groupId comes from the route params — set when navigating from community screen
+  // groupId is passed as a route parameter when navigating from the community screen
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
+
+  // Get the currently authenticated user from Clerk
   const { user } = useUser();
+
+  // Mutation hook for submitting the new challenge to the database
   const createChallengeMutation = useCreateChallenge();
 
-  // Form state for the challenge fields
+  // Form state for the challenge title, description, and selected duration
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [duration, setDuration] = useState("7d"); // default to 7 days
 
-  // Available duration options shown as selectable buttons
+  // Default duration set to 7 days — the most common choice
+  const [duration, setDuration] = useState("7d");
+
+  // Available duration options displayed as selectable buttons
   const durations = [
     { label: "3 days", value: "3d", days: 3 },
     { label: "7 days", value: "7d", days: 7 },
@@ -38,7 +44,7 @@ export default function CreateChallengeScreen() {
     { label: "30 days", value: "30d", days: 30 },
   ];
 
-  // Validates form and submits the challenge to the database
+  // Validates the form and creates the challenge in the database
   const handleCreate = async () => {
     if (!title.trim() || !groupId) {
       Alert.alert("Title Required", "Please enter a challenge title");
@@ -50,7 +56,7 @@ export default function CreateChallengeScreen() {
       return;
     }
 
-    // Find the number of days matching the selected duration button
+    // Look up the number of days for the selected duration option
     const selectedDuration = durations.find((d) => d.value === duration);
     const daysToAdd = selectedDuration?.days || 7;
 
@@ -63,7 +69,7 @@ export default function CreateChallengeScreen() {
         userId: user.id,
       });
 
-      // Go back to the community screen after successful creation
+      // Return to the community screen after the challenge has been created
       router.back();
     } catch {
       Alert.alert("Error", "Failed to create challenge. Please try again.");
@@ -72,7 +78,7 @@ export default function CreateChallengeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header with close button, title, and create action */}
+      {/* Header with close button, screen title, and create action */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} hitSlop={10}>
           <AntDesign name="close" size={26} color="white" />
@@ -80,7 +86,7 @@ export default function CreateChallengeScreen() {
 
         <Text style={styles.headerTitle}>Create Challenge</Text>
 
-        {/* Create button — disabled until title is entered */}
+        {/* Create button — reduced opacity and disabled until title is entered */}
         <Pressable
           onPress={handleCreate}
           disabled={!title.trim() || createChallengeMutation.isPending}
@@ -98,7 +104,7 @@ export default function CreateChallengeScreen() {
         </Pressable>
       </View>
 
-      {/* KeyboardAvoidingView pushes content up when keyboard opens on iOS */}
+      {/* KeyboardAvoidingView shifts the form up on iOS when the keyboard opens */}
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1 }}
@@ -107,7 +113,7 @@ export default function CreateChallengeScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Trophy icon shown at the top of the form */}
+          {/* Trophy icon displayed at the top of the form */}
           <View style={styles.iconSection}>
             <View style={styles.iconContainer}>
               <MaterialCommunityIcons
@@ -148,7 +154,7 @@ export default function CreateChallengeScreen() {
             <Text style={styles.charCount}>{description.length}/200</Text>
           </View>
 
-          {/* Duration selector — tap a button to select how long the challenge runs */}
+          {/* Duration selector — tapping a button updates the selected duration */}
           <View style={styles.durationSection}>
             <Text style={styles.sectionTitle}>Duration</Text>
             <View style={styles.durationGrid}>
@@ -158,6 +164,7 @@ export default function CreateChallengeScreen() {
                   onPress={() => setDuration(item.value)}
                   style={[
                     styles.durationButton,
+                    // Highlight the button when it matches the selected duration
                     duration === item.value && styles.durationButtonActive,
                   ]}
                 >
@@ -181,7 +188,7 @@ export default function CreateChallengeScreen() {
             </View>
           </View>
 
-          {/* Info box explaining what the challenge does */}
+          {/* Info box explaining what the challenge allows members to do */}
           <View style={styles.infoBox}>
             <MaterialCommunityIcons
               name="information"
@@ -221,9 +228,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     fontSize: 20,
   },
-  scrollContent: {
-    padding: 20,
-  },
+  scrollContent: { padding: 20 },
   iconSection: {
     alignItems: "center",
     marginBottom: 32,
@@ -251,10 +256,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,
@@ -304,10 +306,7 @@ const styles = StyleSheet.create({
     gap: 8,
     minWidth: "47%",
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,
@@ -315,6 +314,7 @@ const styles = StyleSheet.create({
   durationButtonActive: {
     backgroundColor: COLORS.primary,
   },
+
   durationText: {
     fontSize: 18,
     fontWeight: "600",

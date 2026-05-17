@@ -14,27 +14,44 @@ import {
   View,
 } from "react-native";
 
+// This screen allows users to create a new account
+// After signing up, user must verify email using a 6 digit code
 export default function SignUpScreen() {
+  // Clerk hook for sign up process
   const { isLoaded, signUp, setActive } = useSignUp();
+
+  // Router for navigation
   const router = useRouter();
 
+  // State for storing user inputs
   const [emailAddress, setEmailAddress] = React.useState("");
   const [username, setUsername] = React.useState("");
   const [password, setPassword] = React.useState("");
+
+  // State to control verification step
   const [pendingVerification, setPendingVerification] = React.useState(false);
+
+  // State for verification code
   const [code, setCode] = React.useState("");
+
+  // State to toggle password visibility
   const [showPassword, setShowPassword] = React.useState(false);
+
+  // State for loading indicator
   const [isLoading, setIsLoading] = React.useState(false);
 
+  // Handles sign up button press
   const onSignUpPress = async () => {
+    // Stop if Clerk is not ready
     if (!isLoaded || !signUp) return;
 
-    // Basic validation
+    // Check if all fields are filled
     if (!emailAddress || !username || !password) {
       Alert.alert("Missing Information", "Please fill in all fields");
       return;
     }
 
+    // Check password strength
     if (password.length < 8) {
       Alert.alert(
         "Weak Password",
@@ -44,78 +61,110 @@ export default function SignUpScreen() {
     }
 
     setIsLoading(true);
+
     try {
+      // Create new user account
       await signUp.create({ emailAddress, username, password });
+
+      // Send verification code to email
       await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
+
+      // Move to verification screen
       setPendingVerification(true);
     } catch (err: any) {
+      // Show error if sign up fails
       console.error(JSON.stringify(err, null, 2));
       Alert.alert(
         "Sign Up Failed",
         err.errors?.[0]?.message || "Unable to create account",
       );
     } finally {
+      // Stop loading
       setIsLoading(false);
     }
   };
 
+  // Handles verification of email using code
   const onVerifyPress = async () => {
+    // Stop if Clerk is not ready
     if (!isLoaded || !signUp) return;
 
+    // Check if code is valid
     if (!code || code.length < 6) {
       Alert.alert("Invalid Code", "Please enter the 6-digit verification code");
       return;
     }
 
     setIsLoading(true);
+
     try {
+      // Verify the email code
       const completeSignUp = await signUp.attemptEmailAddressVerification({
         code,
       });
+
+      // If verification is successful
       if (completeSignUp.status === "complete") {
+        // Activate user session
         await setActive({ session: completeSignUp.createdSessionId });
+
+        // Redirect to home screen
         router.replace("/");
       }
     } catch (err: any) {
+      // Show error if verification fails
       console.error(JSON.stringify(err, null, 2));
       Alert.alert(
         "Verification Failed",
         err.errors?.[0]?.message || "Invalid verification code",
       );
     } finally {
+      // Stop loading
       setIsLoading(false);
     }
   };
 
-  // Resend verification code
+  // Resends verification code to user's email
   const onResendCode = async () => {
+    // Stop if Clerk is not ready
     if (!isLoaded || !signUp) return;
 
     try {
+      // Send new verification code
       await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
+
       Alert.alert(
         "Code Sent",
         "A new verification code has been sent to your email",
       );
     } catch (err: any) {
+      // Show error if resend fails
       console.error(JSON.stringify(err, null, 2));
       Alert.alert("Error", "Unable to resend code");
     }
   };
 
+  // Show verification UI if user has already signed up
   if (pendingVerification) {
     return (
       <View style={styles.container}>
+        {/* Background design */}
         <View style={styles.waveBackground} />
+
+        {/* Prevent keyboard overlap */}
         <KeyboardAvoidingView
           style={styles.formContainer}
           behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
+          {/* Title */}
           <Text style={styles.title}>Verify Email</Text>
+
+          {/* Instruction */}
           <Text style={styles.subtitle}>
             We've sent a 6-digit code to {emailAddress}
           </Text>
 
+          {/* Code input */}
           <Text style={styles.label}>Verification Code</Text>
           <View style={styles.inputWrapper}>
             <Ionicons
@@ -135,6 +184,7 @@ export default function SignUpScreen() {
             />
           </View>
 
+          {/* Verify button */}
           <TouchableOpacity
             style={[styles.button, isLoading && styles.buttonDisabled]}
             onPress={onVerifyPress}
@@ -145,6 +195,7 @@ export default function SignUpScreen() {
             </Text>
           </TouchableOpacity>
 
+          {/* Resend code */}
           <TouchableOpacity onPress={onResendCode} style={styles.resendButton}>
             <Text style={styles.resendText}>Didn't receive code? Resend</Text>
           </TouchableOpacity>
@@ -153,6 +204,7 @@ export default function SignUpScreen() {
     );
   }
 
+  // Main sign up screen UI
   return (
     <View style={styles.container}>
       <View style={styles.waveBackground} />
@@ -161,8 +213,10 @@ export default function SignUpScreen() {
         style={styles.formContainer}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
+        {/* Title */}
         <Text style={styles.title}>Sign Up</Text>
 
+        {/* Email input */}
         <Text style={styles.label}>Email</Text>
         <View style={styles.inputWrapper}>
           <Ionicons
@@ -183,6 +237,7 @@ export default function SignUpScreen() {
           />
         </View>
 
+        {/* Username input */}
         <Text style={styles.label}>Username</Text>
         <View style={styles.inputWrapper}>
           <Ionicons
@@ -202,6 +257,7 @@ export default function SignUpScreen() {
           />
         </View>
 
+        {/* Password input */}
         <Text style={styles.label}>Password</Text>
         <View style={styles.inputWrapper}>
           <Ionicons
@@ -219,7 +275,8 @@ export default function SignUpScreen() {
             onChangeText={setPassword}
             autoComplete="password-new"
           />
-          {/* Password visibility toggle button */}
+
+          {/* Toggle password visibility */}
           <TouchableOpacity
             onPress={() => setShowPassword(!showPassword)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -232,6 +289,7 @@ export default function SignUpScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Sign up button */}
         <TouchableOpacity
           style={[styles.button, isLoading && styles.buttonDisabled]}
           onPress={onSignUpPress}
@@ -246,6 +304,7 @@ export default function SignUpScreen() {
   );
 }
 
+// Styles for layout and UI
 const styles = StyleSheet.create({
   container: {
     flex: 1,
