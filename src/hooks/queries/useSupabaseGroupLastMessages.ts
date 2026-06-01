@@ -1,16 +1,25 @@
 import { supabase } from "@/src/lib/supabase";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 // Fetches the last message and unread count for each of the user's groups.
-// One batch query for all groups — N+1 eliminated.
 export function useSupabaseGroupLastMessages(
   groupIds: string[],
   currentUserId?: string,
 ) {
   const queryClient = useQueryClient();
 
-  // Real-time: when any new message arrives, invalidate so chat list updates instantly
+  // Keep the exact current query key in a ref so the real-time callback
+  // always targets the right cache entry even after groupIds changes
+  const queryKeyRef = useRef<any[]>([
+    "group-last-messages",
+    groupIds,
+    currentUserId,
+  ]);
+  useEffect(() => {
+    queryKeyRef.current = ["group-last-messages", groupIds, currentUserId];
+  });
+
   useEffect(() => {
     if (groupIds.length === 0) return;
 
@@ -23,32 +32,67 @@ export function useSupabaseGroupLastMessages(
           schema: "public",
           table: "group_messages",
         },
-        (payload: any) => {
-          // Only invalidate when the message belongs to one of the user's groups
-          const incomingGroupId = payload.new?.group_id;
-          if (incomingGroupId && groupIds.includes(incomingGroupId)) {
-            queryClient.invalidateQueries({
-              queryKey: ["group-last-messages"],
-            });
+        async (payload: any) => {
+          const raw = payload.new;
+          const incomingGroupId = raw?.group_id;
+
+          // Ignore messages from groups the user hasn't joined
+          if (!incomingGroupId || !groupIds.includes(incomingGroupId)) return;
+
+          // Fetch the sender's name — lightweight query, users table has no RLS
+          let senderName = "Unknown";
+          if (raw.user_id) {
+            const { data: userData } = await supabase
+              .from("users")
+              .select("full_name, username")
+              .eq("id", raw.user_id)
+              .single();
+            senderName = userData?.full_name || userData?.username || "Unknown";
           }
+
+          const messageText =
+            (raw.message as string) || (raw.image_url ? "📷 Photo" : "");
+          const isFromOther = raw.user_id !== currentUserId;
+
+          // Patch the exact cache entry directly — instant update, no refetch
+          queryClient.setQueryData(
+            queryKeyRef.current,
+            (old: any[] | undefined) => {
+              if (!old) return old;
+              return old.map((entry) => {
+                if (entry.groupId !== incomingGroupId) return entry;
+                return {
+                  ...entry,
+                  message: messageText,
+                  timestamp: raw.created_at,
+                  sender: senderName,
+                  // Only increment unread count for messages from other users
+                  unreadCount: isFromOther
+                    ? (entry.unreadCount ?? 0) + 1
+                    : (entry.unreadCount ?? 0),
+                };
+              });
+            },
+          );
         },
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        if (__DEV__) {
+          console.log("[ChatList] Realtime:", status, err ?? "");
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [groupIds.join(","), queryClient]);
+  }, [groupIds.join(","), currentUserId, queryClient]);
 
   return useQuery({
     queryKey: ["group-last-messages", groupIds, currentUserId],
     queryFn: async () => {
       if (groupIds.length === 0) return [];
 
-      // ONE query for all messages across all groups.
-      // FIX: use a generous limit — groupIds.length * 5 was too small for active groups.
-      // 200 rows covers all groups comfortably and Supabase returns them sorted desc
-      // so we always find the latest message per group in the first pass.
+      // One batch query for all groups sorted desc — first row per group = latest
       const { data, error } = await supabase
         .from("group_messages")
         .select(
@@ -72,19 +116,19 @@ export function useSupabaseGroupLastMessages(
 
       if (error) throw error;
 
-      // Group messages by group_id — first seen = most recent (sorted desc)
+      // Build last-message and unread maps in one pass
       const groupMap = new Map<string, any>();
       const unreadMap = new Map<string, number>();
 
       for (const msg of data || []) {
         const gid = msg.group_id as string;
 
-        // First message seen per group = the latest one
+        // First seen per group = most recent (sorted desc)
         if (!groupMap.has(gid)) {
           groupMap.set(gid, msg);
         }
 
-        // Count unread: messages from others that haven't been read yet
+        // Count unread: messages from others not yet marked as read
         if (currentUserId && msg.user_id !== currentUserId && !msg.is_read) {
           unreadMap.set(gid, (unreadMap.get(gid) ?? 0) + 1);
         }
@@ -117,6 +161,7 @@ export function useSupabaseGroupLastMessages(
       });
     },
     enabled: groupIds.length > 0,
-    staleTime: 1000 * 30,
+    // staleTime 0 so switching to the Chat tab always loads fresh data
+    staleTime: 0,
   });
 }

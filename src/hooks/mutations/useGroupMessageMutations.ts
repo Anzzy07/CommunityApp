@@ -3,19 +3,15 @@ import { GroupMessage } from "@/src/types";
 import { uploadImage } from "@/src/utils/supabaseImages";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-// Sends a message to a group chat.
-//
+// Sends a message to a group chat with an optimistic insert.
 // Flow:
-// 1. onMutate — optimistic message added instantly to cache (sender sees it immediately)
-// 2. mutationFn — uploads image if needed, inserts message into Supabase
-// 3. onSuccess — only updates chat list preview (does NOT refetch messages)
-// 4. Real-time subscription — replaces the optimistic message with the real one
-//    on the sender's device AND delivers it to all other devices
-//
-// Why we don't invalidate ["group-messages"] in onSuccess:
-// The real-time subscription already handles replacing the optimistic placeholder.
-// Invalidating here would cause a full refetch that races with the real-time append,
-// causing a visible flicker or duplicate messages.
+// 1. onMutate - optimistic message with the real user name and avatar
+//    appears instantly at the bottom of the chat
+// 2. mutationFn — uploads image if attached, inserts into group_messages
+// 3. onSuccess — invalidates chat list preview ONLY (not the message list)
+// 4. Real-time subscription — replaces the optimistic placeholder with
+//    the real DB row on the sender's device, and delivers it to all others
+
 export function useSendMessage() {
   const queryClient = useQueryClient();
 
@@ -32,6 +28,10 @@ export function useSendMessage() {
       message: string;
       imageUrl?: string;
       replyToId?: string;
+      // userName and userImage are used only in onMutate for the optimistic message.
+      // They are NOT sent to the DB — the DB uses userId to look up the user.
+      userName?: string;
+      userImage?: string | null;
     }) => {
       // Upload image to Supabase Storage first if one was attached
       let storagePath: string | null = null;
@@ -43,7 +43,6 @@ export function useSendMessage() {
         }
       }
 
-      // Insert the message row into the database
       const { data, error } = await supabase
         .from("group_messages")
         .insert({
@@ -60,39 +59,45 @@ export function useSendMessage() {
       return data;
     },
 
-    onMutate: async ({ groupId, userId, message, imageUrl }) => {
-      // Cancel any outgoing refetches so they don't overwrite our optimistic message
+    onMutate: async ({
+      groupId,
+      userId,
+      message,
+      imageUrl,
+      userName,
+      userImage,
+    }) => {
+      // Cancel outgoing refetches so they don't overwrite the optimistic message
       await queryClient.cancelQueries({
         queryKey: ["group-messages", groupId],
       });
 
-      // Save the current message list so we can roll back if the send fails
       const previousMessages = queryClient.getQueryData([
         "group-messages",
         groupId,
       ]);
 
-      // Build a temporary message object that appears instantly in the chat.
-      // The id starts with "optimistic-" so the real-time subscription can
-      // identify and replace it when the real message arrives from Supabase.
+      // Build optimistic message shown instantly before DB confirms.
+      // Uses real userName and userImage so the sender sees their own name
+      // and avatar straight away — not "You" with a blank avatar.
+      // The "optimistic-" prefix lets the real-time subscription find
+      // and replace this entry when the real message arrives.
       const optimisticMessage: GroupMessage = {
         id: `optimistic-${Date.now()}`,
         group_id: groupId,
         user: {
           id: userId,
-          // "You" is shown briefly before the real-time message replaces it
-          name: "You",
-          image: null,
+          name: userName || "You",
+          image: userImage || null,
         },
         message,
-        // Show the local file URI for instant image preview —
-        // the real storage URL arrives after upload completes
+        // Show the local file URI for instant preview before the upload finishes
         image_url: imageUrl || null,
         created_at: new Date().toISOString(),
         reply_to: null,
       };
 
-      // Append optimistic message to the bottom of the chat instantly
+      // Append to the bottom of the chat immediately
       queryClient.setQueryData(
         ["group-messages", groupId],
         (old: GroupMessage[] | undefined) => [
@@ -105,7 +110,7 @@ export function useSendMessage() {
     },
 
     onError: (_err, variables, context) => {
-      // Something went wrong — restore the message list to before the failed send
+      // Restore the previous message list if the send failed
       if (context?.previousMessages !== undefined) {
         queryClient.setQueryData(
           ["group-messages", variables.groupId],
@@ -114,21 +119,20 @@ export function useSendMessage() {
       }
     },
 
-    onSuccess: (_data, _variables) => {
-      // DO NOT invalidate ["group-messages"] here.
-      // The real-time subscription handles replacing the optimistic placeholder
-      // with the real message. Invalidating would cause an unnecessary full refetch
-      // that creates a flicker on the sender's screen.
-      //
-      // Only update the chat list last-message preview so other screens
-      // show the correct latest message without opening the chat.
-      queryClient.invalidateQueries({ queryKey: ["group-last-messages"] });
+    onSuccess: () => {
+      // Only refresh the chat list last-message preview.
+      // exact:false matches all keys that start with "group-last-messages"
+      // regardless of the groupIds and currentUserId suffix.
+      queryClient.invalidateQueries({
+        queryKey: ["group-last-messages"],
+        exact: false,
+      });
     },
   });
 }
 
 // Marks all unread messages in a group as read for the current user.
-// Called when the user opens the group chat screen so the unread badge clears.
+// Called when the chat screen opens — clears the unread badge on the list.
 export function useMarkMessagesAsRead() {
   const queryClient = useQueryClient();
 
@@ -140,9 +144,7 @@ export function useMarkMessagesAsRead() {
       groupId: string;
       userId: string;
     }) => {
-      // Update all messages in this group that:
-      // were NOT sent by the current user
-      // are still marked as unread
+      // Update messages from others that are still unread
       const { error } = await supabase
         .from("group_messages")
         .update({ is_read: true })
@@ -154,8 +156,11 @@ export function useMarkMessagesAsRead() {
     },
 
     onSuccess: () => {
-      // Refresh the chat list so the unread badge disappears immediately
-      queryClient.invalidateQueries({ queryKey: ["group-last-messages"] });
+      // Clear the unread badge — matches all group-last-messages keys
+      queryClient.invalidateQueries({
+        queryKey: ["group-last-messages"],
+        exact: false,
+      });
     },
   });
 }

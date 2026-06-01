@@ -4,9 +4,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 
 // Fetches all messages for a group chat with user info and reply data.
-// Uses staleTime:0 + refetchInterval as a polling fallback in case real-time
-// misses a message — this guarantees Device 2 always gets new messages
-// even if the Supabase subscription silently drops a payload.
 export function useSupabaseGroupMessages(groupId: string) {
   return useQuery({
     queryKey: ["group-messages", groupId],
@@ -29,7 +26,7 @@ export function useSupabaseGroupMessages(groupId: string) {
 
       if (error) throw error;
 
-      // Collect all reply_to_ids so we can fetch their content in one batch query
+      // Collect all reply_to_ids to batch fetch their content in one query
       const replyToIds = [
         ...new Set(
           (data || [])
@@ -38,7 +35,7 @@ export function useSupabaseGroupMessages(groupId: string) {
         ),
       ];
 
-      // Batch fetch reply content — one query regardless of how many replies exist
+      // One batch query for all reply content — no N+1
       let replyMap = new Map<
         string,
         { id: string; message: string; user_name: string }
@@ -91,40 +88,33 @@ export function useSupabaseGroupMessages(groupId: string) {
       return messages;
     },
     enabled: !!groupId,
-    // staleTime 0: every navigation into this screen immediately refetches
-    // so Device 2 sees new messages without waiting for real-time
     staleTime: 0,
     gcTime: 1000 * 60 * 10,
-    // Polling fallback: refetch every 3 seconds while the screen is open.
-    // This guarantees messages appear even if the Supabase real-time
-    // subscription silently drops a payload — belt-and-suspenders approach.
-    // Real-time still handles instant delivery; polling is the safety net.
-    refetchInterval: 3000,
-    // Only poll when the app is in the foreground — stop when user switches apps
-    refetchIntervalInBackground: false,
   });
 }
 
 // Real-time subscription for group chat messages.
 //
-// Strategy:
-// 1. Listen for INSERT events on group_messages for this specific groupId
-// 2. Fetch the full new message with user info via a targeted query by id
-// 3. Append it to the React Query cache — no full list refetch needed
-// 4. Deduplicate against any optimistic placeholder from useSendMessage
-// 5. Call onScrollToBottom so the new message is always visible
+// Accepts currentUserId so we know whether to scroll when a message arrives —
+// the sender already scrolled in handleSend, so we only scroll on Device 2.
 //
-// The scrollRef pattern ensures the Supabase channel is only created ONCE
-// per groupId — the closure captures scrollRef.current, not the function itself,
-// so re-renders never cause the subscription to restart.
+// Uses payload.new directly instead of a follow-up .select() query.
+// The old approach did an extra query inside the callback which could fail
+// silently if the Supabase session was not available (Clerk auth setup).
+// Instead we read user info from the existing cache first (free, instant).
+// Only if the sender is completely new do we do one lightweight users query.
+//
+// The scrollRef pattern ensures the channel is only created ONCE per groupId.
+// Re-renders never restart the subscription.
 export function useGroupMessagesSubscription(
   groupId: string,
+  currentUserId: string | undefined,
   onScrollToBottom: () => void,
 ) {
   const queryClient = useQueryClient();
 
   // Store the latest scroll callback in a ref so the subscription closure
-  // always calls the most recent version without recreating the channel
+  // always calls the current version without recreating the channel
   const scrollRef = useRef(onScrollToBottom);
   useEffect(() => {
     scrollRef.current = onScrollToBottom;
@@ -133,8 +123,6 @@ export function useGroupMessagesSubscription(
   useEffect(() => {
     if (!groupId) return;
 
-    // Use the exact same cache key format as useSupabaseGroupMessages
-    // so setQueryData always targets the correct cache entry
     const cacheKey = ["group-messages", groupId];
 
     const channel = supabase
@@ -148,104 +136,103 @@ export function useGroupMessagesSubscription(
           filter: `group_id=eq.${groupId}`,
         },
         async (payload: any) => {
-          const newMsgId = payload.new?.id;
-          if (!newMsgId) return;
+          const raw = payload.new;
+          if (!raw?.id) return;
 
-          // Fetch the full message with joined user data.
-          // payload.new only contains the raw DB row without user info,
-          // so we need this extra query to get the sender's name and avatar.
-          const { data } = await supabase
-            .from("group_messages")
-            .select(
-              `
-              id,
-              group_id,
-              message,
-              image_url,
-              created_at,
-              reply_to_id,
-              user_id,
-              user:users!group_messages_user_id_fkey (
-                id,
-                full_name,
-                username,
-                image_url
-              )
-            `,
-            )
-            .eq("id", newMsgId)
-            .single();
+          // Step 1: look up sender from existing cache — no network call needed
+          const cached =
+            queryClient.getQueryData<GroupMessage[]>(cacheKey) ?? [];
+          const cachedUser = cached.find(
+            (m) => m.user.id === raw.user_id,
+          )?.user;
 
-          if (!data) return;
+          let userInfo = cachedUser;
+
+          // Step 2: only if not in cache, fetch from users table (RLS disabled)
+          if (!userInfo) {
+            const { data: userData } = await supabase
+              .from("users")
+              .select("id, full_name, username, image_url")
+              .eq("id", raw.user_id)
+              .single();
+
+            if (userData) {
+              userInfo = {
+                id: userData.id,
+                name: userData.full_name || userData.username || "Unknown",
+                image: userData.image_url || null,
+              };
+            }
+          }
 
           const newMessage: GroupMessage = {
-            id: data.id,
-            group_id: data.group_id,
-            user: {
-              id: (data.user as any)?.id || data.user_id,
-              name:
-                (data.user as any)?.full_name ||
-                (data.user as any)?.username ||
-                "Unknown",
-              image: (data.user as any)?.image_url || null,
+            id: raw.id,
+            group_id: raw.group_id,
+            user: userInfo ?? {
+              id: raw.user_id,
+              name: "Unknown",
+              image: null,
             },
-            message: data.message || "",
-            image_url: data.image_url || null,
-            created_at: data.created_at,
-            // Reply content not critical for real-time delivery —
-            // the 3-second polling refetch will fill it in shortly
+            message: raw.message || "",
+            image_url: raw.image_url || null,
+            created_at: raw.created_at,
             reply_to: null,
           };
 
-          // Update cache — three possible cases:
-          // A) Replace the optimistic placeholder (sender's device)
-          // B) Skip if already added by the 3s polling refetch (exact id match)
-          // C) Append as a new message (receiver's device, normal case)
+          // Update cache — three cases:
+          // A) Replace optimistic placeholder (sender's device)
+          // B) Skip exact duplicate (safety net)
+          // C) Append new message (receiver's device — the normal cross-device case)
           queryClient.setQueryData(
             cacheKey,
             (old: GroupMessage[] | undefined) => {
               const existing = old ?? [];
 
-              // Case A: find and replace optimistic placeholder.
-              // Matched by: temp id prefix + same message text + same sender id
+              // Case A: find optimistic placeholder by temp id + message text + sender
               const optimisticIndex = existing.findIndex(
                 (m) =>
                   m.id.startsWith("optimistic-") &&
                   m.message === newMessage.message &&
                   m.user.id === newMessage.user.id,
               );
-
               if (optimisticIndex !== -1) {
-                // Replace in-place to preserve list order
                 const updated = [...existing];
                 updated[optimisticIndex] = newMessage;
                 return updated;
               }
 
-              // Case B: exact duplicate — real-time fired after polling already added it
+              // Case B: already exists — prevent duplicate
               if (existing.some((m) => m.id === newMessage.id)) {
                 return existing;
               }
 
-              // Case C: genuinely new message from another user — append to bottom
+              // Case C: new message from another user — append to bottom
               return [...existing, newMessage];
             },
           );
 
-          // Refresh the chat list last-message preview and unread count
+          // Update the chat list last message preview and unread badge.
+          // Use exact query key so invalidation actually hits the right cache entry.
           queryClient.invalidateQueries({
             queryKey: ["group-last-messages"],
+            exact: false,
           });
 
-          // Scroll to bottom so the new message is visible immediately
-          scrollRef.current();
+          // Only scroll for the receiver — sender already scrolled in handleSend
+          if (raw.user_id !== currentUserId) {
+            scrollRef.current();
+          }
         },
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        if (__DEV__) {
+          console.log(`[Chat:${groupId}] Status:`, status, err ?? "");
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);
     };
-    // Only recreate the channel when groupId changes — not on every render
-  }, [groupId, queryClient]);
+    // Only recreate when groupId or currentUserId changes
+  }, [groupId, currentUserId, queryClient]);
 }

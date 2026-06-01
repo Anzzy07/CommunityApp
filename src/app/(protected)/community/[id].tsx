@@ -11,20 +11,25 @@ import {
   useSupabaseGroupMemberCount,
   useSupabaseGroupMembers,
 } from "@/src/hooks/queries/useSupabaseGroupMembers";
-import { useSupabaseGroups } from "@/src/hooks/queries/useSupabaseGroups";
-import { useSupabasePosts } from "@/src/hooks/queries/useSupabasePosts";
+import {
+  useSupabaseGroupPostCount,
+  useSupabaseGroupPosts,
+} from "@/src/hooks/queries/useSupabaseGroupPosts";
+import { useSupabaseGroup } from "@/src/hooks/queries/useSupabaseGroups";
 import { Post } from "@/src/types";
 import { useUser } from "@clerk/clerk-expo";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSetAtom } from "jotai";
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback } from "react";
 import {
   ActivityIndicator,
   Alert,
   FlatList,
   Image,
   Pressable,
+  RefreshControl,
   StyleSheet,
   Text,
   View,
@@ -32,50 +37,52 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function CommunityDetailsScreen() {
-  // Extract the community ID from the route parameters
   const { id } = useLocalSearchParams<{ id: string }>();
-
-  // Get the currently authenticated user from Clerk
   const { user } = useUser();
-
-  // Jotai setter used to pre-select this community when navigating to the Create Post screen
   const setSelectedGroup = useSetAtom(selectedGroupAtom);
 
-  // Fetch all groups, user memberships, posts, challenges, and member count from Supabase
-  const { data: groups = [], isLoading: groupsLoading } = useSupabaseGroups();
-  const { data: groupMembers = [], isLoading: membersLoading } =
-    useSupabaseGroupMembers(user?.id || "");
-
-  // Posts use an infinite query — data.pages is an array of pages each containing an array of posts
-  const { data: postsData } = useSupabasePosts();
-  const { data: challenges = [] } = useSupabaseChallenges(id);
+  // Fetch only this community — replaces the old groups.find() pattern that
+  // loaded every community in the app just to render one screen
+  const {
+    data: group,
+    isLoading: groupLoading,
+    refetch: refetchGroup,
+  } = useSupabaseGroup(id);
+  const {
+    data: groupMembers = [],
+    isLoading: membersLoading,
+    refetch: refetchMembers,
+  } = useSupabaseGroupMembers(user?.id || "");
   const { data: memberCount = 0 } = useSupabaseGroupMemberCount(id);
+  const { data: challenges = [] } = useSupabaseChallenges(id);
 
-  // Mutation hooks for joining and leaving this community
   const joinMutation = useJoinGroup();
   const leaveMutation = useLeaveGroup();
 
-  // Find the current community from the groups list using the route ID
-  const group = groups.find((g) => g.id === id);
-
-  // Check if the current user is a member of this community
   const isJoined = groupMembers.some((m) => m.group_id === id);
-
-  // Check if the current user is the community leader
   const isLeader = group?.leader_id === user?.id;
 
-  // Flatten all paginated post pages into a single array and filter to this community
-  const groupPosts = useMemo(() => {
-    if (!postsData?.pages) return [];
-    return postsData.pages.flat().filter((p: Post) => p.group?.id === id);
-  }, [postsData?.pages, id]);
+  // Only fetch posts for members — saves a DB query for visitors
+  const { data: groupPosts = [], refetch: refetchPosts } =
+    useSupabaseGroupPosts(isJoined ? id : "");
 
-  // Handles joining this community and shows an error if the request fails
+  // Cheap count-only query for non-members to show community activity
+  const { data: postCount = 0 } = useSupabaseGroupPostCount(
+    !isJoined ? id : "",
+  );
+
+  const isLoading = groupLoading || membersLoading;
+
+  const handleRefresh = useCallback(async () => {
+    await Promise.all([refetchGroup(), refetchMembers(), refetchPosts()]);
+  }, [refetchGroup, refetchMembers, refetchPosts]);
+
   const handleJoin = async () => {
     if (!user?.id) {
       Alert.alert("Sign in required", "Please sign in to join communities");
       return;
     }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       await joinMutation.mutateAsync({ groupId: id, userId: user.id });
     } catch {
@@ -83,11 +90,8 @@ export default function CommunityDetailsScreen() {
     }
   };
 
-  // Handles leaving this community
-  // Leaders cannot leave
   const handleLeave = () => {
     if (!user?.id) return;
-
     if (isLeader) {
       Alert.alert(
         "Cannot Leave",
@@ -95,35 +99,24 @@ export default function CommunityDetailsScreen() {
       );
       return;
     }
-
-    // Ask for confirmation before removing the user from the community
-    Alert.alert(
-      "Leave Community",
-      "Are you sure you want to leave this community?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Leave",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await leaveMutation.mutateAsync({ groupId: id, userId: user.id });
-            } catch {
-              Alert.alert(
-                "Error",
-                "Failed to leave community. Please try again.",
-              );
-            }
-          },
+    Alert.alert("Leave Community", "Are you sure you want to leave?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Leave",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await leaveMutation.mutateAsync({ groupId: id, userId: user.id });
+          } catch {
+            Alert.alert("Error", "Failed to leave community.");
+          }
         },
-      ],
-    );
+      },
+    ]);
   };
 
-  // Stable renderItem using useCallback to prevent FlatList from re-rendering all post cards unnecessarily
   const renderPost = useCallback(
     ({ item }: { item: Post }) => (
-      // Join button hidden on community page since user is already viewing the community
       <PostListItem post={item} showJoinButton={false} isJoined={isJoined} />
     ),
     [isJoined],
@@ -131,8 +124,7 @@ export default function CommunityDetailsScreen() {
 
   const keyExtractor = useCallback((item: Post) => item.id, []);
 
-  // Show a loading spinner while groups and member data are being fetched
-  if (groupsLoading || membersLoading) {
+  if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={COLORS.primary} />
@@ -141,7 +133,6 @@ export default function CommunityDetailsScreen() {
     );
   }
 
-  // Show a not found state if the community ID does not match any group
   if (!group) {
     return (
       <View style={styles.notFound}>
@@ -155,16 +146,14 @@ export default function CommunityDetailsScreen() {
     );
   }
 
-  // Header rendered above the post list — contains the hero, action buttons, challenges, and posts label
   const renderHeader = () => (
     <>
-      {/* Hero section with blurred cover image, community avatar, name, and member count */}
+      {/* Hero: blurred cover with avatar, name and member count overlaid */}
       <View style={styles.heroSection}>
         <Image
           source={{ uri: group.image || "https://via.placeholder.com/80" }}
           style={styles.heroCover}
         />
-        {/* Dark overlay to make text readable over the cover image */}
         <View style={styles.heroOverlay} />
         <View style={styles.heroContent}>
           <Image
@@ -174,7 +163,6 @@ export default function CommunityDetailsScreen() {
           <View style={styles.heroInfo}>
             <View style={styles.nameRow}>
               <Text style={styles.heroName}>{group.name}</Text>
-              {/* Crown icon shown next to the name when the current user is the leader */}
               {isLeader && (
                 <MaterialCommunityIcons
                   name="crown"
@@ -197,11 +185,10 @@ export default function CommunityDetailsScreen() {
         </View>
       </View>
 
-      {/* Action buttons row — changes depending on membership status */}
+      {/* Action bar: members see Create/Chat/Challenge, visitors see Join */}
       <View style={styles.actionsContainer}>
         {isJoined ? (
           <>
-            {/* Create Post button — sets the selected group atom so the Create screen pre-selects this community */}
             <Pressable
               style={[styles.actionButton, styles.primaryAction]}
               onPress={() => {
@@ -218,15 +205,14 @@ export default function CommunityDetailsScreen() {
               <Text style={styles.primaryActionText}>Create Post</Text>
             </Pressable>
 
-            {/* Chat button — navigates to the group chat screen for this community */}
             <Pressable
               style={[styles.actionButton, styles.secondaryAction]}
-              onPress={() => {
+              onPress={() =>
                 router.push({
                   pathname: "/groupChat/[id]",
                   params: { id: group.id, name: group.name },
-                });
-              }}
+                })
+              }
             >
               <MaterialCommunityIcons
                 name="chat-outline"
@@ -236,7 +222,7 @@ export default function CommunityDetailsScreen() {
               <Text style={styles.secondaryActionText}>Chat</Text>
             </Pressable>
 
-            {/* Challenge button — only visible to the community leader */}
+            {/* Challenge creation is leader-only */}
             {isLeader && (
               <Pressable
                 style={[styles.actionButton, styles.challengeAction]}
@@ -257,7 +243,6 @@ export default function CommunityDetailsScreen() {
             )}
           </>
         ) : (
-          // Join button shown to users who are not yet members
           <Pressable
             style={[styles.actionButton, styles.joinAction]}
             onPress={handleJoin}
@@ -278,7 +263,7 @@ export default function CommunityDetailsScreen() {
           </Pressable>
         )}
 
-        {/* Leave button — only shown to members who are not the leader */}
+        {/* Leave button — regular members only, not the leader */}
         {isJoined && !isLeader && (
           <Pressable
             style={[styles.actionButton, styles.leaveAction]}
@@ -298,7 +283,7 @@ export default function CommunityDetailsScreen() {
         )}
       </View>
 
-      {/* Membership status banner — shows different text for leaders and regular members */}
+      {/* Membership status strip */}
       {isJoined && (
         <View style={styles.statusBanner}>
           <MaterialCommunityIcons
@@ -316,8 +301,8 @@ export default function CommunityDetailsScreen() {
         </View>
       )}
 
-      {/* Active challenges section — only rendered when at least one challenge exists */}
-      {challenges.length > 0 && (
+      {/* Challenges — members only */}
+      {isJoined && challenges.length > 0 && (
         <>
           <View style={styles.sectionHeader}>
             <MaterialCommunityIcons
@@ -334,10 +319,12 @@ export default function CommunityDetailsScreen() {
         </>
       )}
 
-      {/* Posts section label with total post count for this community */}
+      {/* Posts header — visitors see DB count so they know what they're missing */}
       <View style={styles.postsHeader}>
         <Text style={styles.postsTitle}>Community Posts</Text>
-        <Text style={styles.postsCount}>{groupPosts.length}</Text>
+        <Text style={styles.postsCount}>
+          {isJoined ? groupPosts.length : postCount}
+        </Text>
       </View>
     </>
   );
@@ -345,28 +332,32 @@ export default function CommunityDetailsScreen() {
   return (
     <SafeAreaView style={styles.container} edges={["bottom"]}>
       <FlatList
-        data={groupPosts}
+        data={isJoined ? groupPosts : []}
         keyExtractor={keyExtractor}
         renderItem={renderPost}
-        // Header contains the hero, actions, challenges, and posts label
         ListHeaderComponent={renderHeader}
-        // Empty state message varies based on whether the user is a member
         ListEmptyComponent={
-          <View style={styles.emptyPosts}>
-            <MaterialCommunityIcons
-              name="post-outline"
-              size={48}
-              color={COLORS.textSecondary}
-            />
-            <Text style={styles.emptyTitle}>No posts yet</Text>
-            <Text style={styles.emptySubtitle}>
-              {isJoined
-                ? "Be the first to share something!"
-                : "Join the community to see posts"}
-            </Text>
-          </View>
+          isJoined ? (
+            <View style={styles.emptyPosts}>
+              <MaterialCommunityIcons
+                name="post-outline"
+                size={48}
+                color={COLORS.textSecondary}
+              />
+              <Text style={styles.emptyTitle}>No posts yet</Text>
+              <Text style={styles.emptySubtitle}>
+                Be the first to share something!
+              </Text>
+            </View>
+          ) : null
         }
-        // Performance optimisations for larger community feeds
+        refreshControl={
+          <RefreshControl
+            refreshing={isLoading}
+            onRefresh={handleRefresh}
+            tintColor={COLORS.primary}
+          />
+        }
         removeClippedSubviews={true}
         maxToRenderPerBatch={8}
         windowSize={8}
@@ -404,7 +395,7 @@ const styles = StyleSheet.create({
   },
   heroOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0, 0, 0, 0.4)",
+    backgroundColor: "rgba(0,0,0,0.4)",
   },
   heroContent: {
     flex: 1,
@@ -431,7 +422,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: "bold",
     color: "white",
-    textShadowColor: "rgba(0, 0, 0, 0.75)",
+    textShadowColor: "rgba(0,0,0,0.75)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },

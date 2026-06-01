@@ -14,6 +14,7 @@ import { Post } from "@/src/types";
 import { useUser } from "@clerk/clerk-expo";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { formatDistanceToNowStrict } from "date-fns";
+import * as Haptics from "expo-haptics";
 import { Link, useRouter } from "expo-router";
 import React, { memo } from "react";
 import { Alert, Image, Pressable, StyleSheet, Text, View } from "react-native";
@@ -32,45 +33,40 @@ function PostListItem({
   showJoinButton = true,
   isJoined = false,
 }: PostListItemProps) {
-  // Get the currently authenticated user from Clerk
   const { user } = useUser();
   const router = useRouter();
 
-  // Use 0 as a safe default if streak is not present on this post
   const streak = post.streak ?? 0;
 
-  // Fetch the current user's vote status for this post (up, down, or null)
   const { data: voteStatus } = useUserPostVote(post.id, user?.id);
-
-  // Fetch whether the current user has awarded this post
   const { data: hasAwarded } = useUserPostAward(post.id, user?.id);
 
-  // Mutations for voting, awarding, sharing, joining, and deleting
   const voteMutation = usePostVote();
   const awardMutation = usePostAward();
   const shareMutation = usePostShare();
   const joinMutation = useJoinGroup();
   const deletePostMutation = useDeletePost();
 
-  // Derive display values with safe defaults
   const upvotes = post.upvotes ?? 0;
   const awarded = hasAwarded ?? false;
   const currentVote = voteStatus ?? null;
-
-  // Check if the current user owns this post
   const isOwner = post.user.id === user?.id;
 
-  // Navigate to the community detail screen when the community name or image is tapped
   const handleGoToCommunity = () => {
     router.push(`/community/${post.group.id}`);
   };
 
-  // Handles an upvote action on this post
+  // Navigate to the post author's profile — works for own profile and others
+  const handleGoToProfile = () => {
+    router.push({ pathname: "/profile", params: { userId: post.user.id } });
+  };
+
   const handleUpvote = async () => {
     if (!user?.id) {
       Alert.alert("Sign in required", "Please sign in to vote");
       return;
     }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
       await voteMutation.mutateAsync({
         postId: post.id,
@@ -82,12 +78,12 @@ function PostListItem({
     }
   };
 
-  // Handles a downvote action on this post
   const handleDownvote = async () => {
     if (!user?.id) {
       Alert.alert("Sign in required", "Please sign in to vote");
       return;
     }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
       await voteMutation.mutateAsync({
         postId: post.id,
@@ -99,7 +95,6 @@ function PostListItem({
     }
   };
 
-  // Handles the share action for this post using the share mutation
   const handleShare = async () => {
     try {
       await shareMutation.mutateAsync({
@@ -109,18 +104,16 @@ function PostListItem({
     } catch {}
   };
 
-  // Handles giving or removing an award on a post
-  // Alerts the user when an award is successfully given
   const handleAward = async () => {
     if (!user?.id) {
       Alert.alert("Sign in required", "Please sign in to give awards");
       return;
     }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       await awardMutation.mutateAsync({
         postId: post.id,
         userId: user.id,
-        // Pass true to remove the award if already awarded, false to add it
         remove: awarded,
       });
       if (!awarded)
@@ -130,7 +123,6 @@ function PostListItem({
     }
   };
 
-  // Handles joining a community from the post card join button
   const handleJoinCommunity = () => {
     if (!user?.id) {
       Alert.alert("Sign in required", "Please sign in to join communities");
@@ -141,6 +133,7 @@ function PostListItem({
       {
         text: "Join",
         onPress: async () => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           try {
             await joinMutation.mutateAsync({
               groupId: post.group.id,
@@ -154,18 +147,9 @@ function PostListItem({
     ]);
   };
 
-  // Shows the post options menu to the owner
-  // Provides options to edit or delete the post
   const handleOptions = () => {
     if (!isOwner) return;
     Alert.alert("Post Options", "", [
-      {
-        text: "Edit Post",
-        onPress: () => {
-          // Navigate to the edit post screen passing the post ID as a route parameter
-          router.push(`/edit-post/${post.id}` as any);
-        },
-      },
       {
         text: "Delete Post",
         style: "destructive",
@@ -185,7 +169,6 @@ function PostListItem({
                       userId: user!.id,
                     });
                     Alert.alert("Success", "Post deleted successfully");
-                    // Navigate back if the post was deleted from the detail screen
                     if (isDetailedPost) router.back();
                   } catch {
                     Alert.alert("Error", "Failed to delete post");
@@ -202,7 +185,6 @@ function PostListItem({
 
   const PostContent = (
     <View style={styles.container}>
-      {/* Header row with community image, name, streak, timestamp, and action buttons */}
       <View style={styles.header}>
         <Pressable onPress={handleGoToCommunity} hitSlop={10}>
           <Image
@@ -218,7 +200,6 @@ function PostListItem({
               <Text style={styles.groupName}>{post.group.name}</Text>
             </Pressable>
 
-            {/* Streak badge only renders when the user has an active streak */}
             {streak > 0 && (
               <View style={styles.streakBadge}>
                 <MaterialCommunityIcons name="fire" size={16} color="#FF6A00" />
@@ -233,13 +214,14 @@ function PostListItem({
             </Text>
           </View>
 
-          {/* Author name is only shown on the detailed post view */}
+          {/* Author name — tappable to navigate to that user's profile */}
           {isDetailedPost && (
-            <Text style={styles.authorName}>{post.user.name}</Text>
+            <Pressable onPress={handleGoToProfile} hitSlop={8}>
+              <Text style={styles.authorName}>{post.user.name}</Text>
+            </Pressable>
           )}
         </View>
 
-        {/* Show options menu for the post owner or a Join button for non-members */}
         {isOwner ? (
           <Pressable onPress={handleOptions} hitSlop={10}>
             <Feather
@@ -255,15 +237,12 @@ function PostListItem({
         ) : null}
       </View>
 
-      {/* Post title */}
       <Text style={styles.title}>{post.title}</Text>
 
-      {/* Post image loaded from Supabase Storage using the stored path */}
       {post.image && (
         <SupabaseImage path={post.image} style={styles.postImage} />
       )}
 
-      {/* Post description truncated to 4 lines in the feed view */}
       {post.description && (
         <Text
           numberOfLines={isDetailedPost ? undefined : 4}
@@ -273,10 +252,8 @@ function PostListItem({
         </Text>
       )}
 
-      {/* Footer row containing vote controls and action buttons */}
       <View style={styles.footer}>
         <View style={styles.leftActions}>
-          {/* Upvote and downvote controls with current vote state reflected in icons */}
           <View style={styles.voteContainer}>
             <Pressable
               onPress={handleUpvote}
@@ -290,7 +267,6 @@ function PostListItem({
                     : "arrow-up-bold-outline"
                 }
                 size={19}
-                // Highlight the icon in the primary colour when the user has upvoted
                 color={currentVote === "up" ? COLORS.primary : COLORS.border}
               />
             </Pressable>
@@ -311,13 +287,11 @@ function PostListItem({
                     : "arrow-down-bold-outline"
                 }
                 size={19}
-                // Highlight the icon in red when the user has downvoted
                 color={currentVote === "down" ? "#DC2626" : COLORS.border}
               />
             </Pressable>
           </View>
 
-          {/* Comment count button */}
           <View style={styles.actionButton}>
             <MaterialCommunityIcons
               name="comment-outline"
@@ -328,14 +302,12 @@ function PostListItem({
           </View>
         </View>
 
-        {/* Award trophy and share */}
         <View style={styles.rightActions}>
           <Pressable
             onPress={handleAward}
             hitSlop={10}
             disabled={awardMutation.isPending}
           >
-            {/* Trophy icon fills when the user has awarded this post */}
             <MaterialCommunityIcons
               name={awarded ? "trophy" : "trophy-outline"}
               size={19}
@@ -361,7 +333,6 @@ function PostListItem({
     </View>
   );
 
-  // Return content directly for the detailed post view
   if (isDetailedPost) return PostContent;
   return (
     <Link href={`/post/${post.id}`} asChild>
@@ -379,47 +350,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0.8,
     backgroundColor: "white",
   },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  groupImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 5,
-  },
-  headerInfo: {
-    flex: 1,
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-  },
-  groupName: {
-    fontWeight: "bold",
-    fontSize: 18,
-    color: "#3A3B3C",
-  },
-  streakBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  streakText: {
-    fontSize: 16,
-    color: "#FF6A00",
-    fontWeight: "600",
-  },
-  timeText: {
-    color: "grey",
-    fontSize: 14,
-  },
-  authorName: {
-    fontSize: 15,
-    color: COLORS.primary,
-    marginTop: 2,
-  },
+  header: { flexDirection: "row", alignItems: "center" },
+  groupImage: { width: 40, height: 40, borderRadius: 20, marginRight: 5 },
+  headerInfo: { flex: 1 },
+  headerRow: { flexDirection: "row", alignItems: "center", gap: 5 },
+  groupName: { fontWeight: "bold", fontSize: 18, color: "#3A3B3C" },
+  streakBadge: { flexDirection: "row", alignItems: "center" },
+  streakText: { fontSize: 16, color: "#FF6A00", fontWeight: "600" },
+  timeText: { color: "grey", fontSize: 14 },
+  authorName: { fontSize: 15, color: COLORS.primary, marginTop: 2 },
   joinButton: {
     marginLeft: "auto",
     backgroundColor: COLORS.button,
@@ -427,36 +366,21 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 10,
   },
-  joinButtonText: {
-    color: "white",
-    fontWeight: "bold",
-    fontSize: 15,
-  },
+  joinButtonText: { color: "white", fontWeight: "bold", fontSize: 15 },
   title: {
     fontWeight: "bold",
     fontSize: 18,
     letterSpacing: 0.5,
     color: COLORS.textPrimary,
   },
-  postImage: {
-    width: "100%",
-    aspectRatio: 4 / 3,
-    borderRadius: 15,
-  },
-  description: {
-    fontSize: 17,
-    lineHeight: 21,
-    color: COLORS.textPrimary,
-  },
+  postImage: { width: "100%", aspectRatio: 4 / 3, borderRadius: 15 },
+  description: { fontSize: 17, lineHeight: 21, color: COLORS.textPrimary },
   footer: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  leftActions: {
-    flexDirection: "row",
-    gap: 10,
-  },
+  leftActions: { flexDirection: "row", gap: 10 },
   voteContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -486,15 +410,8 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 20,
   },
-  actionText: {
-    fontWeight: "500",
-    marginLeft: 5,
-    color: COLORS.textPrimary,
-  },
-  rightActions: {
-    flexDirection: "row",
-    gap: 10,
-  },
+  actionText: { fontWeight: "500", marginLeft: 5, color: COLORS.textPrimary },
+  rightActions: { flexDirection: "row", gap: 10 },
   iconButton: {
     borderWidth: 2,
     borderColor: COLORS.border,
@@ -504,7 +421,6 @@ const styles = StyleSheet.create({
   },
 });
 
-// Only re-renders this component if the data it actually displays has changed
 export default memo(PostListItem, (prev, next) => {
   return (
     prev.post.id === next.post.id &&

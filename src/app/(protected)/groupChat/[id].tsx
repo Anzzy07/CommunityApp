@@ -42,86 +42,67 @@ export default function GroupChatScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  // KEY FIX: useLocalSearchParams can return string | string[] for dynamic routes.
-  // Always coerce to a plain string so the React Query cache key is always identical
-  // to what useSupabaseGroupMessages and useGroupMessagesSubscription use.
-  // If it were ever an array, cache keys would never match and setQueryData
-  // from the real-time subscription would update a different cache entry.
+  // KEY FIX: useLocalSearchParams returns string | string[] for dynamic routes.
+  // Always coerce to a plain string so the React Query cache key is always
+  // identical to what useSupabaseGroupMessages and useGroupMessagesSubscription
+  // use. If groupId were an array, setQueryData from the subscription would
+  // update a completely different cache entry and messages would never appear.
   const groupId = Array.isArray(params.id) ? params.id[0] : params.id;
   const groupName = Array.isArray(params.name) ? params.name[0] : params.name;
 
-  // Ref to the FlatList so we can programmatically scroll to the bottom
   const flatListRef = useRef<FlatList>(null);
 
-  // Local composer state
   const [replyTo, setReplyTo] = useState<GroupMessage | null>(null);
   const [text, setText] = useState("");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
-  // Fetch all messages for this group.
-  // staleTime is 0 and refetchInterval is 3s (set in the hook) so:
-  // - navigating in always loads fresh data immediately
-  // - polling every 3s catches any messages the real-time subscription missed
+  // staleTime:0 in the hook means navigating in always triggers an immediate
+  // background refetch — Device 2 gets messages that arrived while away
   const {
     data: messages = [],
     isLoading: messagesLoading,
     refetch: refetchMessages,
   } = useSupabaseGroupMessages(groupId);
 
-  // Fetch current user's group memberships to check if they can send messages
   const { data: groupMembers = [] } = useSupabaseGroupMembers(user?.id || "");
 
   const sendMessageMutation = useSendMessage();
   const markAsReadMutation = useMarkMessagesAsRead();
   const leaveMutation = useLeaveGroup();
 
-  // Check membership using the coerced string groupId — consistent with all other checks
   const isMember = groupMembers.some((m) => m.group_id === groupId);
 
-  // Scroll to the bottom of the message list.
-  // animated=true for new messages, animated=false for initial load.
+  // Scroll to bottom — animated for new messages, instant for initial load
   const scrollToBottom = useCallback((animated = true) => {
     setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated });
-    }, 100);
+    }, 80);
   }, []);
 
-  // Real-time subscription — listens for INSERT events on group_messages.
-  // Uses the coerced string groupId to ensure it subscribes to the correct
-  // Supabase channel and updates the correct React Query cache entry.
-  useGroupMessagesSubscription(groupId, () => scrollToBottom(true));
+  // when the sender's own message arrives in real-time
+  useGroupMessagesSubscription(groupId, user?.id, () => scrollToBottom(true));
 
-  // useFocusEffect fires every time this screen comes into focus.
-  // This covers the case where Device 2 already has the screen mounted
-  // but navigates away and comes back — it will refetch on return.
-  // Combined with refetchInterval:3000 in the hook, new messages
-  // always appear within 3 seconds at most even if real-time is slow.
+  // Refetch every time this screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      if (groupId) {
-        refetchMessages();
-      }
+      if (groupId) refetchMessages();
     }, [groupId, refetchMessages]),
   );
 
-  // Mark all unread messages as read as soon as the chat opens.
-  // This clears the unread badge on the chat list for this group.
+  // Mark messages as read when the chat opens
   useEffect(() => {
     if (isMember && user?.id && groupId) {
       markAsReadMutation.mutate({ groupId, userId: user.id });
     }
   }, [groupId, isMember, user?.id]);
 
-  // Scroll to the bottom on initial data load so most recent messages are visible
+  // Scroll to bottom on initial data load
   useEffect(() => {
-    if (messages.length > 0) {
-      scrollToBottom(false);
-    }
+    if (messages.length > 0) scrollToBottom(false);
   }, [messages.length]);
 
-  // Determines avatar and username visibility for consecutive messages.
-  // Groups messages from the same sender — only the last shows the avatar
-  // and only the first shows the username, matching WhatsApp and Slack behaviour.
+  // Groups consecutive messages from the same sender — only the last shows the
+  // avatar and only the first shows the username (WhatsApp/Slack convention)
   const getMessageDisplay = useCallback(
     (index: number) => {
       const current = messages[index];
@@ -129,16 +110,13 @@ export default function GroupChatScreen() {
       const prev = messages[index - 1];
       const isMe = current.user.id === user?.id;
       return {
-        // Show avatar on the last message in a consecutive group from the same sender
         showAvatar: !next || next.user.id !== current.user.id,
-        // Show username on the first message from a new sender (not shown for own messages)
         showUsername: !isMe && (!prev || prev.user.id !== current.user.id),
       };
     },
     [messages, user?.id],
   );
 
-  // Opens the device photo library so the user can pick an image to attach
   const pickImage = useCallback(async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
@@ -156,16 +134,16 @@ export default function GroupChatScreen() {
     }
   }, []);
 
-  // Sends a message — clears the input immediately so the user can keep typing.
-  // An optimistic placeholder appears instantly in the list (useSendMessage).
-  // The real-time subscription and 3s polling both ensure other devices see it.
+  // Clears the composer immediately (before the DB insert) so the user can
+  // keep typing. Passes the real user name and avatar to useSendMessage so
+  // the optimistic placeholder shows the correct sender info straight away.
   const handleSend = useCallback(async () => {
     if ((!text.trim() && !selectedImage) || !isMember || !user?.id) return;
 
     const messageText = text.trim();
     const imageToSend = selectedImage;
 
-    // Clear composer immediately — don't wait for the network request to complete
+    // Clear immediately — don't block on the network request
     setText("");
     setReplyTo(null);
     setSelectedImage(null);
@@ -177,8 +155,11 @@ export default function GroupChatScreen() {
         message: messageText,
         imageUrl: imageToSend || undefined,
         replyToId: replyTo?.id,
+        // Pass real user info so optimistic shows "Anzel Acharya" with avatar
+        // instead of "You" with a blank circle
+        userName: user.fullName || user.username || "You",
+        userImage: user.imageUrl || null,
       });
-      // Scroll after successful send so sender sees their own message at the bottom
       scrollToBottom(true);
     } catch {
       Alert.alert("Error", "Failed to send message. Please try again.");
@@ -187,14 +168,13 @@ export default function GroupChatScreen() {
     text,
     selectedImage,
     isMember,
-    user?.id,
+    user,
     groupId,
     replyTo,
     sendMessageMutation,
     scrollToBottom,
   ]);
 
-  // Confirmation alert before leaving — this is a destructive action
   const handleLeaveChat = useCallback(() => {
     if (!user?.id) return;
     Alert.alert("Leave Chat", `Leave ${groupName}?`, [
@@ -214,7 +194,6 @@ export default function GroupChatScreen() {
     ]);
   }, [user?.id, groupName, groupId, leaveMutation, router]);
 
-  // Overflow action sheet shown when the user taps the three-dot header icon
   const handleOptions = useCallback(() => {
     Alert.alert("Chat Options", "", [
       { text: "Leave Chat", onPress: handleLeaveChat, style: "destructive" },
@@ -222,8 +201,7 @@ export default function GroupChatScreen() {
     ]);
   }, [handleLeaveChat]);
 
-  // Stable renderItem — wrapped in useCallback so the FlatList doesn't
-  // re-render all message bubbles when the text input value changes
+  // Stable renderItem — prevents all bubbles re-rendering on every keystroke
   const renderItem = useCallback(
     ({ item, index }: { item: GroupMessage; index: number }) => {
       const { showAvatar, showUsername } = getMessageDisplay(index);
@@ -241,10 +219,9 @@ export default function GroupChatScreen() {
     [getMessageDisplay, user?.id, isMember],
   );
 
-  // Stable key extractor — uses the real message id or the "optimistic-" temp id
+  // Stable key extractor — real message id or "optimistic-" temp id
   const keyExtractor = useCallback((item: GroupMessage) => item.id, []);
 
-  // Non-members see the header and a join prompt — no message list shown
   if (!isMember) {
     return (
       <View style={styles.container}>
@@ -287,15 +264,14 @@ export default function GroupChatScreen() {
         </Pressable>
       </View>
 
-      {/* Scrollable message list — oldest at top, newest at bottom */}
+      {/* Scrollable message list */}
       <FlatList
         ref={flatListRef}
         data={messages}
         keyExtractor={keyExtractor}
         renderItem={renderItem}
         contentContainerStyle={styles.messagesList}
-        // Scroll to bottom whenever the content height changes —
-        // handles both new messages arriving and the keyboard appearing
+        // Scroll to bottom when content grows
         onContentSizeChange={() => scrollToBottom(false)}
         ListEmptyComponent={
           !messagesLoading ? (
@@ -310,16 +286,15 @@ export default function GroupChatScreen() {
             </View>
           ) : null
         }
-        // Performance: unmount off-screen rows and limit render batch size
         removeClippedSubviews={true}
         maxToRenderPerBatch={20}
         windowSize={10}
         initialNumToRender={20}
-        // Prevents the list from jumping when the keyboard opens on Android
+        // Prevents list jumping when keyboard opens on Android
         maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
       />
 
-      {/* Reply preview bar — appears when user long-presses a message to reply */}
+      {/* Reply preview  */}
       {replyTo && (
         <View style={styles.replyPreview}>
           <View style={styles.replyIndicator} />
@@ -337,7 +312,7 @@ export default function GroupChatScreen() {
         </View>
       )}
 
-      {/* Image attachment preview — shown after user picks a photo */}
+      {/* Image preview  */}
       {selectedImage && (
         <View style={styles.imagePreviewContainer}>
           <Image source={{ uri: selectedImage }} style={styles.imagePreview} />
@@ -353,12 +328,11 @@ export default function GroupChatScreen() {
       {/* Message composer: image picker, text input, send button */}
       <View style={[styles.inputContainer, { paddingBottom: insets.bottom }]}>
         <View style={styles.inputWrapper}>
-          {/* Attach image button */}
           <Pressable onPress={pickImage} style={styles.imageButton}>
             <Ionicons name="image-outline" size={24} color={COLORS.primary} />
           </Pressable>
 
-          {/* Multi-line text input — grows up to maxHeight then scrolls */}
+          {/* Multi-line input */}
           <TextInput
             placeholder="Type a message..."
             placeholderTextColor="#9CA3AF"
@@ -369,7 +343,7 @@ export default function GroupChatScreen() {
             maxLength={1000}
           />
 
-          {/* Send button — disabled when there is nothing to send */}
+          {/* Disabled when there is nothing to send */}
           <Pressable
             onPress={handleSend}
             disabled={
@@ -403,9 +377,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0.5,
     borderBottomColor: "#E5E7EB",
   },
-  backButton: {
-    padding: 4,
-  },
+  backButton: { padding: 4 },
   headerTitle: {
     flex: 1,
     fontSize: 20,
@@ -413,10 +385,7 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     marginHorizontal: 12,
   },
-  messagesList: {
-    paddingVertical: 12,
-    flexGrow: 1,
-  },
+  messagesList: { paddingVertical: 12, flexGrow: 1 },
   emptyMessages: {
     flex: 1,
     justifyContent: "center",
@@ -429,11 +398,7 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     marginTop: 12,
   },
-  emptySubtext: {
-    fontSize: 16,
-    color: COLORS.textSecondary,
-    marginTop: 4,
-  },
+  emptySubtext: { fontSize: 16, color: COLORS.textSecondary, marginTop: 4 },
   replyPreview: {
     flexDirection: "row",
     alignItems: "center",
@@ -450,19 +415,14 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     marginRight: 12,
   },
-  replyContent: {
-    flex: 1,
-  },
+  replyContent: { flex: 1 },
   replyLabel: {
     fontSize: 16,
     fontWeight: "600",
     color: COLORS.primary,
     marginBottom: 2,
   },
-  replyMessage: {
-    fontSize: 16,
-    color: COLORS.textSecondary,
-  },
+  replyMessage: { fontSize: 16, color: COLORS.textSecondary },
   imagePreviewContainer: {
     position: "relative",
     paddingHorizontal: 15,
@@ -471,11 +431,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 0.5,
     borderTopColor: "#E5E7EB",
   },
-  imagePreview: {
-    width: "100%",
-    height: 150,
-    borderRadius: 12,
-  },
+  imagePreview: { width: "100%", height: 150, borderRadius: 12 },
   removeImageButton: {
     position: "absolute",
     top: 20,
@@ -490,11 +446,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingTop: 12,
   },
-  inputWrapper: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: 10,
-  },
+  inputWrapper: { flexDirection: "row", alignItems: "flex-end", gap: 10 },
   imageButton: {
     padding: 8,
     justifyContent: "center",

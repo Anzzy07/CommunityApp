@@ -1,12 +1,6 @@
 import { downloadImage } from "@/src/utils/supabaseImages";
 import React, { useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  Image,
-  ImageStyle,
-  StyleProp,
-  View,
-} from "react-native";
+import { Image, ImageStyle, StyleProp, View } from "react-native";
 
 type Props = {
   path: string | null;
@@ -15,6 +9,7 @@ type Props = {
   fallbackUri?: string;
 };
 
+// Renders an image from Supabase Storage or a plain URL.
 export default function SupabaseImage({
   path,
   style,
@@ -25,38 +20,35 @@ export default function SupabaseImage({
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    // No path provided — skip loading and show the fallback immediately
     if (!path) {
       setLoading(false);
       setError(true);
       return;
     }
 
-    // Path is already a remote URL — use it directly without going through Supabase Storage
+    // Already a remote URL
     if (path.startsWith("http://") || path.startsWith("https://")) {
       setImageUri(path);
       setLoading(false);
       return;
     }
 
-    // A local file:// URI should never reach the database.
-    // Log a warning and fall back gracefully rather than making a failed network request.
+    // Local file:// URI should never reach the DB — log and fall back
     if (path.startsWith("file://")) {
-      console.warn("⚠️ Invalid local file path in database:", path);
+      console.warn("⚠️ Local file path in database:", path);
       setError(true);
       setLoading(false);
       return;
     }
 
-    // Path refers to a Supabase Storage object — download and convert it to a usable URI
+    // Supabase Storage path — download and resolve to a usable URI
     const loadImage = async () => {
       try {
         setLoading(true);
         setError(false);
         const uri = await downloadImage(path);
         setImageUri(uri);
-      } catch (err) {
-        console.error("Failed to load image from storage:", err);
+      } catch {
         setError(true);
       } finally {
         setLoading(false);
@@ -66,25 +58,11 @@ export default function SupabaseImage({
     loadImage();
   }, [path]);
 
-  // Show a spinner in the same dimensions as the final image while the URI is resolving
+  // Grey skeleton
   if (loading) {
-    return (
-      <View
-        style={[
-          style,
-          {
-            justifyContent: "center",
-            alignItems: "center",
-            backgroundColor: "#f0f0f0",
-          },
-        ]}
-      >
-        <ActivityIndicator size="small" color="#999" />
-      </View>
-    );
+    return <View style={[style, { backgroundColor: "#E5E7EB" }]} />;
   }
 
-  // Render the fallback placeholder when the image could not be loaded
   if (error || !imageUri) {
     return <Image source={{ uri: fallbackUri }} style={style} />;
   }
